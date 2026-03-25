@@ -533,7 +533,7 @@ const Index = () => {
 
       <PrinterSelectDialog open={showPrinterSelect} onOpenChange={setShowPrinterSelect} printers={availablePrinters} onSelect={handlePrinterSelected} />
       <StatsDetailDialog open={statsDialog.open} onOpenChange={(open) => setStatsDialog(prev => ({ ...prev, open }))} title={statsDialog.title} type={statsDialog.type} stats={stats} />
-      <ServeServiceDialog open={showServeService} onOpenChange={setShowServeService} onAddToCart={(item) => cart.addItem(item.tempo, { type: 'ficha', fichaType: 'comida', fichaTexto: item.fichaTexto, fichaValor: item.fichaValor })} />
+      
     </div>
   );
 };
