@@ -600,53 +600,19 @@ export default function FichasLista() {
         });
       }
 
-      // Send assigned groups directly to their printers
+      // Send assigned groups to print queue
       for (const group of assignedGroups) {
-        await sendToPrinterDirect(group.printer, group.items, dateStr, timeStr);
+        await sendToPrintQueue(group.printer, group.items, dateStr, timeStr);
       }
 
-      // Unassigned items: AndroidBridge > Bluetooth > Browser fallback
+      // Unassigned items: also send to print queue using default printer or first active
       if (unassignedItems.length > 0) {
-        if (window.AndroidBridge?.smartPrintVoucher) {
-          sendToAndroidBridge(unassignedItems, dateStr, timeStr);
-        } else if (config.type === 'bluetooth' || config.bluetoothDeviceName) {
-          if (!isBluetoothConnected()) {
-            let reconnected = false;
-            for (let attempt = 1; attempt <= 3; attempt++) {
-              toast({ title: `Reconectando... (${attempt}/3)` });
-              const char = await silentReconnectBluetooth();
-              if (char) { reconnected = true; break; }
-              if (attempt < 3) await new Promise(r => setTimeout(r, 1500));
-            }
-            if (!reconnected) {
-              try {
-                const devices = await scanBluetoothDevices();
-                if (devices.length > 0) {
-                  const char = await connectBluetooth(devices[0].device);
-                  if (char) reconnected = true;
-                }
-              } catch {}
-            }
-            if (!reconnected) {
-              toast({ title: 'Falha na conexão Bluetooth', variant: 'destructive' });
-              setPrinting(false);
-              return;
-            }
-          }
-          for (const item of unassignedItems) {
-            for (let i = 0; i < item.quantidade; i++) {
-              const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
-              await printData(escposData);
-            }
-          }
+        const defaultPrinter = impressorasAtivas.find(p => p.padrao) || impressorasAtivas[0];
+        if (defaultPrinter) {
+          await sendToPrintQueue(defaultPrinter, unassignedItems, dateStr, timeStr);
         } else {
-          printViaBrowser(dateStr, timeStr);
+          toast({ title: 'Nenhuma impressora ativa', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
         }
-      }
-
-      // If no printable items at all but sale registered
-      if (assignedGroups.length === 0 && unassignedItems.length === 0) {
-        // Nothing to print, sale was registered
       }
 
       toast({ title: 'Impressão enviada!', description: `${totalItems} ficha(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
