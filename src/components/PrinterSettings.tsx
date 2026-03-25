@@ -211,55 +211,6 @@ export function PrinterSettings() {
               </div>
             )}
 
-            {/* Print Server URL config */}
-            <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
-              <div className="flex items-center gap-2">
-                <Link2 className="h-4 w-4 text-primary" />
-                <Label className="font-semibold">Print Server Local</Label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                IP do PC que roda o print_server.py na sua rede (ex: http://192.168.1.10:8787)
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  value={printServerUrl}
-                  onChange={(e) => setPrintServerUrl(e.target.value)}
-                  placeholder="http://192.168.1.10:8787"
-                  className="flex-1"
-                />
-                <Button size="sm" onClick={() => {
-                  setLocalPrintServerUrl(printServerUrl);
-                  toast({ title: '✅ Print Server salvo' });
-                }}>
-                  Salvar
-                </Button>
-                <Button size="sm" variant="outline" onClick={async () => {
-                  const url = printServerUrl.trim().replace(/\/+$/, '');
-                  if (!url) {
-                    toast({ title: '⚠️ Informe a URL do Print Server', variant: 'destructive' });
-                    return;
-                  }
-                  try {
-                    const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 5000);
-                    const res = await fetch(`${url}/status`, { signal: controller.signal });
-                    clearTimeout(timeout);
-                    if (res.ok) {
-                      toast({ title: '✅ Print Server conectado', description: 'Comunicação OK!' });
-                    } else {
-                      toast({ title: '⚠️ Print Server respondeu com erro', description: `Status ${res.status}`, variant: 'destructive' });
-                    }
-                  } catch (e: any) {
-                    const msg = e?.name === 'AbortError'
-                      ? 'Print Server não respondeu (timeout 5s).'
-                      : 'Não foi possível conectar. Verifique se o Print Server está rodando e acessível.';
-                    toast({ title: '❌ Conexão falhou', description: msg, variant: 'destructive' });
-                  }
-                }}>
-                  <CheckCircle className="mr-1 h-4 w-4" /> Testar
-                </Button>
-              </div>
-            </div>
 
             <div className="flex justify-between items-center">
               <h3 className="font-semibold text-sm">Lista de Impressoras</h3>
