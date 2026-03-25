@@ -1050,6 +1050,39 @@ export default function FichasLista() {
           }]);
         }}
       />
+
+      {/* Printer Selection Modal */}
+      <Dialog open={showPrinterSelectModal} onOpenChange={setShowPrinterSelectModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" />
+              Selecionar Impressora
+            </DialogTitle>
+            <DialogDescription>Escolha a impressora para enviar as fichas.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            {impressorasAtivas.map((imp) => (
+              <Button
+                key={imp.id}
+                variant="outline"
+                className="w-full justify-start gap-3 h-14"
+                onClick={() => handleSelectPrinterAndPrint(imp)}
+              >
+                <div className="text-left">
+                  <div className="font-medium">{imp.nome}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {imp.tipo === 'rede' ? `${imp.ip}:${imp.porta || '9100'}` : imp.bluetooth_nome || 'Bluetooth'}
+                  </div>
+                </div>
+              </Button>
+            ))}
+            <Button variant="ghost" className="w-full" onClick={() => { setShowPrinterSelectModal(false); executePrint(); }}>
+              Imprimir sem selecionar (padrão)
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
