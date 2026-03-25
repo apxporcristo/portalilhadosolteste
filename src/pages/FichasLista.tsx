@@ -1095,7 +1095,7 @@ export default function FichasLista() {
         }}
       />
 
-      {/* Printer Selection Modal */}
+      {/* Printer Selection Modal - for items without printer_id */}
       <Dialog open={showPrinterSelectModal} onOpenChange={setShowPrinterSelectModal}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -1103,7 +1103,11 @@ export default function FichasLista() {
               <Printer className="h-5 w-5" />
               Selecionar Impressora
             </DialogTitle>
-            <DialogDescription>Escolha a impressora para enviar as fichas.</DialogDescription>
+            <DialogDescription>
+              {pendingUnassignedItems.length > 0
+                ? `${pendingUnassignedItems.length} item(ns) sem impressora configurada. Escolha para onde enviar:`
+                : 'Escolha a impressora para enviar as fichas.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 mt-2">
             {impressorasAtivas.map((imp) => (
@@ -1111,7 +1115,7 @@ export default function FichasLista() {
                 key={imp.id}
                 variant="outline"
                 className="w-full justify-start gap-3 h-14"
-                onClick={() => handleSelectPrinterAndPrint(imp)}
+                onClick={() => handleSelectPrinterForUnassigned(imp)}
               >
                 <div className="text-left">
                   <div className="font-medium">{imp.nome}</div>
@@ -1121,7 +1125,7 @@ export default function FichasLista() {
                 </div>
               </Button>
             ))}
-            <Button variant="ghost" className="w-full" onClick={() => { setShowPrinterSelectModal(false); executePrint(); }}>
+            <Button variant="ghost" className="w-full" onClick={() => { setShowPrinterSelectModal(false); executePrint(pendingAssignedGroups, pendingUnassignedItems); }}>
               Imprimir sem selecionar (padrão)
             </Button>
           </div>
