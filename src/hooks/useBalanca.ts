@@ -405,9 +405,17 @@ export function useBalanca() {
       if (attempt < retries) await new Promise(r => setTimeout(r, 1000));
     }
 
-    // All retries failed for BT - offer new pairing
+    // All retries failed for BT
     if (config.tipo_conexao === 'bluetooth') {
-      toast({ title: 'Balança não respondeu', description: 'Abra o pareamento para buscar a balança.' });
+      const isAndroidApp = !!window.IS_ANDROID_APP;
+      if (isAndroidApp) {
+        toast({ title: 'Balança não respondeu', description: 'Verifique se o app auxiliar está conectado à balança.' });
+      } else {
+        toast({
+          title: 'Bluetooth indisponível no navegador',
+          description: 'O Web Bluetooth não suporta este tipo de balança. Use o app Android auxiliar ou digite o peso manualmente.',
+        });
+      }
     }
 
     return null;
