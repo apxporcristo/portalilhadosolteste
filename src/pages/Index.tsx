@@ -544,7 +544,7 @@ const Index = () => {
                   items={cart.items}
                   onAdd={(tempo, opts) => cart.addItem(tempo, opts)}
                   onRemove={(tempo, fichaType) => cart.removeItem(tempo, fichaType)}
-                  onRemoveAll={(tempo, fichaType) => cart.removeAllOfItem(tempo, fichaType)}
+                  onRemoveAll={(tempo, fichaType) => cart.removeAll(tempo, fichaType)}
                   onClear={() => cart.clearCart()}
                   onPrint={handleBatchPrint}
                   totalItems={cart.totalItems}
