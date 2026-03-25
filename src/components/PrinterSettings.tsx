@@ -275,7 +275,7 @@ export function PrinterSettings() {
                   placeholder="http://192.168.1.10:8787"
                   className="flex-1"
                 />
-                <Button size="sm" onClick={() => {
+                <Button size="sm" onClick={async () => {
                   let url = printServerUrl.trim().replace(/\/+$/, '');
                   if (url.startsWith('https://')) {
                     url = url.replace('https://', 'http://');
@@ -284,6 +284,7 @@ export function PrinterSettings() {
                   }
                   setLocalPrintServerUrl(url);
                   toast({ title: '✅ Print Server salvo' });
+                  await checkPrintServerUrl(url);
                 }}>
                   Salvar
                 </Button>
