@@ -7,6 +7,7 @@ import { useImpressoras } from '@/hooks/useImpressoras';
 import { useVoucherCart } from '@/hooks/useVoucherCart';
 import { useAndroidBridge } from '@/hooks/useAndroidBridge';
 import { printVouchersBatch } from '@/lib/print-browser';
+import { getLocalPrintServerUrl } from '@/hooks/usePrintJobs';
 import { getNetworkName, getWifiQrString } from '@/hooks/useNetworkName';
 import { PrinterSelectDialog, AvailablePrinter } from '@/components/PrinterSelectDialog';
 import { VoucherCart } from '@/components/VoucherCart';
@@ -107,7 +108,8 @@ export default function VoucherLista() {
           
           for (const v of voucherData) {
             const escposData = await createVoucherData(v.voucher_id, v.tempo_validade);
-            const response = await fetch('http://127.0.0.1:8787/print', {
+            const printServerUrl = getLocalPrintServerUrl().trim().replace(/\/+$/, '') || 'http://127.0.0.1:8787';
+            const response = await fetch(`${printServerUrl}/print`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ip: printerIp, port: parseInt(printerPort), data: Array.from(escposData) }),
@@ -131,7 +133,8 @@ export default function VoucherLista() {
         try {
           for (const v of voucherData) {
             const escposData = await createVoucherData(v.voucher_id, v.tempo_validade);
-            const response = await fetch('http://127.0.0.1:8787/print', {
+            const printServerUrl = getLocalPrintServerUrl().trim().replace(/\/+$/, '') || 'http://127.0.0.1:8787';
+            const response = await fetch(`${printServerUrl}/print`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ bluetoothAddress: printer.name, data: Array.from(escposData) }),
