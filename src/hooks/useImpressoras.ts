@@ -32,6 +32,21 @@ export function useImpressoras() {
     voucher_bluetooth_printer_id: null,
   });
 
+  const normalizeRow = (row: any): Impressora => ({
+    id: row.id,
+    nome: row.nome || row.name || '',
+    tipo: row.tipo_conexao || row.tipo || row.printer_type || 'rede',
+    ip: row.ip || row.ip_address || null,
+    porta: row.porta || row.port || null,
+    bluetooth_nome: row.bluetooth_name || row.bluetooth_nome || null,
+    bluetooth_mac: row.bluetooth_address || row.bluetooth_mac || null,
+    descricao: row.descricao || row.description || null,
+    ativa: row.ativo ?? row.ativa ?? true,
+    padrao: row.padrao ?? row.is_default ?? false,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  });
+
   const fetchImpressoras = useCallback(async () => {
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
@@ -41,7 +56,7 @@ export function useImpressoras() {
     if (error) {
       console.error('Erro ao carregar impressoras:', error);
     } else {
-      setImpressoras((data as unknown as Impressora[]) || []);
+      setImpressoras((data as any[] || []).map(normalizeRow));
     }
     setLoading(false);
   }, []);
