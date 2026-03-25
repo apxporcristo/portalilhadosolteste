@@ -55,15 +55,20 @@ export default function VoucherLista() {
     if (androidBridge.isAvailable()) {
       printers.push({ type: 'network' as const, name: 'Android (SmartPrint)' });
     }
-    if (config.bluetoothDeviceName) {
-      printers.push({ type: 'bluetooth', name: config.bluetoothDeviceName });
+    // Add registered printers from database
+    for (const imp of impressoras.filter(p => p.ativa)) {
+      if (imp.tipo === 'bluetooth') {
+        printers.push({ type: 'bluetooth', name: imp.bluetooth_nome || imp.nome });
+      } else if (imp.tipo === 'rede' && imp.ip) {
+        printers.push({ type: 'network', name: `${imp.nome} (${imp.ip}:${imp.porta || '9100'})` });
+      }
     }
-    if (config.networkIp) {
-      printers.push({ type: 'network', name: `${config.networkIp}:${config.networkPort || '9100'}` });
+    if (config.bluetoothDeviceName && !printers.some(p => p.name === config.bluetoothDeviceName)) {
+      printers.push({ type: 'bluetooth', name: config.bluetoothDeviceName });
     }
     printers.push({ type: 'browser' as any, name: 'Navegador (Browser)' });
     return printers;
-  }, [config, androidBridge]);
+  }, [config, androidBridge, impressoras]);
 
   const handleAddToCart = useCallback((tempo: string) => {
     const inCart = cart.items.find(i => i.tempo === tempo)?.quantity || 0;
