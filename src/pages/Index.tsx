@@ -68,8 +68,6 @@ const Index = () => {
   const [availablePrinters, setAvailablePrinters] = useState<AvailablePrinter[]>([]);
   const [batchPrinting, setBatchPrinting] = useState(false);
   const [statsDialog, setStatsDialog] = useState<{ open: boolean; type: 'total' | 'livres' | 'usados' | 'reservados'; title: string }>({ open: false, type: 'total', title: '' });
-  const [showServeService, setShowServeService] = useState(false);
-
   const balanca = useBalanca();
   const userSession = useOptionalUserSession();
   const userAccess = userSession?.access;
