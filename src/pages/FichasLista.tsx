@@ -1005,6 +1005,7 @@ export default function FichasLista() {
             categoria_nome: 'Serve Service',
             exigir_dados_cliente: true,
             exigir_dados_atendente: true,
+            created_at: new Date().toISOString(),
           };
           setCart(prev => [...prev, {
             ficha: serveServiceFicha,
