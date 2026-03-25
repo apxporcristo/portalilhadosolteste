@@ -191,7 +191,17 @@ export function useBalanca() {
     return false;
   }, [isBtConnected, reconnectSavedDevice]);
 
-  // Pair new device - only via Android Bridge (Web Bluetooth doesn't support classic serial)
+  const listarDispositivosPareadosAndroid = useCallback((): Array<{ name: string; address: string }> => {
+    try {
+      const raw = window.AndroidBridge?.listPairedDevices?.();
+      if (!raw) return [];
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }, []);
+
+
   const parearNovoDispositivo = useCallback(async (): Promise<boolean> => {
     if (window.IS_ANDROID_APP && window.AndroidBridge?.listPairedDevices) {
       // In Android app, list paired devices and let user pick
