@@ -759,30 +759,16 @@ export default function FichasAdmin() {
             <DialogTitle>{editProd ? 'Editar Produto' : 'Novo Produto'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Categoria *</Label>
-                <Select value={prodForm.categoria_id} onValueChange={(v) => setProdForm(p => ({ ...p, categoria_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {categorias.filter(c => c.ativo).map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.nome_categoria}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Impressora</Label>
-                <Select value={prodForm.printer_id} onValueChange={(v) => setProdForm(p => ({ ...p, printer_id: v === '_none' ? '' : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Usar padrão" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">Nenhuma (usar padrão)</SelectItem>
-                    {impressorasAtivas.map(imp => (
-                      <SelectItem key={imp.id} value={imp.id}>{imp.nome} ({imp.tipo})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label>Categoria *</Label>
+              <Select value={prodForm.categoria_id} onValueChange={(v) => setProdForm(p => ({ ...p, categoria_id: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  {categorias.filter(c => c.ativo).map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.nome_categoria}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Nome do produto *</Label>
@@ -836,6 +822,18 @@ export default function FichasAdmin() {
                 <Switch checked={prodForm.imprimir_ficha} onCheckedChange={(v) => setProdForm(p => ({ ...p, imprimir_ficha: v }))} />
                 <Label>Imprimir ficha</Label>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Impressora</Label>
+              <Select value={prodForm.printer_id} onValueChange={(v) => setProdForm(p => ({ ...p, printer_id: v === '_none' ? '' : v }))}>
+                <SelectTrigger><SelectValue placeholder="Usar padrão" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Nenhuma (usar padrão)</SelectItem>
+                  {impressorasAtivas.map(imp => (
+                    <SelectItem key={imp.id} value={imp.id}>{imp.nome} ({imp.tipo})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Observação <span className="text-muted-foreground text-xs">(opcional, aparece na ficha)</span></Label>
