@@ -371,10 +371,48 @@ export function useBalanca() {
       const bridge = window.AndroidBridge;
       if (!bridge || !bridge.readScale) return null;
       const raw = bridge.readScale();
+      console.log('[Balança] AndroidBridge.readScale() retornou:', raw);
       if (!raw) return null;
-      return parseToledoWeight(raw);
+      // Try Toledo protocol first, then plain number
+      const parsed = parseToledoWeight(raw);
+      if (parsed !== null) return parsed;
+      const num = parseFloat(raw.replace(',', '.'));
+      return isNaN(num) ? null : num;
     } catch {
       return null;
+    }
+  }, []);
+
+  const conectarBalancaAndroid = useCallback((): boolean => {
+    const bridge = window.AndroidBridge;
+    if (!bridge?.connectScale) return false;
+    const address = config.dispositivo_id || '';
+    if (!address) {
+      toast({ title: 'Dispositivo não configurado', description: 'Configure o endereço da balança em balanca_config.', variant: 'destructive' });
+      return false;
+    }
+    console.log('[Balança] connectScale:', address, 'baud:', config.baud_rate);
+    const ok = bridge.connectScale(address, config.baud_rate);
+    setStatus(ok ? 'conectada' : 'falha');
+    return ok;
+  }, [config.dispositivo_id, config.baud_rate]);
+
+  const desconectarBalancaAndroid = useCallback(() => {
+    window.AndroidBridge?.disconnectScale?.();
+    setStatus('desconectada');
+  }, []);
+
+  const isScaleConnectedAndroid = useCallback((): boolean => {
+    return window.AndroidBridge?.isScaleConnected?.() ?? false;
+  }, []);
+
+  const listarDispositivosPareadosAndroid = useCallback((): Array<{ name: string; address: string }> => {
+    try {
+      const raw = window.AndroidBridge?.listPairedDevices?.();
+      if (!raw) return [];
+      return JSON.parse(raw);
+    } catch {
+      return [];
     }
   }, []);
 
@@ -490,11 +528,16 @@ export function useBalanca() {
     buscarDispositivosSerial,
     disconnect,
     fetchConfig,
-    // BT-specific
+    // BT-specific (Web Bluetooth)
     parearNovoDispositivo,
     listarDispositivosPareados,
     conectarDispositivo,
     connectBluetoothWithRetries,
     isBtConnected,
+    // Android Bridge scale
+    conectarBalancaAndroid,
+    desconectarBalancaAndroid,
+    isScaleConnectedAndroid,
+    listarDispositivosPareadosAndroid,
   };
 }
