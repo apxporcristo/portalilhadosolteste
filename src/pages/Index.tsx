@@ -9,6 +9,7 @@ import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
 import { useVoucherCart } from '@/hooks/useVoucherCart';
 import { useAndroidBridge } from '@/hooks/useAndroidBridge';
 import { usePrintJobs } from '@/hooks/usePrintJobs';
+import { FileUpload } from '@/components/FileUpload';
 import { StatsCard } from '@/components/StatsCard';
 import { StatsDetailDialog } from '@/components/StatsDetailDialog';
 import { VoucherReport } from '@/components/VoucherReport';
