@@ -67,8 +67,9 @@ export default function FichasLista() {
   const [search, setSearch] = useState('');
   const [showServeService, setShowServeService] = useState(false);
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
-  const [printing, setPrinting] = useState(false);
   const [showPrinterSelectModal, setShowPrinterSelectModal] = useState(false);
+  const [pendingUnassignedItems, setPendingUnassignedItems] = useState<CartItem[]>([]);
+  const [pendingAssignedGroups, setPendingAssignedGroups] = useState<{ printer: Impressora; items: CartItem[] }[]>([]);
 
   // Peso manual input
   const [showPesoModal, setShowPesoModal] = useState(false);
