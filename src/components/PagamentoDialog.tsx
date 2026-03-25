@@ -21,6 +21,9 @@ interface PagamentoDialogProps {
   confirmLabel?: string;
   confirmIcon?: React.ReactNode;
   onConfirm: (pagamentos: PagamentoSelecionado[]) => void;
+  onSave?: (pagamentos: PagamentoSelecionado[]) => void;
+  saveLabel?: string;
+  saveIcon?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -33,6 +36,9 @@ export function PagamentoDialog({
   confirmLabel = 'Confirmar',
   confirmIcon,
   onConfirm,
+  onSave,
+  saveLabel = 'Salvar',
+  saveIcon,
   children,
 }: PagamentoDialogProps) {
   const [selected, setSelected] = useState<Record<string, string>>({});
