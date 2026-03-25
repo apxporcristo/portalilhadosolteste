@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSupabaseClient } from '@/hooks/useVouchers';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 export interface Impressora {
@@ -48,7 +48,7 @@ export function useImpressoras() {
   });
 
   const fetchImpressoras = useCallback(async () => {
-    const supabase = await getSupabaseClient();
+    
     const { data, error } = await supabase
       .from('printers' as any)
       .select('*')
@@ -62,7 +62,7 @@ export function useImpressoras() {
   }, []);
 
   const fetchVoucherConfig = useCallback(async () => {
-    const supabase = await getSupabaseClient();
+    
     const { data } = await supabase
       .from('app_settings' as any)
       .select('setting_key, value')
@@ -90,7 +90,7 @@ export function useImpressoras() {
   }, [fetchImpressoras, fetchVoucherConfig]);
 
   const createImpressora = useCallback(async (data: Omit<Impressora, 'id' | 'created_at' | 'updated_at'>) => {
-    const supabase = await getSupabaseClient();
+    
     if (data.padrao) {
       await supabase.from('printers' as any).update({ padrao: false } as any).eq('padrao', true);
     }
@@ -105,7 +105,7 @@ export function useImpressoras() {
   }, [fetchImpressoras]);
 
   const updateImpressora = useCallback(async (id: string, data: Partial<Impressora>) => {
-    const supabase = await getSupabaseClient();
+    
     if (data.padrao) {
       await supabase.from('printers' as any).update({ padrao: false } as any).eq('padrao', true);
     }
@@ -119,7 +119,7 @@ export function useImpressoras() {
   }, [fetchImpressoras]);
 
   const deleteImpressora = useCallback(async (id: string) => {
-    const supabase = await getSupabaseClient();
+    
     const { error } = await supabase.from('printers' as any).delete().eq('id', id);
     if (error) {
       toast({ title: 'Erro', description: `Não foi possível excluir a impressora: ${error.message}`, variant: 'destructive' });
@@ -131,7 +131,7 @@ export function useImpressoras() {
   }, [fetchImpressoras]);
 
   const setAsDefault = useCallback(async (id: string) => {
-    const supabase = await getSupabaseClient();
+    
     await supabase.from('printers' as any).update({ padrao: false } as any).eq('padrao', true);
     await supabase.from('printers' as any).update({ padrao: true } as any).eq('id', id);
     await fetchImpressoras();
@@ -139,7 +139,7 @@ export function useImpressoras() {
   }, [fetchImpressoras]);
 
   const toggleAtiva = useCallback(async (id: string, ativa: boolean) => {
-    const supabase = await getSupabaseClient();
+    
     await supabase.from('printers' as any).update({ ativa } as any).eq('id', id);
     await fetchImpressoras();
   }, [fetchImpressoras]);
@@ -153,7 +153,7 @@ export function useImpressoras() {
   }, [impressoras]);
 
   const saveVoucherConfig = useCallback(async (config: VoucherPrintConfig) => {
-    const supabase = await getSupabaseClient();
+    
     const keys = [
       { setting_key: 'voucher_print_target', key: 'voucher_print_target', value: config.voucher_print_target },
       { setting_key: 'voucher_bluetooth_printer_id', key: 'voucher_bluetooth_printer_id', value: config.voucher_bluetooth_printer_id || '' },
