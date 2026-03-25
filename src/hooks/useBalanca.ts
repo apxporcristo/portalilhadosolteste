@@ -270,17 +270,12 @@ export function useBalanca() {
 
   // ========== WEIGHT READING ==========
 
+  // Read weight via Android Bridge (Bluetooth Classic serial)
   const lerPesoBluetooth = useCallback(async (): Promise<number | null> => {
-    if (!isBtConnected()) return null;
-    try {
-      const value = await _btCharacteristic.readValue();
-      const bytes = new Uint8Array(value.buffer);
-      return parseToledoWeightBytes(bytes);
-    } catch (err) {
-      console.error('Erro leitura BT:', err);
-      return null;
-    }
-  }, [isBtConnected]);
+    // Web Bluetooth GATT cannot read classic serial scales
+    // Use Android Bridge readScale instead
+    return lerPesoAndroid();
+  }, [lerPesoAndroid]);
 
   const lerPesoSerial = useCallback(async (): Promise<number | null> => {
     try {
