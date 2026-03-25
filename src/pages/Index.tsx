@@ -402,7 +402,34 @@ const Index = () => {
         </div>
       </footer>
 
-      <PrinterSelectDialog open={showPrinterSelect} onOpenChange={setShowPrinterSelect} printers={availablePrinters} onSelect={handlePrinterSelected} />
+      {/* Printer select dialog using DB printers */}
+      <Dialog open={showPrinterSelect} onOpenChange={setShowPrinterSelect}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" />
+              Selecionar Impressora
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            {impressorasAtivas.map((imp) => (
+              <Button
+                key={imp.id}
+                variant="outline"
+                className="w-full justify-start gap-3 h-14"
+                onClick={() => handlePrinterSelected(imp)}
+              >
+                <div className="text-left">
+                  <div className="font-medium">{imp.nome}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {imp.tipo === 'bluetooth' ? 'Bluetooth' : `Rede ${imp.ip || ''}`}
+                  </div>
+                </div>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
       <StatsDetailDialog open={statsDialog.open} onOpenChange={(open) => setStatsDialog(prev => ({ ...prev, open }))} title={statsDialog.title} type={statsDialog.type} stats={stats} />
       
     </div>
