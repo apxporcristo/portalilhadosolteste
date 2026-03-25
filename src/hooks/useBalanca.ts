@@ -378,8 +378,12 @@ export function useBalanca() {
     }
   }, []);
 
-  // Main read function - uses persistent connection, no re-pairing
+  // Main read function - prioritizes AndroidBridge, then persistent BT/serial
   const lerPeso = useCallback(async (retries = 3): Promise<number | null> => {
+    // Always try Android Bridge first (works with auxiliary app)
+    const pesoAndroid = lerPesoAndroid();
+    if (pesoAndroid !== null && pesoAndroid > 0) return pesoAndroid;
+
     for (let attempt = 1; attempt <= retries; attempt++) {
       // Serial/USB
       if (config.tipo_conexao === 'serial' || config.tipo_conexao === 'usb_serial') {
@@ -387,27 +391,34 @@ export function useBalanca() {
         if (peso !== null && peso > 0) return peso;
       }
 
-      // Android Bridge
-      const pesoAndroid = lerPesoAndroid();
-      if (pesoAndroid !== null && pesoAndroid > 0) return pesoAndroid;
-
-      // Bluetooth - use persistent connection
+      // Bluetooth via Web Bluetooth (only in Android app context, skip in browser)
       if (config.tipo_conexao === 'bluetooth') {
-        // Ensure connected before reading
-        if (!isBtConnected()) {
-          const reconnected = await reconnectSavedDevice();
-          if (!reconnected) continue;
+        if (window.IS_ANDROID_APP) {
+          // In Android app, try Web Bluetooth connection
+          if (!isBtConnected()) {
+            const reconnected = await reconnectSavedDevice();
+            if (!reconnected) continue;
+          }
+          const pesoBt = await lerPesoBluetooth();
+          if (pesoBt !== null && pesoBt > 0) return pesoBt;
         }
-        const pesoBt = await lerPesoBluetooth();
-        if (pesoBt !== null && pesoBt > 0) return pesoBt;
+        // In browser, skip Web Bluetooth entirely - it won't work for scales
       }
 
       if (attempt < retries) await new Promise(r => setTimeout(r, 1000));
     }
 
-    // All retries failed for BT - offer new pairing
+    // All retries failed for BT
     if (config.tipo_conexao === 'bluetooth') {
-      toast({ title: 'Balança não respondeu', description: 'Abra o pareamento para buscar a balança.' });
+      const isAndroidApp = !!window.IS_ANDROID_APP;
+      if (isAndroidApp) {
+        toast({ title: 'Balança não respondeu', description: 'Verifique se o app auxiliar está conectado à balança.' });
+      } else {
+        toast({
+          title: 'Bluetooth indisponível no navegador',
+          description: 'O Web Bluetooth não suporta este tipo de balança. Use o app Android auxiliar ou digite o peso manualmente.',
+        });
+      }
     }
 
     return null;
