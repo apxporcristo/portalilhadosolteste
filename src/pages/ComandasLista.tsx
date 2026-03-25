@@ -30,7 +30,6 @@ export default function ComandasLista() {
   const [showDetalhe, setShowDetalhe] = useState(false);
   const [showPrinterSelect, setShowPrinterSelect] = useState(false);
   const [pendingPrintItems, setPendingPrintItems] = useState<{ items: ComandaItem[]; comanda: Comanda } | null>(null);
-  const [showDetalhe, setShowDetalhe] = useState(false);
 
   // Item counts per comanda
   const [itemCounts, setItemCounts] = useState<Record<string, { qty: number; total: number }>>({});
