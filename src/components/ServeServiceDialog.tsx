@@ -107,18 +107,27 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
             </Button>
           </div>
 
-          {/* Fallback buttons for BT */}
-          {config.tipo_conexao === 'bluetooth' && status === 'falha' && (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => connectBluetoothWithRetries()} className="flex-1">
-                <Bluetooth className="h-4 w-4 mr-2" />
-                Reconectar
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => parearNovoDispositivo()} className="flex-1">
-                <BluetoothSearching className="h-4 w-4 mr-2" />
-                Parear novo
-              </Button>
-            </div>
+          {/* Fallback for BT - show appropriate message */}
+          {config.tipo_conexao === 'bluetooth' && (status === 'falha' || status === 'desconectada') && (
+            <>
+              {window.IS_ANDROID_APP ? (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => connectBluetoothWithRetries()} className="flex-1">
+                    <Bluetooth className="h-4 w-4 mr-2" />
+                    Reconectar
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => parearNovoDispositivo()} className="flex-1">
+                    <BluetoothSearching className="h-4 w-4 mr-2" />
+                    Parear novo
+                  </Button>
+                </div>
+              ) : (
+                <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground mb-1">Bluetooth não suportado no navegador</p>
+                  <p>O Web Bluetooth possui limitações e não conecta em balanças como a sua. Use o <strong>app Android auxiliar</strong> para leitura automática, ou digite o peso manualmente abaixo.</p>
+                </div>
+              )}
+            </>
           )}
 
           {peso !== null ? (
