@@ -236,7 +236,7 @@ const Index = () => {
     } finally {
       setBatchPrinting(false);
     }
-  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge, getVoucherPrinter, printDirect]);
+  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge, getVoucherPrinter, createPrintJob]);
 
   const handleBatchPrint = useCallback(async () => {
     const { printer: voucherPrinter, error: voucherError } = getVoucherPrinter();
