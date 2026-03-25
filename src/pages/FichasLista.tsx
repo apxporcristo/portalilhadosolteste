@@ -61,7 +61,6 @@ export default function FichasLista() {
   const balanca = useBalanca();
   const { lerPeso } = balanca;
   const [search, setSearch] = useState('');
-  const [showServeService, setShowServeService] = useState(false);
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const [showPrinterSelectModal, setShowPrinterSelectModal] = useState(false);
