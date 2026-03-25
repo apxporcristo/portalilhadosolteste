@@ -36,7 +36,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useBalanca } from '@/hooks/useBalanca';
-import { ServeServiceDialog } from '@/components/ServeServiceDialog';
 
 
 const timeColors: Record<string, string> = {

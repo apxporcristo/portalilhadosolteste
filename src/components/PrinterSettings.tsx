@@ -260,30 +260,16 @@ export function PrinterSettings() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-1 justify-end">
-                            {imp.tipo === 'rede' && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-green-600"
-                                  onClick={() => testDirectPrint(imp)}
-                                  disabled={testingPrinterId === imp.id}
-                                  title="Imprimir direto (Print Server local)"
-                                >
-                                  {testingPrinterId === imp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-primary"
-                                  onClick={() => sendTestToQueue(imp)}
-                                  disabled={testingPrinterId === imp.id}
-                                  title="Enviar para fila (Supabase)"
-                                >
-                                  <List className="h-3.5 w-3.5" />
-                                </Button>
-                              </>
-                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-primary"
+                              onClick={() => sendTestToQueue(imp)}
+                              disabled={testingPrinterId === imp.id}
+                              title="Enviar teste para fila (Supabase)"
+                            >
+                              {testingPrinterId === imp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+                            </Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(imp)}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
