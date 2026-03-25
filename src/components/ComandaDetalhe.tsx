@@ -138,7 +138,7 @@ export function ComandaDetalhe({ comanda, open, onOpenChange, onPrintItems, onCl
         await executeSave(email, nome, cpf);
       }
       const formaDesc = pagamentos.map(p => `${p.forma.nome}: R$ ${p.valor.toFixed(2).replace('.', ',')}`).join(' | ');
-      await fecharComanda(comanda.id, pagamentos[0].forma.id, formaDesc, email, nome || undefined);
+      await fecharComanda(comanda.id, pagamentos[0].forma.id, formaDesc, email, nome || undefined, loggedUser?.user_id);
       // Additional audit with CPF
       await registrarAlteracao(
         comanda.id, null, 'edicao',
