@@ -21,6 +21,7 @@ import { useComandas } from '@/hooks/useComandas';
 import { PagamentoDialog, PagamentoSelecionado } from '@/components/PagamentoDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useBalanca } from '@/hooks/useBalanca';
+import { ServeServiceDialog } from '@/components/ServeServiceDialog';
 
 interface SelectedItem {
   categoria: string;
