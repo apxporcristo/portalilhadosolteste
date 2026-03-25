@@ -1002,7 +1002,6 @@ export default function FichasLista() {
             nome_produto: item.fichaTexto,
             valor: item.fichaValor,
             categoria_id: '',
-            nome_categoria: 'Serve Service',
             categoria_nome: 'Serve Service',
             exigir_dados_cliente: true,
             exigir_dados_atendente: true,
