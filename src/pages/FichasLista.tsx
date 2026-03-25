@@ -337,35 +337,19 @@ export default function FichasLista() {
       return (produto as any)?.imprimir_ficha !== false;
     });
 
-    // Group by printer_id
-    const assigned: { printer: Impressora; items: CartItem[] }[] = [];
-    const unassigned: CartItem[] = [];
-
-    for (const item of printableItems) {
-      const produto = produtos.find(p => p.id === item.ficha.id);
-      const printerId = produto?.printer_id || (item.ficha as any)?.printer_id;
-      if (printerId) {
-        const printer = impressorasAtivas.find(p => p.id === printerId);
-        if (printer) {
-          const group = assigned.find(g => g.printer.id === printer.id);
-          if (group) group.items.push(item);
-          else assigned.push({ printer, items: [item] });
-          continue;
-        }
-      }
-      unassigned.push(item);
+    if (printableItems.length === 0) {
+      executePrint([], []);
+      return;
     }
 
-    setPendingAssignedGroups(assigned);
-
-    if (unassigned.length > 0 && impressorasAtivas.length > 0) {
-      // Need user to pick a printer for unassigned items
-      setPendingUnassignedItems(unassigned);
+    // Always show printer selection modal if there are registered printers
+    if (impressorasAtivas.length > 0) {
+      setPendingAssignedGroups([]);
+      setPendingUnassignedItems(printableItems);
       setShowPrinterSelectModal(true);
     } else {
-      // All items have printers or no printers registered at all
-      setPendingUnassignedItems([]);
-      executePrint(assigned, unassigned);
+      // No printers registered, use browser/default fallback
+      executePrint([], printableItems);
     }
   };
 
