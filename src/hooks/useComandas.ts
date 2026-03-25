@@ -103,14 +103,15 @@ export function useComandas() {
     formaPagamentoId: string,
     formaPagamentoNome: string,
     usuarioEmail: string,
-    usuarioNome?: string
+    usuarioNome?: string,
+    usuarioId?: string
   ) => {
     const supabase = await getSupabaseClient();
     // 1. Mark as fechada
     const { error } = await supabase.from('comandas' as any).update({
       status: 'fechada',
       fechada_em: new Date().toISOString(),
-      fechada_por: usuarioNome || usuarioEmail,
+      fechada_por: usuarioId || null,
       forma_pagamento_id: formaPagamentoId,
       forma_pagamento_nome: formaPagamentoNome,
       updated_at: new Date().toISOString(),
