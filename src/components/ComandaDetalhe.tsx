@@ -93,22 +93,18 @@ export function ComandaDetalhe({ comanda, open, onOpenChange, onPrintItems, onCl
     await executeClose(email, nome, pagamentos, cpf);
   };
 
-  const executeSave = async (email: string, nome?: string) => {
+  const executeSave = async (email: string, nome?: string | null, cpf?: string | null) => {
     if (!comanda) return;
     try {
-      // Process full deletes
       for (const id of pending.deletes) {
         await excluirItem(id);
       }
-      // Process decreases
       for (const [key, dec] of Object.entries(pending.decreases)) {
-        // Find the group's item IDs from the original items
         const groupItems = items.filter(i => {
           const compKey = i.complementos ? JSON.stringify(i.complementos) : '';
           return `${i.produto_nome}|${compKey}|${Number(i.valor_unitario)}` === key;
         });
         let remaining = dec;
-        // Remove from last items first
         for (let idx = groupItems.length - 1; idx >= 0 && remaining > 0; idx--) {
           const item = groupItems[idx];
           if (item.quantidade <= remaining) {
@@ -123,9 +119,8 @@ export function ComandaDetalhe({ comanda, open, onOpenChange, onPrintItems, onCl
           }
         }
       }
-      // Log all changes
       for (const desc of pending.descriptions) {
-        await registrarAlteracao(comanda.id, null, 'edicao', desc, email, nome);
+        await registrarAlteracao(comanda.id, null, 'edicao', `${desc} [CPF: ${cpf || 'N/A'}]`, email, nome || undefined);
       }
       toast({ title: 'Alterações salvas' });
       setPending({ deletes: [], decreases: {}, descriptions: [] });
@@ -136,14 +131,20 @@ export function ComandaDetalhe({ comanda, open, onOpenChange, onPrintItems, onCl
     }
   };
 
-  const executeClose = async (email: string, nome?: string, pagamentos?: PagamentoSelecionado[]) => {
+  const executeClose = async (email: string, nome?: string | null, pagamentos?: PagamentoSelecionado[], cpf?: string | null) => {
     if (!comanda || !pagamentos || pagamentos.length === 0) return;
     try {
       if (hasChanges) {
-        await executeSave(email, nome);
+        await executeSave(email, nome, cpf);
       }
       const formaDesc = pagamentos.map(p => `${p.forma.nome}: R$ ${p.valor.toFixed(2).replace('.', ',')}`).join(' | ');
-      await fecharComanda(comanda.id, pagamentos[0].forma.id, formaDesc, email, nome);
+      await fecharComanda(comanda.id, pagamentos[0].forma.id, formaDesc, email, nome || undefined);
+      // Additional audit with CPF
+      await registrarAlteracao(
+        comanda.id, null, 'edicao',
+        `Comanda encerrada - ${formaDesc} [CPF: ${cpf || 'N/A'}]`,
+        email, nome || undefined
+      );
       toast({ title: 'Comanda encerrada com sucesso' });
       setShowClose(false);
       onOpenChange(false);
@@ -151,6 +152,62 @@ export function ComandaDetalhe({ comanda, open, onOpenChange, onPrintItems, onCl
     } catch (err: any) {
       toast({ title: 'Erro ao encerrar comanda', description: err?.message || String(err), variant: 'destructive' });
     }
+  };
+
+  // Grouped items and total
+  const groupedItems = useMemo(() => {
+    const activeItems = items.filter(i => !pending.deletes.includes(i.id));
+    const groups: Record<string, GroupedItem> = {};
+    for (const item of activeItems) {
+      const compKey = item.complementos ? JSON.stringify(item.complementos) : '';
+      const key = `${item.produto_nome}|${compKey}|${Number(item.valor_unitario)}`;
+      if (groups[key]) {
+        groups[key].quantidade += item.quantidade;
+        groups[key].originalQuantidade += item.quantidade;
+        groups[key].valor_total += Number(item.valor_total);
+        groups[key].itemIds.push(item.id);
+        if (item.peso) groups[key].peso = (groups[key].peso || 0) + item.peso;
+      } else {
+        groups[key] = {
+          key,
+          produto_nome: item.produto_nome,
+          quantidade: item.quantidade,
+          originalQuantidade: item.quantidade,
+          valor_unitario: Number(item.valor_unitario),
+          valor_total: Number(item.valor_total),
+          peso: item.peso,
+          complementos: item.complementos,
+          itemIds: [item.id],
+        };
+      }
+    }
+    for (const [key, dec] of Object.entries(pending.decreases)) {
+      if (groups[key]) {
+        groups[key].quantidade -= dec;
+        groups[key].valor_total = groups[key].quantidade * groups[key].valor_unitario;
+      }
+    }
+    return Object.values(groups).filter(g => g.quantidade > 0);
+  }, [items, pending]);
+
+  const totalComanda = useMemo(() => groupedItems.reduce((sum, g) => sum + g.valor_total, 0), [groupedItems]);
+
+  const handleDecrease = (group: GroupedItem) => {
+    if (group.quantidade <= 1) return;
+    setPending(prev => ({
+      ...prev,
+      decreases: { ...prev.decreases, [group.key]: (prev.decreases[group.key] || 0) + 1 },
+      descriptions: [...prev.descriptions, `Quantidade diminuída: ${group.produto_nome} (-1)`],
+    }));
+  };
+
+  const handleDeleteGroup = (group: GroupedItem) => {
+    setPending(prev => ({
+      ...prev,
+      deletes: [...prev.deletes, ...group.itemIds],
+      decreases: (() => { const d = { ...prev.decreases }; delete d[group.key]; return d; })(),
+      descriptions: [...prev.descriptions, `Itens removidos: ${group.produto_nome} (${group.quantidade}x)`],
+    }));
   };
 
   if (!comanda) return null;
@@ -245,7 +302,7 @@ export function ComandaDetalhe({ comanda, open, onOpenChange, onPrintItems, onCl
             {comanda.status === 'aberta' && (
               <Button variant="outline" onClick={() => {
                 if (hasChanges) {
-                  requestAuth('save');
+                  handleSaveChanges();
                 } else {
                   onOpenChange(false);
                 }
@@ -264,40 +321,6 @@ export function ComandaDetalhe({ comanda, open, onOpenChange, onPrintItems, onCl
         </DialogContent>
       </Dialog>
 
-      {/* Auth Dialog */}
-      <Dialog open={showAuth} onOpenChange={setShowAuth}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Autenticação necessária</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Informe suas credenciais para confirmar as alterações na comanda.
-          </p>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>CPF</Label>
-              <Input
-                inputMode="numeric"
-                value={authCpf}
-                onChange={e => setAuthCpf(formatCPF(e.target.value))}
-                placeholder="000.000.000-00"
-                maxLength={14}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Senha</Label>
-              <Input type="password" value={authSenha} onChange={e => setAuthSenha(e.target.value)} placeholder="Sua senha" onKeyDown={e => e.key === 'Enter' && handleAuth()} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAuth(false)}>Cancelar</Button>
-            <Button onClick={handleAuth} disabled={authLoading || !cleanCPF(authCpf) || !authSenha}>
-              {authLoading ? 'Verificando...' : 'Confirmar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Encerrar Comanda Dialog */}
       <PagamentoDialog
         open={showClose}
@@ -308,9 +331,8 @@ export function ComandaDetalhe({ comanda, open, onOpenChange, onPrintItems, onCl
         confirmLabel="Confirmar encerramento"
         confirmIcon={<Lock className="h-4 w-4 mr-2" />}
         onConfirm={(pagamentos) => {
-          setPendingPagamentos(pagamentos);
           setShowClose(false);
-          requestAuth('close');
+          handleCloseComanda(pagamentos);
         }}
       />
     </>
