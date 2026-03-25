@@ -245,6 +245,31 @@ export function PrinterSettings() {
                 }}>
                   Salvar
                 </Button>
+                <Button size="sm" variant="outline" onClick={async () => {
+                  const url = printServerUrl.trim().replace(/\/+$/, '');
+                  if (!url) {
+                    toast({ title: '⚠️ Informe a URL do Print Server', variant: 'destructive' });
+                    return;
+                  }
+                  try {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 5000);
+                    const res = await fetch(`${url}/status`, { signal: controller.signal });
+                    clearTimeout(timeout);
+                    if (res.ok) {
+                      toast({ title: '✅ Print Server conectado', description: 'Comunicação OK!' });
+                    } else {
+                      toast({ title: '⚠️ Print Server respondeu com erro', description: `Status ${res.status}`, variant: 'destructive' });
+                    }
+                  } catch (e: any) {
+                    const msg = e?.name === 'AbortError'
+                      ? 'Print Server não respondeu (timeout 5s).'
+                      : 'Não foi possível conectar. Verifique se o Print Server está rodando e acessível.';
+                    toast({ title: '❌ Conexão falhou', description: msg, variant: 'destructive' });
+                  }
+                }}>
+                  <CheckCircle className="mr-1 h-4 w-4" /> Testar
+                </Button>
               </div>
             </div>
 
