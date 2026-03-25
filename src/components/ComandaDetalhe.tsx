@@ -11,6 +11,7 @@ import { useFormasPagamento, FormaPagamento } from '@/hooks/useFormasPagamento';
 import { PagamentoDialog, PagamentoSelecionado } from '@/components/PagamentoDialog';
 import { cn } from '@/lib/utils';
 import { formatCPF, cleanCPF } from '@/lib/cpf-utils';
+import { useOptionalUserSession } from '@/contexts/UserSessionContext';
 
 interface Props {
   comanda: Comanda | null;
