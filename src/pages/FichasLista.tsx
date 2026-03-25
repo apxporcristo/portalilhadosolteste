@@ -60,7 +60,7 @@ export default function FichasLista() {
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
   const { impressoras } = useImpressoras();
-  const { createPrintJob } = usePrintJobs();
+  // Direct printing - no print_jobs
   const impressorasAtivas = impressoras.filter(p => p.ativa);
   const balanca = useBalanca();
   const { lerPeso } = balanca;
