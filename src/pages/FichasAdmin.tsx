@@ -772,28 +772,26 @@ export default function FichasAdmin() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Nome do produto *</Label>
-                <Input value={prodForm.nome_produto} onChange={(e) => setProdForm(p => ({ ...p, nome_produto: e.target.value.slice(0, 50) }))} placeholder="Ex: Coca-Cola Lata" maxLength={50} />
-                {editProd && isPrinted(editProd.id) && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Lock className="h-3 w-3" /> Produto já impresso — apenas pequenas correções no nome
-                  </p>
-                )}
+                <Label>Impressora</Label>
+                <Select value={prodForm.printer_id} onValueChange={(v) => setProdForm(p => ({ ...p, printer_id: v === '_none' ? '' : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Usar padrão" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Nenhuma (usar padrão)</SelectItem>
+                    {impressorasAtivas.map(imp => (
+                      <SelectItem key={imp.id} value={imp.id}>{imp.nome} ({imp.tipo})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
-              <div className="space-y-2">
-                <Label>Valor (R$) *</Label>
-                <Input type="number" min="0" step="0.01" value={prodForm.valor} onChange={(e) => setProdForm(p => ({ ...p, valor: e.target.value.slice(0, 5) }))} placeholder="0.00" maxLength={5} className="w-24" />
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={prodForm.ativo} onCheckedChange={(v) => setProdForm(p => ({ ...p, ativo: v }))} />
-                <Label>Ativado</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={prodForm.tem_complementos} onCheckedChange={(v) => setProdForm(p => ({ ...p, tem_complementos: v }))} />
-                <Label>Complementos</Label>
-              </div>
+            <div className="space-y-2">
+              <Label>Nome do produto *</Label>
+              <Input value={prodForm.nome_produto} onChange={(e) => setProdForm(p => ({ ...p, nome_produto: e.target.value.slice(0, 50) }))} placeholder="Ex: Coca-Cola Lata" maxLength={50} />
+              {editProd && isPrinted(editProd.id) && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Lock className="h-3 w-3" /> Produto já impresso — apenas pequenas correções no nome
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4 items-end">
               <div className="space-y-2">
@@ -807,27 +805,37 @@ export default function FichasAdmin() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Impressora</Label>
-                <Select value={prodForm.printer_id} onValueChange={(v) => setProdForm(p => ({ ...p, printer_id: v === '_none' ? '' : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Usar padrão" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">Nenhuma (usar padrão)</SelectItem>
-                    {impressorasAtivas.map(imp => (
-                      <SelectItem key={imp.id} value={imp.id}>{imp.nome} ({imp.tipo})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>{prodForm.forma_venda === 'por_peso' ? 'Valor por kg (R$) *' : 'Valor (R$) *'}</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={prodForm.forma_venda === 'por_peso' ? prodForm.valor_por_kg : prodForm.valor}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (prodForm.forma_venda === 'por_peso') {
+                      setProdForm(p => ({ ...p, valor_por_kg: val, valor: val }));
+                    } else {
+                      setProdForm(p => ({ ...p, valor: val.slice(0, 5) }));
+                    }
+                  }}
+                  placeholder="0.00"
+                />
               </div>
             </div>
-            {prodForm.forma_venda === 'por_peso' && (
-              <div className="space-y-2">
-                <Label>Valor por kg (R$)</Label>
-                <Input type="number" min="0" step="0.01" value={prodForm.valor_por_kg} onChange={(e) => setProdForm(p => ({ ...p, valor_por_kg: e.target.value }))} placeholder="0.00" className="w-28" />
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch checked={prodForm.ativo} onCheckedChange={(v) => setProdForm(p => ({ ...p, ativo: v }))} />
+                <Label>Ativado</Label>
               </div>
-            )}
-            <div className="flex items-center gap-2">
-              <Switch checked={prodForm.imprimir_ficha} onCheckedChange={(v) => setProdForm(p => ({ ...p, imprimir_ficha: v }))} />
-              <Label>Imprimir ficha</Label>
+              <div className="flex items-center gap-2">
+                <Switch checked={prodForm.tem_complementos} onCheckedChange={(v) => setProdForm(p => ({ ...p, tem_complementos: v }))} />
+                <Label>Complementos</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={prodForm.imprimir_ficha} onCheckedChange={(v) => setProdForm(p => ({ ...p, imprimir_ficha: v }))} />
+                <Label>Imprimir ficha</Label>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Observação <span className="text-muted-foreground text-xs">(opcional, aparece na ficha)</span></Label>
