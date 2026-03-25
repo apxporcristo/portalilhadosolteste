@@ -100,12 +100,14 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex gap-2">
-            <Button onClick={handleLerPeso} disabled={lendo} className="flex-1">
-              <RefreshCw className={`h-4 w-4 mr-2 ${lendo ? 'animate-spin' : ''}`} />
-              {lendo ? 'Lendo...' : 'Ler Peso da Balança'}
-            </Button>
-          </div>
+          {status === 'conectada' && (
+            <div className="flex gap-2">
+              <Button onClick={handleLerPeso} disabled={lendo} className="flex-1">
+                <RefreshCw className={`h-4 w-4 mr-2 ${lendo ? 'animate-spin' : ''}`} />
+                {lendo ? 'Lendo...' : 'Ler Peso da Balança'}
+              </Button>
+            </div>
+          )}
 
           {/* BT Classic scales require Android app - show guidance */}
           {config.tipo_conexao === 'bluetooth' && !window.IS_ANDROID_APP && (
