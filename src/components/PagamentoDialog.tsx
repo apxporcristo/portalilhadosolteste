@@ -187,14 +187,27 @@ export function PagamentoDialog({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Button
-            onClick={handleConfirm}
-            disabled={!canConfirm && !(showTroco && pagamentos.every(p => p.valor > 0))}
-            className="w-full"
-          >
-            {confirmIcon}
-            {confirmLabel}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleConfirm}
+              disabled={!canConfirm && !(showTroco && pagamentos.every(p => p.valor > 0))}
+              className="flex-1"
+            >
+              {confirmIcon}
+              {confirmLabel}
+            </Button>
+            {onSave && (
+              <Button
+                variant="secondary"
+                onClick={handleSave}
+                disabled={!canConfirm && !(showTroco && pagamentos.every(p => p.valor > 0))}
+                className="flex-1"
+              >
+                {saveIcon}
+                {saveLabel}
+              </Button>
+            )}
+          </div>
           {children}
         </div>
       </DialogContent>
