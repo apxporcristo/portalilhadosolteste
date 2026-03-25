@@ -56,7 +56,7 @@ const Index = () => {
   } = useVouchers();
 
   const [isAdmin, setIsAdmin] = useState(false);
-  const { config, printData, createVoucherData, isBluetoothConnected, reconnectBluetooth, silentReconnectBluetooth, scanBluetoothDevices, connectBluetooth } = usePrinterContext();
+  const { createVoucherData } = usePrinterContext();
   const { getVoucherPrinter, voucherConfig } = useImpressoras();
   const cart = useVoucherCart();
   const fichasConsumo = useFichasConsumo();
