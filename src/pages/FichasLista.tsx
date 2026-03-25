@@ -604,19 +604,6 @@ export default function FichasLista() {
             />
           </div>
 
-          {/* Serve Service button */}
-          {!balanca.loading && balanca.config.id && (
-            <Button
-              variant="outline"
-              className="w-full max-w-2xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10"
-              onClick={() => setShowServeService(true)}
-            >
-              <Scale className="h-5 w-5 mr-2 text-primary" />
-              <span className="font-semibold">SERVE SERVICE</span>
-              <span className="ml-2 text-sm text-muted-foreground">R$ {(balanca.config.valor_peso || 0).toFixed(2)}/kg</span>
-            </Button>
-          )}
-
           {grouped.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               {search ? 'Nenhum produto encontrado.' : 'Nenhuma ficha ativa no momento.'}
@@ -996,30 +983,6 @@ export default function FichasLista() {
         }}
         confirmText="Sim, incluir"
         cancelText="Não"
-      />
-
-      <ServeServiceDialog
-        open={showServeService}
-        onOpenChange={setShowServeService}
-        onAddToCart={(item) => {
-          const serveServiceFicha: FichaAtiva = {
-            id: `serve_service_${Date.now()}`,
-            nome_produto: item.fichaTexto,
-            valor: item.fichaValor,
-            categoria_id: '',
-            categoria_nome: 'Serve Service',
-            exigir_dados_cliente: true,
-            exigir_dados_atendente: true,
-            created_at: new Date().toISOString(),
-          };
-          setCart(prev => [...prev, {
-            ficha: serveServiceFicha,
-            quantidade: 1,
-            selectedItems: [],
-            peso: parseFloat(item.tempo.match(/[\d.]+/)?.[0] || '0'),
-            valorPorKg: balanca.config.valor_peso || 0,
-          }]);
-        }}
       />
 
       {/* Printer Selection Modal - for items without printer_id */}
