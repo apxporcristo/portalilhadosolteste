@@ -87,6 +87,12 @@ export function PagamentoDialog({
     resetState();
   };
 
+  const handleSave = () => {
+    if (!canConfirm && !showTroco) return;
+    onSave?.(pagamentos);
+    resetState();
+  };
+
   const handleOpenChange = (v: boolean) => {
     if (!v) resetState();
     onOpenChange(v);
