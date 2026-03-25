@@ -268,12 +268,24 @@ export function useBalanca() {
     return false;
   }, [config, saveConfig]);
 
-  // ========== WEIGHT READING ==========
+  const lerPesoAndroid = useCallback((): number | null => {
+    try {
+      const bridge = window.AndroidBridge;
+      if (!bridge || !bridge.readScale) return null;
+      const raw = bridge.readScale();
+      console.log('[Balança] AndroidBridge.readScale() retornou:', raw);
+      if (!raw) return null;
+      const parsed = parseToledoWeight(raw);
+      if (parsed !== null) return parsed;
+      const num = parseFloat(raw.replace(',', '.'));
+      return isNaN(num) ? null : num;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Read weight via Android Bridge (Bluetooth Classic serial)
   const lerPesoBluetooth = useCallback(async (): Promise<number | null> => {
-    // Web Bluetooth GATT cannot read classic serial scales
-    // Use Android Bridge readScale instead
     return lerPesoAndroid();
   }, [lerPesoAndroid]);
 
@@ -308,24 +320,6 @@ export function useBalanca() {
       return null;
     }
   }, [serialPort, config.baud_rate]);
-
-  const lerPesoAndroid = useCallback((): number | null => {
-    try {
-      const bridge = window.AndroidBridge;
-      if (!bridge || !bridge.readScale) return null;
-      const raw = bridge.readScale();
-      console.log('[Balança] AndroidBridge.readScale() retornou:', raw);
-      if (!raw) return null;
-      // Try Toledo protocol first, then plain number
-      const parsed = parseToledoWeight(raw);
-      if (parsed !== null) return parsed;
-      const num = parseFloat(raw.replace(',', '.'));
-      return isNaN(num) ? null : num;
-    } catch {
-      return null;
-    }
-  }, []);
-
   const conectarBalancaAndroid = useCallback((): boolean => {
     const bridge = window.AndroidBridge;
     if (!bridge?.connectScale) return false;
