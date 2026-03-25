@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, Bluetooth, BluetoothSearching, Wifi, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, Bluetooth, BluetoothSearching, Wifi, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -348,6 +348,53 @@ export default function FichasLista() {
       setShowPrinterSelectModal(true);
     } else {
       toast({ title: 'Nenhuma impressora cadastrada', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveOnly = async () => {
+    if (cart.length === 0) return;
+    setPrinting(true);
+    try {
+      const sbClient = await getSupabaseClient();
+      for (const item of cart) {
+        const unitTotal = cartItemTotal(item);
+        const dadosExtras: any = {};
+        if (item.ficha.exigir_dados_cliente && nomeCliente.trim()) {
+          dadosExtras.nome_cliente = nomeCliente.trim();
+          if (telefoneCliente.trim()) dadosExtras.telefone_cliente = telefoneCliente.trim();
+        }
+        if (item.ficha.exigir_dados_atendente && nomeAtendente.trim()) {
+          dadosExtras.nome_atendente = nomeAtendente.trim();
+        }
+        try {
+          await registrarImpressao(item.ficha.id, item.quantidade, unitTotal, dadosExtras);
+        } catch (e) { console.warn('[Ficha Save] registrarImpressao falhou:', e); }
+
+        let produtoNome = item.ficha.nome_produto;
+        if (item.selectedItems.length > 0) {
+          produtoNome += ' | ' + item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ');
+        }
+        try {
+          await sbClient.from('fichas_impressas' as any).insert({
+            produto_id: item.ficha.id,
+            produto_nome: produtoNome,
+            categoria_id: item.ficha.categoria_id,
+            categoria_nome: item.ficha.categoria_nome,
+            quantidade: item.quantidade,
+            valor_unitario: unitTotal,
+            valor_total: unitTotal * item.quantidade,
+            nome_cliente: nomeCliente.trim() || null,
+            telefone_cliente: telefoneCliente.trim() || null,
+            nome_atendente: nomeAtendente.trim() || null,
+          });
+        } catch (e) { console.warn('[Ficha Save] fichas_impressas insert falhou:', e); }
+      }
+      toast({ title: 'Salvo!', description: `${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
+      clearCart();
+    } catch (err) {
+      toast({ title: 'Erro', description: `Falha ao salvar: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -833,6 +880,12 @@ export default function FichasLista() {
         onConfirm={() => {
           setShowPagamentoModal(false);
           handleInitPrint();
+        }}
+        saveLabel="Salvar"
+        saveIcon={<Save className="h-5 w-5 mr-2" />}
+        onSave={() => {
+          setShowPagamentoModal(false);
+          handleSaveOnly();
         }}
       >
         {comandasAbertas.length > 0 && (

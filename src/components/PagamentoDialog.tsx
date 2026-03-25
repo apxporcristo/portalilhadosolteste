@@ -21,6 +21,9 @@ interface PagamentoDialogProps {
   confirmLabel?: string;
   confirmIcon?: React.ReactNode;
   onConfirm: (pagamentos: PagamentoSelecionado[]) => void;
+  onSave?: (pagamentos: PagamentoSelecionado[]) => void;
+  saveLabel?: string;
+  saveIcon?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -33,6 +36,9 @@ export function PagamentoDialog({
   confirmLabel = 'Confirmar',
   confirmIcon,
   onConfirm,
+  onSave,
+  saveLabel = 'Salvar',
+  saveIcon,
   children,
 }: PagamentoDialogProps) {
   const [selected, setSelected] = useState<Record<string, string>>({});
@@ -78,6 +84,12 @@ export function PagamentoDialog({
   const handleConfirm = () => {
     if (!canConfirm && !showTroco) return;
     onConfirm(pagamentos);
+    resetState();
+  };
+
+  const handleSave = () => {
+    if (!canConfirm && !showTroco) return;
+    onSave?.(pagamentos);
     resetState();
   };
 
@@ -175,14 +187,27 @@ export function PagamentoDialog({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Button
-            onClick={handleConfirm}
-            disabled={!canConfirm && !(showTroco && pagamentos.every(p => p.valor > 0))}
-            className="w-full"
-          >
-            {confirmIcon}
-            {confirmLabel}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleConfirm}
+              disabled={!canConfirm && !(showTroco && pagamentos.every(p => p.valor > 0))}
+              className="flex-1"
+            >
+              {confirmIcon}
+              {confirmLabel}
+            </Button>
+            {onSave && (
+              <Button
+                variant="secondary"
+                onClick={handleSave}
+                disabled={!canConfirm && !(showTroco && pagamentos.every(p => p.valor > 0))}
+                className="flex-1"
+              >
+                {saveIcon}
+                {saveLabel}
+              </Button>
+            )}
+          </div>
           {children}
         </div>
       </DialogContent>
