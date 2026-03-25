@@ -225,6 +225,7 @@ export default function FichasAdmin() {
       forma_venda: p.forma_venda || 'unitario',
       valor_por_kg: p.valor_por_kg ? String(p.valor_por_kg) : '',
       obs: (p as any).obs || '',
+      imprimir_ficha: (p as any).imprimir_ficha ?? true,
     });
     setShowProdModal(true);
   };
