@@ -1098,6 +1098,11 @@ export default function FichasLista() {
                 className="w-full justify-start gap-3 h-14"
                 onClick={() => handleSelectPrinterForUnassigned(imp)}
               >
+                {imp.tipo === 'bluetooth' ? (
+                  <Bluetooth className="h-5 w-5 text-blue-500 shrink-0" />
+                ) : (
+                  <Wifi className="h-5 w-5 text-green-500 shrink-0" />
+                )}
                 <div className="text-left">
                   <div className="font-medium">{imp.nome}</div>
                   <div className="text-xs text-muted-foreground">
