@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, Bluetooth, BluetoothSearching } from 'lucide-react';
+import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, Bluetooth, BluetoothSearching, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -337,35 +337,19 @@ export default function FichasLista() {
       return (produto as any)?.imprimir_ficha !== false;
     });
 
-    // Group by printer_id
-    const assigned: { printer: Impressora; items: CartItem[] }[] = [];
-    const unassigned: CartItem[] = [];
-
-    for (const item of printableItems) {
-      const produto = produtos.find(p => p.id === item.ficha.id);
-      const printerId = produto?.printer_id || (item.ficha as any)?.printer_id;
-      if (printerId) {
-        const printer = impressorasAtivas.find(p => p.id === printerId);
-        if (printer) {
-          const group = assigned.find(g => g.printer.id === printer.id);
-          if (group) group.items.push(item);
-          else assigned.push({ printer, items: [item] });
-          continue;
-        }
-      }
-      unassigned.push(item);
+    if (printableItems.length === 0) {
+      executePrint([], []);
+      return;
     }
 
-    setPendingAssignedGroups(assigned);
-
-    if (unassigned.length > 0 && impressorasAtivas.length > 0) {
-      // Need user to pick a printer for unassigned items
-      setPendingUnassignedItems(unassigned);
+    // Always show printer selection modal if there are registered printers
+    if (impressorasAtivas.length > 0) {
+      setPendingAssignedGroups([]);
+      setPendingUnassignedItems(printableItems);
       setShowPrinterSelectModal(true);
     } else {
-      // All items have printers or no printers registered at all
-      setPendingUnassignedItems([]);
-      executePrint(assigned, unassigned);
+      // No printers registered, use browser/default fallback
+      executePrint([], printableItems);
     }
   };
 
@@ -1103,9 +1087,7 @@ export default function FichasLista() {
               Selecionar Impressora
             </DialogTitle>
             <DialogDescription>
-              {pendingUnassignedItems.length > 0
-                ? `${pendingUnassignedItems.length} item(ns) sem impressora configurada. Escolha para onde enviar:`
-                : 'Escolha a impressora para enviar as fichas.'}
+              Escolha a impressora para enviar as fichas:
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 mt-2">
@@ -1116,6 +1098,11 @@ export default function FichasLista() {
                 className="w-full justify-start gap-3 h-14"
                 onClick={() => handleSelectPrinterForUnassigned(imp)}
               >
+                {imp.tipo === 'bluetooth' ? (
+                  <Bluetooth className="h-5 w-5 text-blue-500 shrink-0" />
+                ) : (
+                  <Wifi className="h-5 w-5 text-green-500 shrink-0" />
+                )}
                 <div className="text-left">
                   <div className="font-medium">{imp.nome}</div>
                   <div className="text-xs text-muted-foreground">
