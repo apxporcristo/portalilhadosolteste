@@ -110,7 +110,7 @@ export function usePrintJobs() {
       return true;
     } catch (e) {
       const message = e instanceof TypeError && (e.message === 'Failed to fetch' || e.message.includes('fetch'))
-        ? 'Falha de rede ao acessar o Print Server local. No preview do Lovable isso costuma ser bloqueio do navegador por HTTPS x HTTP local.'
+        ? 'Impressão local indisponível neste navegador. Use o app auxiliar de impressão neste dispositivo.'
         : (e as Error).message;
       toast({ title: '❌ Erro na impressão direta', description: message, variant: 'destructive' });
       return false;
