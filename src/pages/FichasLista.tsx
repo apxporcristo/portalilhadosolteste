@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, Bluetooth, BluetoothSearching, Wifi } from 'lucide-react';
+import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, Bluetooth, BluetoothSearching, Wifi, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,7 @@ import { useComandas } from '@/hooks/useComandas';
 import { PagamentoDialog, PagamentoSelecionado } from '@/components/PagamentoDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useBalanca } from '@/hooks/useBalanca';
-import { ServeServiceDialog } from '@/components/ServeServiceDialog';
+
 
 interface SelectedItem {
   categoria: string;
@@ -61,7 +61,6 @@ export default function FichasLista() {
   const balanca = useBalanca();
   const { lerPeso } = balanca;
   const [search, setSearch] = useState('');
-  const [showServeService, setShowServeService] = useState(false);
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const [showPrinterSelectModal, setShowPrinterSelectModal] = useState(false);
@@ -177,18 +176,9 @@ export default function FichasLista() {
   };
 
   const handlePesoProduct = async (ficha: FichaAtiva, selectedItems: SelectedItem[]) => {
-    const peso = await lerPeso();
-    if (peso !== null && peso > 0) {
-      const produto = produtos.find(p => p.id === ficha.id);
-      const valorKg = produto?.valor_por_kg || Number(ficha.valor);
-      const subtotal = peso * valorKg;
-      addItemToCart(ficha, selectedItems, peso, valorKg);
-    } else {
-      // Fallback: manual weight input
-      setPendingPesoFicha({ ficha, selectedItems });
-      setPesoManual('');
-      setShowPesoModal(true);
-    }
+    setPendingPesoFicha({ ficha, selectedItems });
+    setPesoManual('');
+    setShowPesoModal(true);
   };
 
   const handleConfirmPesoManual = () => {
@@ -605,19 +595,6 @@ export default function FichasLista() {
             />
           </div>
 
-          {/* Serve Service button */}
-          {!balanca.loading && balanca.config.id && (
-            <Button
-              variant="outline"
-              className="w-full max-w-2xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10"
-              onClick={() => setShowServeService(true)}
-            >
-              <Scale className="h-5 w-5 mr-2 text-primary" />
-              <span className="font-semibold">SERVE SERVICE</span>
-              <span className="ml-2 text-sm text-muted-foreground">R$ {(balanca.config.valor_peso || 0).toFixed(2)}/kg</span>
-            </Button>
-          )}
-
           {grouped.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               {search ? 'Nenhum produto encontrado.' : 'Nenhuma ficha ativa no momento.'}
@@ -854,21 +831,83 @@ export default function FichasLista() {
         )}
       </PagamentoDialog>
 
-      {/* Modal Peso Manual */}
-      <Dialog open={showPesoModal} onOpenChange={setShowPesoModal}>
-        <DialogContent>
+      {/* Modal Peso - estilo ServeService */}
+      <Dialog open={showPesoModal} onOpenChange={(open) => { if (!open) { setShowPesoModal(false); setPendingPesoFicha(null); } }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Informar peso</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Scale className="h-5 w-5 text-primary" />
+              {pendingPesoFicha?.ficha.nome_produto || 'Informar peso'}
+              {balanca.config.tipo_conexao === 'bluetooth' && (
+                <Badge variant={balanca.status === 'conectada' ? 'default' : balanca.status === 'conectando' || balanca.status === 'tentando' ? 'secondary' : 'outline'} className="ml-auto text-xs">
+                  {balanca.status === 'conectada' ? 'Conectada' : balanca.status === 'conectando' ? 'Conectando...' : balanca.status === 'tentando' ? `Tentando...` : balanca.status === 'falha' ? 'Falha' : 'Desconectada'}
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Leia o peso da balança e calcule o valor.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Não foi possível ler a balança. Informe o peso manualmente.</p>
-          <div className="space-y-2">
-            <Label>Peso (kg)</Label>
-            <Input placeholder="0,000" value={pesoManual} onChange={e => setPesoManual(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleConfirmPesoManual()} />
+          <div className="space-y-4">
+            {balanca.status === 'conectada' && (
+              <Button onClick={async () => {
+                const resultado = await lerPeso(3);
+                if (resultado !== null && resultado > 0) {
+                  setPesoManual(resultado.toFixed(3));
+                  toast({ title: 'Peso lido', description: `${resultado.toFixed(3)} kg` });
+                } else {
+                  toast({ title: 'Não foi possível ler o peso', description: 'Digite o peso manualmente.', variant: 'destructive' });
+                }
+              }} className="w-full">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Ler Peso da Balança
+              </Button>
+            )}
+
+            <div>
+              <Label className="text-sm">Peso manual (kg)</Label>
+              <Input
+                type="number"
+                step="0.001"
+                value={pesoManual}
+                onChange={e => setPesoManual(e.target.value)}
+                placeholder="Ex: 0.500"
+                onKeyDown={e => e.key === 'Enter' && handleConfirmPesoManual()}
+              />
+            </div>
+
+            {(() => {
+              const pesoNum = parseFloat(pesoManual.replace(',', '.')) || 0;
+              const produto = pendingPesoFicha ? produtos.find(p => p.id === pendingPesoFicha.ficha.id) : null;
+              const valorKg = produto?.valor_por_kg || Number(pendingPesoFicha?.ficha.valor || 0);
+              const totalPeso = pesoNum * valorKg;
+              return (
+                <div className="p-3 border rounded-lg space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Peso:</span>
+                    <span className="font-medium">{pesoNum.toFixed(3)} kg</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Valor/kg:</span>
+                    <span className="font-medium">R$ {valorKg.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-base font-bold border-t pt-1 mt-1">
+                    <span>Total:</span>
+                    <span className="text-primary">R$ {totalPeso.toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex gap-2">
+              <Button onClick={handleConfirmPesoManual} className="flex-1" disabled={!(parseFloat(pesoManual.replace(',', '.')) > 0)}>
+                Adicionar
+              </Button>
+              <Button variant="outline" onClick={() => { setShowPesoModal(false); setPendingPesoFicha(null); }}>
+                Limpar
+              </Button>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowPesoModal(false); setPendingPesoFicha(null); }}>Cancelar</Button>
-            <Button onClick={handleConfirmPesoManual}>Confirmar</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -935,30 +974,6 @@ export default function FichasLista() {
         }}
         confirmText="Sim, incluir"
         cancelText="Não"
-      />
-
-      <ServeServiceDialog
-        open={showServeService}
-        onOpenChange={setShowServeService}
-        onAddToCart={(item) => {
-          const serveServiceFicha: FichaAtiva = {
-            id: `serve_service_${Date.now()}`,
-            nome_produto: item.fichaTexto,
-            valor: item.fichaValor,
-            categoria_id: '',
-            categoria_nome: 'Serve Service',
-            exigir_dados_cliente: true,
-            exigir_dados_atendente: true,
-            created_at: new Date().toISOString(),
-          };
-          setCart(prev => [...prev, {
-            ficha: serveServiceFicha,
-            quantidade: 1,
-            selectedItems: [],
-            peso: parseFloat(item.tempo.match(/[\d.]+/)?.[0] || '0'),
-            valorPorKg: balanca.config.valor_peso || 0,
-          }]);
-        }}
       />
 
       {/* Printer Selection Modal - for items without printer_id */}
