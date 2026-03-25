@@ -6,8 +6,8 @@ import { usePrinterContext } from '@/contexts/PrinterContext';
 import { useImpressoras } from '@/hooks/useImpressoras';
 import { useVoucherCart } from '@/hooks/useVoucherCart';
 import { useAndroidBridge } from '@/hooks/useAndroidBridge';
+import { usePrintJobs } from '@/hooks/usePrintJobs';
 import { printVouchersBatch } from '@/lib/print-browser';
-import { getLocalPrintServerUrl } from '@/hooks/usePrintJobs';
 import { getNetworkName, getWifiQrString } from '@/hooks/useNetworkName';
 import { PrinterSelectDialog, AvailablePrinter } from '@/components/PrinterSelectDialog';
 import { VoucherCart } from '@/components/VoucherCart';
@@ -45,6 +45,7 @@ export default function VoucherLista() {
   const { getVoucherPrinter } = useImpressoras();
   const cart = useVoucherCart();
   const androidBridge = useAndroidBridge();
+  const { createPrintJob } = usePrintJobs();
   const [showPrinterSelect, setShowPrinterSelect] = useState(false);
   const [availablePrinters, setAvailablePrinters] = useState<AvailablePrinter[]>([]);
   const [batchPrinting, setBatchPrinting] = useState(false);
@@ -113,6 +114,34 @@ export default function VoucherLista() {
             window.AndroidBridge.smartPrint(payload);
           }
           printSuccess = true;
+        } else if (printer.type === 'network') {
+          const { printer: voucherPrinter } = getVoucherPrinter();
+
+          if (voucherPrinter?.tipo === 'rede') {
+            try {
+              for (const v of voucherData) {
+                const escposData = await createVoucherData(v.voucher_id, v.tempo_validade);
+                const payload = JSON.stringify({
+                  type: 'network',
+                  printer_id: voucherPrinter.id,
+                  printer_name: voucherPrinter.nome,
+                  printer_ip: voucherPrinter.ip,
+                  printer_port: voucherPrinter.porta || '9100',
+                  data: Array.from(escposData),
+                  voucher_id: v.voucher_id,
+                  tempo_validade: v.tempo_validade,
+                });
+                const queued = await createPrintJob(voucherPrinter.id, payload, 'json');
+                if (!queued) throw new Error('queue_failed');
+              }
+              printSuccess = true;
+            } catch (err) {
+              console.error('Erro ao enviar impressão para fila:', err);
+              toast({ title: 'Erro na impressão', description: 'Não foi possível enviar para a impressora cadastrada.', variant: 'destructive' });
+            }
+          } else {
+            toast({ title: 'Impressão indisponível', description: 'Impressão local indisponível neste dispositivo. Utilize o app auxiliar de impressão.', variant: 'destructive' });
+          }
         } else {
           // Tentar deep link para app auxiliar
           const networkName = getNetworkName();
@@ -173,7 +202,7 @@ export default function VoucherLista() {
     } finally {
       setBatchPrinting(false);
     }
-  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge]);
+  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge, getVoucherPrinter, createPrintJob]);
 
   const handleBatchPrint = useCallback(async () => {
     const printers = getAvailablePrinters();
