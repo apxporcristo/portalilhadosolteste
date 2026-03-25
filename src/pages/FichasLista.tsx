@@ -59,12 +59,16 @@ export default function FichasLista() {
   const userSession = useOptionalUserSession();
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
+  const { impressoras } = useImpressoras();
+  const { createPrintJob } = usePrintJobs();
+  const impressorasAtivas = impressoras.filter(p => p.ativa);
   const balanca = useBalanca();
   const { lerPeso } = balanca;
   const [search, setSearch] = useState('');
   const [showServeService, setShowServeService] = useState(false);
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [showPrinterSelectModal, setShowPrinterSelectModal] = useState(false);
 
   // Peso manual input
   const [showPesoModal, setShowPesoModal] = useState(false);
