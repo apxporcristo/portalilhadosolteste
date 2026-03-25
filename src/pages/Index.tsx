@@ -62,7 +62,7 @@ const Index = () => {
   const { comandasAbertas } = useComandas();
   const navigate = useNavigate();
   const androidBridge = useAndroidBridge();
-  const { printDirect } = usePrintJobs();
+  const { createPrintJob } = usePrintJobs();
   const [showPrinterSelect, setShowPrinterSelect] = useState(false);
   const [availablePrinters, setAvailablePrinters] = useState<AvailablePrinter[]>([]);
   const [batchPrinting, setBatchPrinting] = useState(false);
