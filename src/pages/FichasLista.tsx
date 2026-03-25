@@ -372,6 +372,7 @@ export default function FichasLista() {
 
   const handleSelectPrinterForUnassigned = (imp: Impressora) => {
     setShowPrinterSelectModal(false);
+    console.log('[Ficha Print] Impressora selecionada:', imp.nome, 'id:', imp.id, 'pendingUnassigned:', pendingUnassignedItems.length);
     // Merge unassigned items into assigned groups under the selected printer
     const merged = [...pendingAssignedGroups];
     const existingGroup = merged.find(g => g.printer.id === imp.id);
@@ -452,7 +453,7 @@ export default function FichasLista() {
       for (let i = 0; i < item.quantidade; i++) {
         const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
         console.log('[Ficha Print] ESC/POS gerado, bytes:', escposData.length);
-        await createPrintJobFromBinary({
+        const jobResult = await createPrintJobFromBinary({
           printer_id: printer.id,
           printer_name: printer.nome,
           device_ip: printer.ip || undefined,
@@ -461,6 +462,7 @@ export default function FichasLista() {
           tipo_documento: 'ficha',
           referencia_id: item.ficha.id,
         });
+        console.log('[Ficha Print] Job criado:', jobResult, 'produto:', item.ficha.nome_produto);
       }
     }
   };
@@ -470,6 +472,7 @@ export default function FichasLista() {
     unassignedItems: CartItem[] = []
   ) => {
     setPrinting(true);
+    console.log('[Ficha Print] executePrint iniciado - assignedGroups:', assignedGroups.length, 'unassignedItems:', unassignedItems.length);
     try {
       const now = new Date();
       const dateStr = now.toLocaleDateString('pt-BR');
@@ -486,7 +489,12 @@ export default function FichasLista() {
         if (item.ficha.exigir_dados_atendente && nomeAtendente.trim()) {
           dadosExtras.nome_atendente = nomeAtendente.trim();
         }
-        await registrarImpressao(item.ficha.id, item.quantidade, unitTotal, dadosExtras);
+        try {
+          await registrarImpressao(item.ficha.id, item.quantidade, unitTotal, dadosExtras);
+          console.log('[Ficha Print] registrarImpressao OK para:', item.ficha.nome_produto);
+        } catch (regErr) {
+          console.warn('[Ficha Print] registrarImpressao falhou (continuando):', regErr);
+        }
       }
 
       // Contabilizar em fichas_impressas para relatório
@@ -497,22 +505,28 @@ export default function FichasLista() {
         if (item.selectedItems.length > 0) {
           produtoNome += ' | ' + item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ');
         }
-        await sbClient.from('fichas_impressas' as any).insert({
-          produto_id: item.ficha.id,
-          produto_nome: produtoNome,
-          categoria_id: item.ficha.categoria_id,
-          categoria_nome: item.ficha.categoria_nome,
-          quantidade: item.quantidade,
-          valor_unitario: unitTotal,
-          valor_total: unitTotal * item.quantidade,
-          nome_cliente: nomeCliente.trim() || null,
-          telefone_cliente: telefoneCliente.trim() || null,
-          nome_atendente: nomeAtendente.trim() || null,
-        });
+        try {
+          await sbClient.from('fichas_impressas' as any).insert({
+            produto_id: item.ficha.id,
+            produto_nome: produtoNome,
+            categoria_id: item.ficha.categoria_id,
+            categoria_nome: item.ficha.categoria_nome,
+            quantidade: item.quantidade,
+            valor_unitario: unitTotal,
+            valor_total: unitTotal * item.quantidade,
+            nome_cliente: nomeCliente.trim() || null,
+            telefone_cliente: telefoneCliente.trim() || null,
+            nome_atendente: nomeAtendente.trim() || null,
+          });
+          console.log('[Ficha Print] fichas_impressas insert OK para:', produtoNome);
+        } catch (insErr) {
+          console.warn('[Ficha Print] fichas_impressas insert falhou (continuando):', insErr);
+        }
       }
 
       // Send assigned groups to print queue
       for (const group of assignedGroups) {
+        console.log('[Ficha Print] Processando grupo - impressora:', group.printer.nome, 'id:', group.printer.id, 'itens:', group.items.length);
         await sendToPrintQueue(group.printer, group.items, dateStr, timeStr);
       }
 
@@ -529,7 +543,8 @@ export default function FichasLista() {
       toast({ title: 'Impressão enviada!', description: `${totalItems} ficha(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
-      toast({ title: 'Erro', description: 'Falha ao registrar impressão.', variant: 'destructive' });
+      console.error('[Ficha Print] Erro em executePrint:', err);
+      toast({ title: 'Erro', description: `Falha ao registrar impressão: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
     } finally {
       setPrinting(false);
     }
