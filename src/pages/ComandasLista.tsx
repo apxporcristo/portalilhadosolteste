@@ -1,15 +1,17 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Search, ClipboardList, Phone, User, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Plus, Search, ClipboardList, Phone, User, ShoppingCart, Printer, Bluetooth, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useComandas, Comanda, ComandaItem } from '@/hooks/useComandas';
+import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
+import { usePrintJobs } from '@/hooks/usePrintJobs';
 import { ComandaDetalhe } from '@/components/ComandaDetalhe';
 import { toast } from '@/hooks/use-toast';
 
