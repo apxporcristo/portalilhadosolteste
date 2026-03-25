@@ -178,6 +178,7 @@ export default function FichasAdmin() {
           forma_venda: prodForm.forma_venda,
           valor_por_kg: prodForm.forma_venda === 'por_peso' ? parseFloat(prodForm.valor_por_kg) || 0 : 0,
           obs: prodForm.obs.trim() || null,
+          imprimir_ficha: prodForm.imprimir_ficha,
         };
         if (isPrinted(editProd.id) && !isNameSimilar(editProd.nome_produto, prodForm.nome_produto.trim())) {
           toast({ title: 'Nome não pode ser alterado', description: 'Este produto já foi impresso. Apenas correções pequenas são permitidas.', variant: 'destructive' });
