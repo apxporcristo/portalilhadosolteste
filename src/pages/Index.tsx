@@ -516,27 +516,7 @@ const Index = () => {
                 </Card>
               )}
 
-              {/* Serve Service - aparece quando balança está configurada */}
-              {!balanca.loading && balanca.config.id && (
-                <Card
-                  className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-[1.02] border-2 hover:border-primary bg-gradient-to-r from-primary/5 to-primary/10"
-                  onClick={() => setShowServeService(true)}
-                >
-                  <CardContent className="flex items-center justify-between gap-3 p-6">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-primary/10 rounded-xl">
-                        <Scale className="h-8 w-8 text-primary" />
-                      </div>
-                      <div>
-                        <span className="text-base font-semibold text-foreground">SERVE SERVICE</span>
-                        <p className="text-sm text-muted-foreground">
-                          Balança • R$ {(balanca.config.valor_peso || 0).toFixed(2)}/kg
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {/* Serve Service removido da tela inicial - agora está dentro de Fichas */}
 
             </div>
           </div>
