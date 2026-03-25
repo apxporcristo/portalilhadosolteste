@@ -134,65 +134,23 @@ export function useBalanca() {
     return false;
   }, []);
 
-  // Try to reconnect to previously saved device (already paired)
+  // Try to reconnect via Android Bridge
   const reconnectSavedDevice = useCallback(async (): Promise<boolean> => {
-    // If already connected, reuse
     if (isBtConnected()) {
       setStatus('conectada');
       return true;
     }
-
-    // If we have a device object that was previously paired, try reconnecting
-    if (_btDevice && _btDevice.gatt) {
-      try {
-        return await connectToDevice(_btDevice);
-      } catch {
-        // Device object stale, clear it
-        _btDevice = null;
-        _btServer = null;
-        _btCharacteristic = null;
-      }
+    // Only works through Android Bridge
+    if (window.IS_ANDROID_APP && window.AndroidBridge?.connectScale) {
+      const address = config.dispositivo_id || '';
+      if (!address) return false;
+      console.log('[Balança] Tentando reconectar via AndroidBridge:', address);
+      const ok = window.AndroidBridge.connectScale(address, config.baud_rate);
+      setStatus(ok ? 'conectada' : 'falha');
+      return ok;
     }
-
-    // Try using getDevices() to find previously paired devices
-    if ('bluetooth' in navigator && (navigator as any).bluetooth.getDevices) {
-      try {
-        const devices = await (navigator as any).bluetooth.getDevices();
-        if (devices && devices.length > 0) {
-          // Try to find the saved device by name
-          const savedName = config.dispositivo_nome;
-          const savedId = config.dispositivo_id;
-          let targetDevice = null;
-
-          if (savedId) {
-            targetDevice = devices.find((d: any) => d.id === savedId);
-          }
-          if (!targetDevice && savedName) {
-            targetDevice = devices.find((d: any) => d.name === savedName);
-          }
-          if (!targetDevice && devices.length > 0) {
-            targetDevice = devices[0];
-          }
-
-          if (targetDevice) {
-            // Need to call watchAdvertisements and wait a bit for GATT to be available
-            try {
-              if (targetDevice.watchAdvertisements) {
-                await targetDevice.watchAdvertisements();
-                await new Promise(r => setTimeout(r, 2000));
-              }
-            } catch { /* some browsers don't support this */ }
-
-            return await connectToDevice(targetDevice);
-          }
-        }
-      } catch (err) {
-        console.error('getDevices() falhou:', err);
-      }
-    }
-
     return false;
-  }, [isBtConnected, connectToDevice, config.dispositivo_nome, config.dispositivo_id]);
+  }, [isBtConnected, config.dispositivo_id, config.baud_rate]);
 
   // Auto-reconnect on mount if BT config exists
   useEffect(() => {
