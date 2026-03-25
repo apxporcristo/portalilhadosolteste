@@ -120,38 +120,18 @@ export function useBalanca() {
     }
   }, []);
 
-  // ========== BLUETOOTH PERSISTENT CONNECTION ==========
+  // ========== BLUETOOTH CONNECTION ==========
+  // Web Bluetooth (BLE/GATT) does NOT work with classic serial scales (SPP/RFCOMM).
+  // Scales like Toledo Prix 3 use Bluetooth Classic, which Chrome/Web Bluetooth cannot access.
+  // All BT scale communication must go through the Android Bridge (APK auxiliar).
 
   const isBtConnected = useCallback((): boolean => {
-    return !!_btDevice && !!_btServer && _btServer.connected && !!_btCharacteristic;
-  }, []);
-
-  const connectToDevice = useCallback(async (device: any): Promise<boolean> => {
-    try {
-      setStatus('conectando');
-      const server = await device.gatt.connect();
-      const service = await server.getPrimaryService('0000fff0-0000-1000-8000-00805f9b34fb');
-      const characteristic = await service.getCharacteristic('0000fff1-0000-1000-8000-00805f9b34fb');
-
-      _btDevice = device;
-      _btServer = server;
-      _btCharacteristic = characteristic;
-
-      // Listen for disconnection
-      device.addEventListener('gattserverdisconnected', () => {
-        console.log('Balança BT desconectada');
-        _btServer = null;
-        _btCharacteristic = null;
-        setStatus('desconectada');
-      });
-
-      setStatus('conectada');
-      return true;
-    } catch (err) {
-      console.error('Erro ao conectar BT balança:', err);
-      setStatus('falha');
-      return false;
+    // In Android app, check via bridge
+    if (window.IS_ANDROID_APP) {
+      return window.AndroidBridge?.isScaleConnected?.() ?? false;
     }
+    // In browser, BT scale is never connected (not supported)
+    return false;
   }, []);
 
   // Try to reconnect to previously saved device (already paired)
