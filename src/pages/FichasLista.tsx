@@ -121,7 +121,13 @@ export default function FichasLista() {
 
   const categoriasList = useMemo(() => {
     const cats = [...new Set(visibleFichas.map(f => f.categoria_nome).filter(Boolean))];
-    return cats.sort((a, b) => a.localeCompare(b));
+    return cats.sort((a, b) => {
+      const aServe = a.toLowerCase().includes('serve-service') || a.toLowerCase().includes('self service') || a.toLowerCase().includes('serve service');
+      const bServe = b.toLowerCase().includes('serve-service') || b.toLowerCase().includes('self service') || b.toLowerCase().includes('serve service');
+      if (aServe && !bServe) return -1;
+      if (!aServe && bServe) return 1;
+      return a.localeCompare(b);
+    });
   }, [visibleFichas]);
 
   const filtered = useMemo(() => {
@@ -143,7 +149,13 @@ export default function FichasLista() {
       if (!map[cat]) map[cat] = [];
       map[cat].push(f);
     });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+    return Object.entries(map).sort(([a], [b]) => {
+      const aServe = a.toLowerCase().includes('serve-service') || a.toLowerCase().includes('self service') || a.toLowerCase().includes('serve service');
+      const bServe = b.toLowerCase().includes('serve-service') || b.toLowerCase().includes('self service') || b.toLowerCase().includes('serve service');
+      if (aServe && !bServe) return -1;
+      if (!aServe && bServe) return 1;
+      return a.localeCompare(b);
+    });
   }, [filtered]);
 
   const needsCliente = useMemo(() => cart.some(item => item.ficha.exigir_dados_cliente), [cart]);
