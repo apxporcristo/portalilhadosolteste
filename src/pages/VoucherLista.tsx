@@ -177,7 +177,7 @@ export default function VoucherLista() {
     } finally {
       setBatchPrinting(false);
     }
-  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge, getVoucherPrinter, createPrintJob]);
+  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge]);
 
   const handleBatchPrint = useCallback(async () => {
     const printers = getAvailablePrinters();
