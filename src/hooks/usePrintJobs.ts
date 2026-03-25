@@ -14,6 +14,7 @@ export interface PrintJob {
   printer_name?: string;
   device_ip?: string;
   device_mac?: string;
+  target_device_code?: string;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +24,7 @@ export interface CreatePrintJobParams {
   printer_name?: string;
   device_ip?: string;
   device_mac?: string;
+  target_device_code?: string;
   conteudo: string;
   formato?: string;
   tipo_documento?: string;
@@ -55,51 +57,103 @@ export function usePrintJobs() {
     fetchJobs();
   }, [fetchJobs]);
 
-  const createPrintJob = useCallback(async (
-    printerIdOrParams: string | CreatePrintJobParams,
-    conteudo?: string,
-    formato = 'escpos'
-  ): Promise<boolean> => {
+  const createPrintJob = useCallback(async (params: CreatePrintJobParams): Promise<boolean> => {
     try {
       const supabase = await getSupabaseClient();
-      let insertData: any;
+      const encoded = btoa(unescape(encodeURIComponent(params.conteudo)));
+      const insertData: Record<string, any> = {
+        printer_id: params.printer_id,
+        conteudo: encoded,
+        formato: params.formato || 'escpos',
+        status: 'pendente',
+      };
+      if (params.printer_name) insertData.printer_name = params.printer_name;
+      if (params.device_ip) insertData.device_ip = params.device_ip;
+      if (params.device_mac) insertData.device_mac = params.device_mac;
+      if (params.target_device_code) insertData.target_device_code = params.target_device_code;
+      if (params.tipo_documento) insertData.tipo_documento = params.tipo_documento;
+      if (params.referencia_id) insertData.referencia_id = params.referencia_id;
 
-      if (typeof printerIdOrParams === 'string') {
-        const encoded = btoa(unescape(encodeURIComponent(conteudo || '')));
-        insertData = {
-          printer_id: printerIdOrParams,
-          conteudo: encoded,
-          formato,
-          status: 'pendente',
-        };
-      } else {
-        const params = printerIdOrParams;
-        const encoded = btoa(unescape(encodeURIComponent(params.conteudo)));
-        insertData = {
-          printer_id: params.printer_id,
-          conteudo: encoded,
-          formato: params.formato || 'escpos',
-          status: 'pendente',
-          ...(params.printer_name && { printer_name: params.printer_name }),
-          ...(params.device_ip && { device_ip: params.device_ip }),
-          ...(params.device_mac && { device_mac: params.device_mac }),
-          ...(params.tipo_documento && { tipo_documento: params.tipo_documento }),
-          ...(params.referencia_id && { referencia_id: params.referencia_id }),
-        };
-      }
+      console.log('[PrintJob] Criando job:', {
+        printer_id: params.printer_id,
+        printer_name: params.printer_name,
+        tipo_documento: params.tipo_documento,
+        referencia_id: params.referencia_id,
+        formato: params.formato || 'escpos',
+        conteudo_length: params.conteudo.length,
+      });
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('print_jobs')
-        .insert(insertData as any);
+        .insert(insertData as any)
+        .select();
+
+      console.log('[PrintJob] Resposta insert:', data, 'erro:', error);
+
       if (error) throw error;
-      toast({ title: '📋 Tarefa enviada para a fila', description: 'Status: PENDENTE. Aguardando processamento.' });
+      toast({ title: '📋 Enviado para fila de impressão', description: `Impressora: ${params.printer_name || params.printer_id}` });
       await fetchJobs();
       return true;
     } catch (e) {
-      toast({ title: '❌ Erro ao criar tarefa', description: (e as Error).message, variant: 'destructive' });
+      console.error('[PrintJob] Erro ao criar job:', e);
+      toast({ title: '❌ Erro ao criar tarefa de impressão', description: (e as Error).message, variant: 'destructive' });
       return false;
     }
   }, [fetchJobs]);
 
-  return { jobs, loading, fetchJobs, createPrintJob };
+  /**
+   * Helper: create a print job from raw ESC/POS binary data (Uint8Array).
+   * Encodes the binary as base64 directly.
+   */
+  const createPrintJobFromBinary = useCallback(async (
+    params: Omit<CreatePrintJobParams, 'conteudo'> & { data: Uint8Array }
+  ): Promise<boolean> => {
+    try {
+      const supabase = await getSupabaseClient();
+      // Convert binary to base64
+      let binary = '';
+      const bytes = params.data;
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const encoded = btoa(binary);
+
+      const insertData: Record<string, any> = {
+        printer_id: params.printer_id,
+        conteudo: encoded,
+        formato: params.formato || 'escpos',
+        status: 'pendente',
+      };
+      if (params.printer_name) insertData.printer_name = params.printer_name;
+      if (params.device_ip) insertData.device_ip = params.device_ip;
+      if (params.device_mac) insertData.device_mac = params.device_mac;
+      if (params.target_device_code) insertData.target_device_code = params.target_device_code;
+      if (params.tipo_documento) insertData.tipo_documento = params.tipo_documento;
+      if (params.referencia_id) insertData.referencia_id = params.referencia_id;
+
+      console.log('[PrintJob] Criando job binário:', {
+        printer_id: params.printer_id,
+        printer_name: params.printer_name,
+        tipo_documento: params.tipo_documento,
+        bytes: bytes.length,
+      });
+
+      const { data: result, error } = await supabase
+        .from('print_jobs')
+        .insert(insertData as any)
+        .select();
+
+      console.log('[PrintJob] Resposta insert binário:', result, 'erro:', error);
+
+      if (error) throw error;
+      await fetchJobs();
+      return true;
+    } catch (e) {
+      console.error('[PrintJob] Erro ao criar job binário:', e);
+      toast({ title: '❌ Erro ao criar tarefa de impressão', description: (e as Error).message, variant: 'destructive' });
+      return false;
+    }
+  }, [fetchJobs]);
+
+  return { jobs, loading, fetchJobs, createPrintJob, createPrintJobFromBinary };
 }
