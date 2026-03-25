@@ -466,7 +466,7 @@ export default function FichasLista() {
     }
   };
 
-  const executePrint = async () => {
+  const executePrint = async (selectedPrinter?: Impressora) => {
     setPrinting(true);
     try {
       const now = new Date();
@@ -510,11 +510,39 @@ export default function FichasLista() {
         });
       }
 
+      // Filter items with imprimir_ficha = true for actual printing
+      const printableItems = cart.filter(item => {
+        const produto = produtos.find(p => p.id === item.ficha.id);
+        return (produto as any)?.imprimir_ficha !== false;
+      });
+
       let printSuccess = false;
 
+      if (printableItems.length === 0) {
+        // Nothing to print but sale was registered
+        printSuccess = true;
+      } else if (selectedPrinter) {
+        // Send to print_jobs in Supabase
+        for (const item of printableItems) {
+          for (let i = 0; i < item.quantidade; i++) {
+            const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
+            const conteudo = new TextDecoder().decode(escposData);
+            await createPrintJob({
+              printer_id: selectedPrinter.id,
+              printer_name: selectedPrinter.nome,
+              device_ip: selectedPrinter.ip || undefined,
+              device_mac: selectedPrinter.bluetooth_mac || undefined,
+              conteudo,
+              tipo_documento: 'ficha_consumo',
+              referencia_id: item.ficha.id,
+            });
+          }
+        }
+        printSuccess = true;
+      }
       // Priority 1: Android Bridge
-      if (window.AndroidBridge?.smartPrintVoucher) {
-        for (const item of cart) {
+      else if (window.AndroidBridge?.smartPrintVoucher) {
+        for (const item of printableItems) {
           for (let i = 0; i < item.quantidade; i++) {
             let fichaText = 'Ficha de consumo\n';
             fichaText += `Categoria: ${item.ficha.categoria_nome}\n`;
@@ -568,7 +596,7 @@ export default function FichasLista() {
           }
         }
         let allSuccess = true;
-        for (const item of cart) {
+        for (const item of printableItems) {
           for (let i = 0; i < item.quantidade; i++) {
             const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
             const success = await printData(escposData);
@@ -580,22 +608,7 @@ export default function FichasLista() {
           toast({ title: 'Erro na impressão Bluetooth', description: 'Falha ao enviar dados para a impressora.', variant: 'destructive' });
         }
       }
-      // Priority 3: Network printer
-      else if (config.type === 'network' && config.networkIp) {
-        let allSuccess = true;
-        for (const item of cart) {
-          for (let i = 0; i < item.quantidade; i++) {
-            const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
-            const success = await printData(escposData);
-            if (!success) { allSuccess = false; break; }
-          }
-          if (!allSuccess) break;
-        }
-        if (allSuccess) { printSuccess = true; } else {
-          toast({ title: 'Erro na impressão', description: 'Falha ao imprimir via rede.', variant: 'destructive' });
-        }
-      }
-      // Priority 4: Browser fallback
+      // Priority 3: Browser fallback
       else {
         printViaBrowser(dateStr, timeStr);
         printSuccess = true;
