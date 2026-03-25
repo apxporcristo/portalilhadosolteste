@@ -881,6 +881,12 @@ export default function FichasLista() {
           setShowPagamentoModal(false);
           handleInitPrint();
         }}
+        saveLabel="Salvar"
+        saveIcon={<Save className="h-5 w-5 mr-2" />}
+        onSave={() => {
+          setShowPagamentoModal(false);
+          handleSaveOnly();
+        }}
       >
         {comandasAbertas.length > 0 && (
           <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setComandaSearch(''); setShowComandaModal(true); }} disabled={totalItems === 0}>
