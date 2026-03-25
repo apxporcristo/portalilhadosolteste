@@ -6,7 +6,7 @@ import { usePrinterContext } from '@/contexts/PrinterContext';
 import { useImpressoras } from '@/hooks/useImpressoras';
 import { useVoucherCart } from '@/hooks/useVoucherCart';
 import { useAndroidBridge } from '@/hooks/useAndroidBridge';
-import { usePrintJobs } from '@/hooks/usePrintJobs';
+
 import { printVouchersBatch } from '@/lib/print-browser';
 import { getNetworkName, getWifiQrString } from '@/hooks/useNetworkName';
 import { PrinterSelectDialog, AvailablePrinter } from '@/components/PrinterSelectDialog';
@@ -42,10 +42,9 @@ export default function VoucherLista() {
   } = useVouchers();
 
   const { config, printData, createVoucherData, isBluetoothConnected, reconnectBluetooth, silentReconnectBluetooth, scanBluetoothDevices, connectBluetooth } = usePrinterContext();
-  const { getVoucherPrinter } = useImpressoras();
+  const { impressoras, getVoucherPrinter } = useImpressoras();
   const cart = useVoucherCart();
   const androidBridge = useAndroidBridge();
-  const { createPrintJob } = usePrintJobs();
   const [showPrinterSelect, setShowPrinterSelect] = useState(false);
   const [availablePrinters, setAvailablePrinters] = useState<AvailablePrinter[]>([]);
   const [batchPrinting, setBatchPrinting] = useState(false);
@@ -56,15 +55,20 @@ export default function VoucherLista() {
     if (androidBridge.isAvailable()) {
       printers.push({ type: 'network' as const, name: 'Android (SmartPrint)' });
     }
-    if (config.bluetoothDeviceName) {
-      printers.push({ type: 'bluetooth', name: config.bluetoothDeviceName });
+    // Add registered printers from database
+    for (const imp of impressoras.filter(p => p.ativa)) {
+      if (imp.tipo === 'bluetooth') {
+        printers.push({ type: 'bluetooth', name: imp.bluetooth_nome || imp.nome });
+      } else if (imp.tipo === 'rede' && imp.ip) {
+        printers.push({ type: 'network', name: `${imp.nome} (${imp.ip}:${imp.porta || '9100'})` });
+      }
     }
-    if (config.networkIp) {
-      printers.push({ type: 'network', name: `${config.networkIp}:${config.networkPort || '9100'}` });
+    if (config.bluetoothDeviceName && !printers.some(p => p.name === config.bluetoothDeviceName)) {
+      printers.push({ type: 'bluetooth', name: config.bluetoothDeviceName });
     }
     printers.push({ type: 'browser' as any, name: 'Navegador (Browser)' });
     return printers;
-  }, [config, androidBridge]);
+  }, [config, androidBridge, impressoras]);
 
   const handleAddToCart = useCallback((tempo: string) => {
     const inCart = cart.items.find(i => i.tempo === tempo)?.quantity || 0;
@@ -114,34 +118,8 @@ export default function VoucherLista() {
             window.AndroidBridge.smartPrint(payload);
           }
           printSuccess = true;
-        } else if (printer.type === 'network') {
-          const { printer: voucherPrinter } = getVoucherPrinter();
-
-          if (voucherPrinter?.tipo === 'rede' && voucherPrinter.ip) {
-            const networkName = getNetworkName();
-            const now = new Date();
-            const currentDate = now.toLocaleDateString('pt-BR');
-            const currentTime = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            let allOk = true;
-            for (const v of voucherData) {
-              const texto = "VOUCHER DE ACESSO\n\n" + `Coloque no modo avião antes de acessar a rede "${networkName}"\n\n` + `Voucher: ${v.voucher_id}\n` + `Tempo de conexão: ${v.tempo_validade}\n` + `Data: ${currentDate} ${currentTime}`;
-              const ok = await createPrintJob({
-                printer_id: voucherPrinter.id || '',
-                printer_name: voucherPrinter.nome,
-                device_ip: voucherPrinter.ip,
-                conteudo: texto,
-                tipo_documento: 'voucher',
-                referencia_id: v.voucher_id,
-              });
-              if (!ok) { allOk = false; break; }
-            }
-            if (allOk) printSuccess = true;
-          } else {
-            toast({ title: 'Impressão indisponível', description: 'Impressão local indisponível neste dispositivo. Utilize o app auxiliar de impressão.', variant: 'destructive' });
-          }
         } else {
           // Tentar deep link para app auxiliar
-          const networkName = getNetworkName();
           for (const v of voucherData) {
             const texto = `VOUCHER DE ACESSO\nVoucher: ${v.voucher_id}\nTempo: ${v.tempo_validade}`;
             window.location.href = "voucherilha://print?text=" + encodeURIComponent(texto) + "&printer=" + encodeURIComponent(printer.name);
@@ -199,56 +177,18 @@ export default function VoucherLista() {
     } finally {
       setBatchPrinting(false);
     }
-  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge, getVoucherPrinter, createPrintJob]);
+  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge]);
 
   const handleBatchPrint = useCallback(async () => {
     const printers = getAvailablePrinters();
-    const androidPrinter = printers.find(p => p.name === 'Android (SmartPrint)');
-
-    if (androidPrinter && androidBridge.isAvailable()) {
-      await executeBatchPrint(androidPrinter);
+    if (printers.length === 0) {
+      toast({ title: 'Nenhuma impressora disponível', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
       return;
     }
-
-    const { printer: voucherPrinter, error: voucherError } = getVoucherPrinter();
-    
-    if (voucherPrinter) {
-      if (voucherPrinter.tipo === 'bluetooth') {
-        const btLocalPrinter: AvailablePrinter = { type: 'bluetooth_local', name: voucherPrinter.bluetooth_mac || voucherPrinter.bluetooth_nome || voucherPrinter.nome };
-        await executeBatchPrint(btLocalPrinter);
-        return;
-      }
-      if (voucherPrinter.tipo === 'rede') {
-        const netPrinter: AvailablePrinter = { type: 'network', name: `${voucherPrinter.ip}:${voucherPrinter.porta || '9100'}` };
-        await executeBatchPrint(netPrinter);
-        return;
-      }
-    }
-
-    if (voucherError) {
-      toast({ title: 'Impressora não configurada', description: voucherError, variant: 'destructive' });
-    }
-
-    const networkPrinter = printers.find(p => p.type === 'network' && p.name !== 'Android (SmartPrint)');
-    if (networkPrinter) { await executeBatchPrint(networkPrinter); return; }
-    if (androidPrinter) { await executeBatchPrint(androidPrinter); return; }
-    const btPrinter = printers.find(p => p.type === 'bluetooth');
-    if (btPrinter) {
-      if (isBluetoothConnected()) { await executeBatchPrint(btPrinter); return; }
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        toast({ title: `Reconectando... (${attempt}/3)`, description: `Tentando conectar a ${btPrinter.name} automaticamente` });
-        const char = await silentReconnectBluetooth();
-        if (char) { await executeBatchPrint(btPrinter); return; }
-        if (attempt < 3) await new Promise(r => setTimeout(r, 1500));
-      }
-      toast({ title: 'Não foi possível reconectar', description: 'Selecione a impressora manualmente.', variant: 'destructive' });
-      const char = await reconnectBluetooth();
-      if (char) { await executeBatchPrint(btPrinter); return; }
-    }
-    toast({ title: 'Nenhuma impressora encontrada', description: 'Selecione ou conecte uma impressora.' });
+    // Always show printer select modal
     setAvailablePrinters(printers);
     setShowPrinterSelect(true);
-  }, [getVoucherPrinter, getAvailablePrinters, executeBatchPrint, isBluetoothConnected, reconnectBluetooth, silentReconnectBluetooth, toast, androidBridge]);
+  }, [getAvailablePrinters]);
 
   const handlePrinterSelected = useCallback(async (printer: AvailablePrinter) => {
     await executeBatchPrint(printer);
