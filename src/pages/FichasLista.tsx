@@ -854,21 +854,83 @@ export default function FichasLista() {
         )}
       </PagamentoDialog>
 
-      {/* Modal Peso Manual */}
-      <Dialog open={showPesoModal} onOpenChange={setShowPesoModal}>
-        <DialogContent>
+      {/* Modal Peso - estilo ServeService */}
+      <Dialog open={showPesoModal} onOpenChange={(open) => { if (!open) { setShowPesoModal(false); setPendingPesoFicha(null); } }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Informar peso</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Scale className="h-5 w-5 text-primary" />
+              {pendingPesoFicha?.ficha.nome_produto || 'Informar peso'}
+              {balanca.config.tipo_conexao === 'bluetooth' && (
+                <Badge variant={balanca.status === 'conectada' ? 'default' : balanca.status === 'conectando' || balanca.status === 'tentando' ? 'secondary' : 'outline'} className="ml-auto text-xs">
+                  {balanca.status === 'conectada' ? 'Conectada' : balanca.status === 'conectando' ? 'Conectando...' : balanca.status === 'tentando' ? `Tentando...` : balanca.status === 'falha' ? 'Falha' : 'Desconectada'}
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Leia o peso da balança e calcule o valor.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Não foi possível ler a balança. Informe o peso manualmente.</p>
-          <div className="space-y-2">
-            <Label>Peso (kg)</Label>
-            <Input placeholder="0,000" value={pesoManual} onChange={e => setPesoManual(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleConfirmPesoManual()} />
+          <div className="space-y-4">
+            {balanca.status === 'conectada' && (
+              <Button onClick={async () => {
+                const resultado = await lerPeso(3);
+                if (resultado !== null && resultado > 0) {
+                  setPesoManual(resultado.toFixed(3));
+                  toast({ title: 'Peso lido', description: `${resultado.toFixed(3)} kg` });
+                } else {
+                  toast({ title: 'Não foi possível ler o peso', description: 'Digite o peso manualmente.', variant: 'destructive' });
+                }
+              }} className="w-full">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Ler Peso da Balança
+              </Button>
+            )}
+
+            <div>
+              <Label className="text-sm">Peso manual (kg)</Label>
+              <Input
+                type="number"
+                step="0.001"
+                value={pesoManual}
+                onChange={e => setPesoManual(e.target.value)}
+                placeholder="Ex: 0.500"
+                onKeyDown={e => e.key === 'Enter' && handleConfirmPesoManual()}
+              />
+            </div>
+
+            {(() => {
+              const pesoNum = parseFloat(pesoManual.replace(',', '.')) || 0;
+              const produto = pendingPesoFicha ? produtos.find(p => p.id === pendingPesoFicha.ficha.id) : null;
+              const valorKg = produto?.valor_por_kg || Number(pendingPesoFicha?.ficha.valor || 0);
+              const totalPeso = pesoNum * valorKg;
+              return (
+                <div className="p-3 border rounded-lg space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Peso:</span>
+                    <span className="font-medium">{pesoNum.toFixed(3)} kg</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Valor/kg:</span>
+                    <span className="font-medium">R$ {valorKg.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-base font-bold border-t pt-1 mt-1">
+                    <span>Total:</span>
+                    <span className="text-primary">R$ {totalPeso.toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex gap-2">
+              <Button onClick={handleConfirmPesoManual} className="flex-1" disabled={!(parseFloat(pesoManual.replace(',', '.')) > 0)}>
+                Adicionar
+              </Button>
+              <Button variant="outline" onClick={() => { setShowPesoModal(false); setPendingPesoFicha(null); }}>
+                Limpar
+              </Button>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowPesoModal(false); setPendingPesoFicha(null); }}>Cancelar</Button>
-            <Button onClick={handleConfirmPesoManual}>Confirmar</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
