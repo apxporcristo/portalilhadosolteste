@@ -349,8 +349,7 @@ export default function FichasLista() {
       setPendingUnassignedItems(printableItems);
       setShowPrinterSelectModal(true);
     } else {
-      // No printers registered, use browser/default fallback
-      executePrint([], printableItems);
+      toast({ title: 'Nenhuma impressora cadastrada', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
     }
   };
 
