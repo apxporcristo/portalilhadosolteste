@@ -71,6 +71,42 @@ export function PrinterSettings() {
     'Conexao OK!\n\n\n', '\x1D\x56\x00',
   ].join('');
 
+  const checkPrintServerUrl = useCallback(async (url: string) => {
+    if (!url) return;
+
+    if (window.location.protocol === 'https:' && url.startsWith('http://')) {
+      toast({
+        title: '⚠️ URL salva, mas preview bloqueia teste',
+        description: 'No preview HTTPS do Lovable o navegador bloqueia acesso ao Print Server HTTP local. Teste no app Android.',
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+        mode: 'cors',
+      });
+
+      if (response.ok) {
+        toast({ title: '✅ Print Server online', description: 'Servidor respondeu na rede.' });
+      } else {
+        toast({ title: '⚠️ Print Server respondeu com erro', description: `Status ${response.status}` });
+      }
+    } catch {
+      toast({
+        title: '⚠️ Não foi possível validar no navegador',
+        description: 'Se estiver no preview HTTPS, isso pode ser bloqueio do navegador. No app Android deve funcionar se o servidor estiver ativo.',
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }, []);
+
   /** Testa via Print Server local (direto) */
   const testDirectPrint = useCallback(async (imp: Impressora) => {
     if (imp.tipo !== 'rede' || !imp.ip) return;
