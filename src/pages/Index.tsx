@@ -7,6 +7,7 @@ import { usePrinterContext } from '@/contexts/PrinterContext';
 import { useImpressoras } from '@/hooks/useImpressoras';
 import { useVoucherCart } from '@/hooks/useVoucherCart';
 import { useAndroidBridge } from '@/hooks/useAndroidBridge';
+import { usePrintJobs } from '@/hooks/usePrintJobs';
 import { printVoucher } from '@/lib/voucher-utils';
 import { printVouchersBatch } from '@/lib/print-browser';
 import { getNetworkName, getWifiQrString } from '@/hooks/useNetworkName';
@@ -62,6 +63,7 @@ const Index = () => {
   const { comandasAbertas } = useComandas();
   const navigate = useNavigate();
   const androidBridge = useAndroidBridge();
+  const { createPrintJob } = usePrintJobs();
   const [showPrinterSelect, setShowPrinterSelect] = useState(false);
   const [availablePrinters, setAvailablePrinters] = useState<AvailablePrinter[]>([]);
   const [batchPrinting, setBatchPrinting] = useState(false);
@@ -146,12 +148,48 @@ const Index = () => {
         }
         printSuccess = true;
       } else if (printer?.type === 'network') {
-        try {
-          if (hasVouchers) await printVouchersBatch(voucherData);
+        const { printer: voucherPrinter } = getVoucherPrinter();
+
+        if (window.IS_ANDROID_APP === true && window.AndroidBridge?.smartPrint) {
+          const networkName = getNetworkName();
+          const wifiQrData = getWifiQrString();
+          const now = new Date();
+          const currentDate = now.toLocaleDateString('pt-BR');
+          const currentTime = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+          for (const v of voucherData) {
+            const texto = "VOUCHER DE ACESSO\n\n" + `Coloque no modo avião antes de acessar a rede "${networkName}"\n\n` + `Voucher: ${v.voucher_id}\n` + `Tempo de conexão: ${v.tempo_validade}\n` + `Data: ${currentDate} ${currentTime}`;
+            if (window.AndroidBridge?.smartPrintVoucher) {
+              window.AndroidBridge.smartPrintVoucher(texto, wifiQrData);
+            } else {
+              window.AndroidBridge.smartPrint(texto);
+            }
+          }
           printSuccess = true;
-        } catch (err) {
-          console.error('Erro na impressão de rede:', err);
-          toast({ title: 'Erro na impressão', description: 'Não foi possível imprimir. Vouchers NÃO foram marcados.', variant: 'destructive' });
+        } else if (voucherPrinter?.tipo === 'rede') {
+          try {
+            for (const v of voucherData) {
+              const data = await createVoucherData(v.voucher_id, v.tempo_validade);
+              const payload = JSON.stringify({
+                type: 'network',
+                printer_id: voucherPrinter.id,
+                printer_name: voucherPrinter.nome,
+                printer_ip: voucherPrinter.ip,
+                printer_port: voucherPrinter.porta || '9100',
+                data: Array.from(data),
+                voucher_id: v.voucher_id,
+                tempo_validade: v.tempo_validade,
+              });
+              const queued = await createPrintJob(voucherPrinter.id, payload, 'json');
+              if (!queued) throw new Error('queue_failed');
+            }
+            printSuccess = true;
+          } catch (err) {
+            console.error('Erro ao enviar impressão para fila:', err);
+            toast({ title: 'Erro na impressão', description: 'Não foi possível enviar para a impressora cadastrada.', variant: 'destructive' });
+          }
+        } else {
+          toast({ title: 'Impressão indisponível', description: 'Impressão local indisponível neste dispositivo. Utilize o app auxiliar de impressão.', variant: 'destructive' });
         }
       } else if (printer?.type === 'bluetooth') {
         let activeChar: any = null;
@@ -204,7 +242,7 @@ const Index = () => {
     } finally {
       setBatchPrinting(false);
     }
-  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge]);
+  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, printData, isBluetoothConnected, reconnectBluetooth, scanBluetoothDevices, connectBluetooth, androidBridge, getVoucherPrinter, createPrintJob]);
 
   const handleBatchPrint = useCallback(async () => {
     const { printer: voucherPrinter, error: voucherError } = getVoucherPrinter();
