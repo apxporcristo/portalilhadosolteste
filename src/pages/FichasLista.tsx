@@ -176,18 +176,9 @@ export default function FichasLista() {
   };
 
   const handlePesoProduct = async (ficha: FichaAtiva, selectedItems: SelectedItem[]) => {
-    const peso = await lerPeso();
-    if (peso !== null && peso > 0) {
-      const produto = produtos.find(p => p.id === ficha.id);
-      const valorKg = produto?.valor_por_kg || Number(ficha.valor);
-      const subtotal = peso * valorKg;
-      addItemToCart(ficha, selectedItems, peso, valorKg);
-    } else {
-      // Fallback: manual weight input
-      setPendingPesoFicha({ ficha, selectedItems });
-      setPesoManual('');
-      setShowPesoModal(true);
-    }
+    setPendingPesoFicha({ ficha, selectedItems });
+    setPesoManual('');
+    setShowPesoModal(true);
   };
 
   const handleConfirmPesoManual = () => {
