@@ -131,13 +131,13 @@ export function usePrintJobs() {
   ): Promise<boolean> => {
     try {
       const supabase = await getSupabaseClient();
-      // Convert binary to base64
       let binary = '';
       const bytes = params.data;
       for (let i = 0; i < bytes.length; i++) {
         binary += String.fromCharCode(bytes[i]);
       }
       const encoded = btoa(binary);
+      const deviceCode = await resolveDeviceCode(params.printer_id, params.target_device_code);
 
       const insertData: Record<string, any> = {
         printer_id: params.printer_id,
@@ -148,13 +148,14 @@ export function usePrintJobs() {
       if (params.printer_name) insertData.printer_name = params.printer_name;
       if (params.device_ip) insertData.device_ip = params.device_ip;
       if (params.device_mac) insertData.device_mac = params.device_mac;
-      if (params.target_device_code) insertData.target_device_code = params.target_device_code;
+      if (deviceCode) insertData.target_device_code = deviceCode;
       if (params.tipo_documento) insertData.tipo_documento = params.tipo_documento;
       if (params.referencia_id) insertData.referencia_id = params.referencia_id;
 
       console.log('[PrintJob] Criando job binário:', {
         printer_id: params.printer_id,
         printer_name: params.printer_name,
+        target_device_code: deviceCode,
         tipo_documento: params.tipo_documento,
         bytes: bytes.length,
       });
@@ -174,7 +175,7 @@ export function usePrintJobs() {
       toast({ title: '❌ Erro ao criar tarefa de impressão', description: (e as Error).message, variant: 'destructive' });
       return false;
     }
-  }, [fetchJobs]);
+  }, [fetchJobs, resolveDeviceCode]);
 
   return { jobs, loading, fetchJobs, createPrintJob, createPrintJobFromBinary };
 }
