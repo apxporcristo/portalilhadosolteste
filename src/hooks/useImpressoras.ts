@@ -139,8 +139,12 @@ export function useImpressoras() {
   }, [fetchImpressoras]);
 
   const toggleAtiva = useCallback(async (id: string, ativa: boolean) => {
-    
-    await supabase.from('printers' as any).update({ ativa } as any).eq('id', id);
+    const { error } = await supabase.from('printers' as any).update({ ativo: ativa } as any).eq('id', id);
+    if (error) {
+      console.error('Erro ao alternar status da impressora:', error);
+      toast({ title: 'Erro', description: `Não foi possível alterar o status: ${error.message}`, variant: 'destructive' });
+      return;
+    }
     await fetchImpressoras();
   }, [fetchImpressoras]);
 
