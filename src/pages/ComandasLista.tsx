@@ -1,21 +1,26 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Search, ClipboardList, Phone, User, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Plus, Search, ClipboardList, Phone, User, ShoppingCart, Printer, Bluetooth, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useComandas, Comanda, ComandaItem } from '@/hooks/useComandas';
+import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
+import { usePrintJobs } from '@/hooks/usePrintJobs';
 import { ComandaDetalhe } from '@/components/ComandaDetalhe';
 import { toast } from '@/hooks/use-toast';
 
 export default function ComandasLista() {
   const navigate = useNavigate();
   const { comandas, comandasAbertas, comandasLivres, loading, abrirComanda, getItensComanda, refetch } = useComandas();
+  const { impressoras } = useImpressoras();
+  const { createPrintJob } = usePrintJobs();
+  const impressorasAtivas = impressoras.filter(p => p.ativa);
   const [search, setSearch] = useState('');
   const [showAbrir, setShowAbrir] = useState(false);
   const [selectedComandaId, setSelectedComandaId] = useState('');
@@ -23,6 +28,8 @@ export default function ComandasLista() {
   const [telefoneCliente, setTelefoneCliente] = useState('');
   const [selectedComanda, setSelectedComanda] = useState<Comanda | null>(null);
   const [showDetalhe, setShowDetalhe] = useState(false);
+  const [showPrinterSelect, setShowPrinterSelect] = useState(false);
+  const [pendingPrintItems, setPendingPrintItems] = useState<{ items: ComandaItem[]; comanda: Comanda } | null>(null);
 
   // Item counts per comanda
   const [itemCounts, setItemCounts] = useState<Record<string, { qty: number; total: number }>>({});
@@ -68,6 +75,57 @@ export default function ComandasLista() {
       toast({ title: 'Erro ao abrir comanda', variant: 'destructive' });
     }
   };
+
+  const handlePrintItems = useCallback((items: ComandaItem[], comanda: Comanda) => {
+    if (impressorasAtivas.length === 0) {
+      toast({ title: 'Nenhuma impressora cadastrada', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
+      return;
+    }
+    setPendingPrintItems({ items, comanda });
+    setShowPrinterSelect(true);
+  }, [impressorasAtivas]);
+
+  const executePrintComanda = useCallback(async (printer: Impressora) => {
+    setShowPrinterSelect(false);
+    if (!pendingPrintItems) return;
+    const { items, comanda } = pendingPrintItems;
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR');
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const normalize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    let content = `Comanda #${comanda.numero}\n`;
+    if (comanda.nome_cliente) content += `Cliente: ${comanda.nome_cliente}\n`;
+    content += `${dateStr} ${timeStr}\n`;
+    content += '--------------------------------\n';
+    for (const item of items) {
+      content += `${item.quantidade}x ${normalize(item.produto_nome)} R$ ${Number(item.valor_total).toFixed(2).replace('.', ',')}\n`;
+    }
+    const total = items.reduce((s, i) => s + Number(i.valor_total), 0);
+    content += '--------------------------------\n';
+    content += `Total: R$ ${total.toFixed(2).replace('.', ',')}\n`;
+
+    console.log('[Comanda Print] Impressora:', printer.nome, 'id:', printer.id);
+    console.log('[Comanda Print] Conteúdo length:', content.length);
+
+    const ok = await createPrintJob({
+      printer_id: printer.id,
+      printer_name: printer.nome,
+      device_ip: printer.ip || undefined,
+      conteudo: content,
+      formato: 'text',
+      tipo_documento: 'comanda',
+      referencia_id: comanda.id,
+    });
+
+    console.log('[Comanda Print] Resultado:', ok);
+
+    if (ok) {
+      toast({ title: 'Enviado para fila!', description: `Comanda #${comanda.numero} na fila de impressão.` });
+    }
+    setPendingPrintItems(null);
+  }, [pendingPrintItems, createPrintJob]);
+
 
   if (loading) {
     return (
@@ -181,7 +239,44 @@ export default function ComandasLista() {
       </Dialog>
 
       {/* Comanda Detalhe */}
-      <ComandaDetalhe comanda={selectedComanda} open={showDetalhe} onOpenChange={setShowDetalhe} onClosed={() => refetch()} />
+      <ComandaDetalhe comanda={selectedComanda} open={showDetalhe} onOpenChange={setShowDetalhe} onPrintItems={handlePrintItems} onClosed={() => refetch()} />
+
+      {/* Printer select dialog */}
+      <Dialog open={showPrinterSelect} onOpenChange={setShowPrinterSelect}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" />
+              Selecionar Impressora
+            </DialogTitle>
+            <DialogDescription>
+              Escolha em qual impressora deseja imprimir a comanda.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            {impressorasAtivas.map((imp) => (
+              <Button
+                key={imp.id}
+                variant="outline"
+                className="w-full justify-start gap-3 h-14"
+                onClick={() => executePrintComanda(imp)}
+              >
+                {imp.tipo === 'bluetooth' ? (
+                  <Bluetooth className="h-5 w-5 text-blue-500" />
+                ) : (
+                  <Wifi className="h-5 w-5 text-green-500" />
+                )}
+                <div className="text-left">
+                  <div className="font-medium">{imp.nome}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {imp.tipo === 'bluetooth' ? 'Bluetooth' : `Rede ${imp.ip || ''}`}
+                  </div>
+                </div>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

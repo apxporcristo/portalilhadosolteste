@@ -10,8 +10,6 @@ import { useFichasConsumo, FichaAtiva, FichaProduto } from '@/hooks/useFichasCon
 import { useComplementos, Complemento, ComplementoItem, GrupoComplemento } from '@/hooks/useComplementos';
 import { getSupabaseClient } from '@/hooks/useVouchers';
 import { getPrintLayoutConfig } from '@/hooks/usePrintLayout';
-import { usePrinterContext } from '@/contexts/PrinterContext';
-import { useAndroidBridge } from '@/hooks/useAndroidBridge';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
 import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
 import { usePrintJobs } from '@/hooks/usePrintJobs';
@@ -54,8 +52,6 @@ export default function FichasLista() {
   const navigate = useNavigate();
   const { fichasAtivas, loading, registrarImpressao, produtos } = useFichasConsumo();
   const { getCategoriasOrdenadas, getItemsDaCategoria, getGruposDaCategoria, loading: loadingComp } = useComplementos();
-  const { config, printData, isBluetoothConnected, silentReconnectBluetooth, scanBluetoothDevices, connectBluetooth } = usePrinterContext();
-  const androidBridge = useAndroidBridge();
   const userSession = useOptionalUserSession();
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
@@ -349,8 +345,7 @@ export default function FichasLista() {
       setPendingUnassignedItems(printableItems);
       setShowPrinterSelectModal(true);
     } else {
-      // No printers registered, use browser/default fallback
-      executePrint([], printableItems);
+      toast({ title: 'Nenhuma impressora cadastrada', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
     }
   };
 
@@ -449,91 +444,7 @@ export default function FichasLista() {
     return new TextEncoder().encode(lines.join(''));
   };
 
-  const printViaBrowser = (dateStr: string, timeStr: string) => {
-    const layoutCfg = getPrintLayoutConfig();
-    const scale = 3;
-    const pw = layoutCfg.fichaPaperWidth * scale;
-    const ph = layoutCfg.fichaPaperHeight * scale;
-
-    let htmlContent = '';
-    for (const item of cart) {
-      const unitTotal = cartItemTotal(item);
-      for (let i = 0; i < item.quantidade; i++) {
-        htmlContent += `<div class="ficha" style="width:${pw}px;min-height:${ph}px;padding:8px;border:1px dashed #999;margin-bottom:8px;text-align:center;font-family:monospace;">`;
-        htmlContent += `<div style="font-size:${layoutCfg.fichaTitleFontSize * 1.2}px;font-weight:bold;">Ficha de consumo</div>`;
-        htmlContent += `<div style="font-size:${layoutCfg.fichaSubtitleFontSize * 1.2}px;margin-top:4px;">Categoria: ${item.ficha.categoria_nome}</div>`;
-        htmlContent += `<div style="font-size:${layoutCfg.fichaNumberFontSize * 1.2}px;font-weight:bold;margin-top:4px;">${item.ficha.nome_produto}</div>`;
-        
-        // Print complementos
-        if (item.selectedItems.length > 0) {
-          htmlContent += `<div style="font-size:${layoutCfg.fichaDataFontSize}px;margin:4px 0;color:#999;">- - - - - - - - - - - - - - - -</div>`;
-          for (const si of item.selectedItems) {
-            htmlContent += `<div style="font-size:${layoutCfg.fichaSubtitleFontSize * 1.2}px;">${si.item.nome}`;
-            if (Number(si.item.valor) > 0) {
-              htmlContent += ` <span style="color:#666;">R$ ${Number(si.item.valor).toFixed(2).replace('.', ',')}</span>`;
-            }
-            htmlContent += `</div>`;
-          }
-          htmlContent += `<div style="font-size:${layoutCfg.fichaSubtitleFontSize * 1.2}px;font-weight:bold;margin-top:2px;">Total: R$ ${unitTotal.toFixed(2).replace('.', ',')}</div>`;
-        }
-        
-        const hasC = item.ficha.exigir_dados_cliente && nomeCliente.trim();
-        const hasA = item.ficha.exigir_dados_atendente && nomeAtendente.trim();
-        if (hasC || hasA) {
-          htmlContent += `<div style="font-size:${layoutCfg.fichaDataFontSize}px;margin:6px 0 2px;color:#999;">- - - - - - - - - - - - - - - -</div>`;
-          if (hasC) htmlContent += `<div style="font-size:${layoutCfg.fichaClienteFontSize * 1.2}px;">Cliente: ${nomeCliente.trim()}</div>`;
-          if (hasA) htmlContent += `<div style="font-size:${layoutCfg.fichaAtendenteFontSize * 1.2}px;">Atendente: ${nomeAtendente.trim()}</div>`;
-        }
-        htmlContent += `<div style="font-size:${layoutCfg.fichaDataFontSize * 1.2}px;margin-top:6px;">Impresso em: ${dateStr} ${timeStr}</div>`;
-        htmlContent += `<div style="font-size:${layoutCfg.fichaDataFontSize}px;margin-top:4px;">- - - - - - - - - - - - - - - -</div>`;
-        htmlContent += `</div>`;
-      }
-    }
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html><head><title>Fichas de Consumo</title>
-        <style>
-          body{margin:0;padding:10px;font-family:monospace;}
-          @media print{body{margin:0;padding:0;} .ficha{page-break-after:auto;border:none!important;}}
-        </style></head>
-        <body>${htmlContent}</body></html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
-    }
-  };
-
-  const sendToAndroidBridge = (items: CartItem[], dateStr: string, timeStr: string) => {
-    for (const item of items) {
-      for (let i = 0; i < item.quantidade; i++) {
-        let fichaText = 'Ficha de consumo\n';
-        fichaText += `Categoria: ${item.ficha.categoria_nome}\n`;
-        fichaText += `${item.ficha.nome_produto}\n`;
-        if (item.selectedItems.length > 0) {
-          fichaText += '- - - - - - - - - - - - - - - -\n';
-          for (const si of item.selectedItems) {
-            fichaText += `${si.categoria}: ${si.item.nome}`;
-            if (Number(si.item.valor) > 0) fichaText += ` R$${Number(si.item.valor).toFixed(2).replace('.', ',')}`;
-            fichaText += '\n';
-          }
-          fichaText += `Total: R$ ${cartItemTotal(item).toFixed(2).replace('.', ',')}\n`;
-        }
-        const hasC = item.ficha.exigir_dados_cliente && nomeCliente.trim();
-        const hasA = item.ficha.exigir_dados_atendente && nomeAtendente.trim();
-        if (hasC || hasA) {
-          fichaText += '- - - - - - - - - - - - - - - -\n';
-          if (hasC) fichaText += `Cliente: ${nomeCliente.trim()}\n`;
-          if (hasA) fichaText += `Atendente: ${nomeAtendente.trim()}\n`;
-        }
-        fichaText += `Impresso em: ${dateStr} ${timeStr}\n`;
-        if (window.AndroidBridge?.smartPrintVoucher) {
-          window.AndroidBridge.smartPrintVoucher(fichaText, '');
-        }
-      }
-    }
-  };
+  // All printing goes through print_jobs queue only
 
   const sendToPrintQueue = async (printer: Impressora, items: CartItem[], dateStr: string, timeStr: string) => {
     console.log('[Ficha Print] Enviando para fila - impressora:', printer.nome, 'id:', printer.id, 'itens:', items.length);
