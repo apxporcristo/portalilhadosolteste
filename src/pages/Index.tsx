@@ -450,6 +450,8 @@ const Index = () => {
               <TabsContent value="settings" className="mt-6">
                 <AdminSettings />
               </TabsContent>
+              <TabsContent value="auditoria" className="mt-6">
+                <AuditoriaComandas />
             </Tabs>
           </>
         ) : (
