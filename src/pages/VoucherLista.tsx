@@ -60,7 +60,7 @@ export default function VoucherLista() {
       if (imp.tipo === 'bluetooth') {
         printers.push({ type: 'bluetooth', name: imp.bluetooth_nome || imp.nome });
       } else if (imp.tipo === 'rede' && imp.ip) {
-        printers.push({ type: 'network', name: `${imp.nome} (${imp.ip}:${imp.porta || '9100'})` });
+        printers.push({ type: 'network', name: `${imp.nome} (${imp.ip}:${imp.porta || '9100'})`, ip: imp.ip, port: imp.porta || '9100' });
       }
     }
     if (config.bluetoothDeviceName && !printers.some(p => p.name === config.bluetoothDeviceName)) {
@@ -91,8 +91,11 @@ export default function VoucherLista() {
       if (!hasVouchers) { setBatchPrinting(false); return; }
 
       if (printer?.name === 'Android (SmartPrint)') {
+        const { getPrintLayoutConfig } = await import('@/hooks/usePrintLayout');
+        const layout = getPrintLayoutConfig();
+        const showQr = layout.qrWidth > 0 && layout.qrHeight > 0;
         const networkName = getNetworkName();
-        const wifiQrData = getWifiQrString();
+        const wifiQrData = showQr ? getWifiQrString() : '';
         const now = new Date();
         const currentDate = now.toLocaleDateString('pt-BR');
         const currentTime = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -101,12 +104,11 @@ export default function VoucherLista() {
           if (window.AndroidBridge?.smartPrintVoucher) {
             window.AndroidBridge.smartPrintVoucher(texto, wifiQrData);
           } else {
-            window.location.href = "voucherilha://print?text=" + encodeURIComponent(texto) + "&qr=" + encodeURIComponent(wifiQrData);
+            window.location.href = "voucherilha://print?text=" + encodeURIComponent(texto) + (wifiQrData ? "&qr=" + encodeURIComponent(wifiQrData) : '');
           }
         }
         printSuccess = true;
       } else if (printer?.type === 'network' || printer?.type === 'bluetooth_local') {
-        // Rede e Bluetooth local: enviar via AndroidBridge ou deep link
         if (window.AndroidBridge?.smartPrint) {
           for (const v of voucherData) {
             const escposData = await createVoucherData(v.voucher_id, v.tempo_validade);
@@ -118,8 +120,29 @@ export default function VoucherLista() {
             window.AndroidBridge.smartPrint(payload);
           }
           printSuccess = true;
+        } else if (printer?.type === 'network' && printer.ip) {
+          // Impressão via rede usando supabase.functions.invoke
+          try {
+            const { getSupabaseClient } = await import('@/hooks/useVouchers');
+            const sbClient = await getSupabaseClient();
+            for (const v of voucherData) {
+              const escposData = await createVoucherData(v.voucher_id, v.tempo_validade);
+              const portNum = parseInt(printer.port || '9100', 10);
+              console.log('[Voucher Print] Rede - IP:', printer.ip, 'Porta:', portNum, 'bytes:', escposData.length);
+              const { data: result, error: fnError } = await sbClient.functions.invoke('print-network', {
+                body: { ip: printer.ip, port: portNum, data: Array.from(escposData) },
+              });
+              console.log('[Voucher Print] Resposta rede:', result, 'erro:', fnError);
+              if (fnError) throw new Error(fnError.message || 'Erro ao enviar para impressora de rede');
+              if (result?.error) throw new Error(result.error);
+            }
+            printSuccess = true;
+          } catch (err) {
+            console.error('[Voucher Print] Erro impressão rede:', err);
+            toast({ title: 'Erro na impressão', description: (err as Error).message, variant: 'destructive' });
+          }
         } else {
-          // Tentar deep link para app auxiliar
+          // Fallback deep link
           for (const v of voucherData) {
             const texto = `VOUCHER DE ACESSO\nVoucher: ${v.voucher_id}\nTempo: ${v.tempo_validade}`;
             window.location.href = "voucherilha://print?text=" + encodeURIComponent(texto) + "&printer=" + encodeURIComponent(printer.name);
