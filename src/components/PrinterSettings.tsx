@@ -240,7 +240,13 @@ export function PrinterSettings() {
                   className="flex-1"
                 />
                 <Button size="sm" onClick={() => {
-                  setLocalPrintServerUrl(printServerUrl);
+                  let url = printServerUrl.trim().replace(/\/+$/, '');
+                  if (url.startsWith('https://')) {
+                    url = url.replace('https://', 'http://');
+                    setPrintServerUrl(url);
+                    toast({ title: '⚠️ Corrigido para HTTP', description: 'O Print Server local usa HTTP, não HTTPS.' });
+                  }
+                  setLocalPrintServerUrl(url);
                   toast({ title: '✅ Print Server salvo' });
                 }}>
                   Salvar
