@@ -407,7 +407,7 @@ export default function FichasLista() {
           } catch (e) { console.warn('[Ficha Save] kds_orders insert falhou:', e); }
         }
       }
-      toast({ title: 'Salvo!', description: `${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
+      toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
       toast({ title: 'Erro', description: `Falha ao salvar: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
