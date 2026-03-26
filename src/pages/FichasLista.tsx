@@ -332,14 +332,18 @@ export default function FichasLista() {
   };
 
   const startDirectPrint = async () => {
-    // Filter printable items
+    // Filter printable items (imprimir_ficha = true)
     const printableItems = cart.filter(item => {
       const produto = produtos.find(p => p.id === item.ficha.id);
       return (produto as any)?.imprimir_ficha !== false;
     });
 
-    // Connect to Bluetooth and print directly
-    executePrint(printableItems);
+    executePrint(printableItems, false);
+  };
+
+  const startConferencePrint = async () => {
+    // Print ALL items for conference
+    executePrint([...cart], true);
   };
 
   const handleSaveOnly = async () => {
