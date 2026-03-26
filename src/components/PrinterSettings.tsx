@@ -50,7 +50,7 @@ export function PrinterSettings() {
 
   const { config, status, bluetoothDevices, updateConfig, saveConfig, scanBluetoothDevices, connectBluetooth, testConnection } = usePrinterContext();
   const androidBridge = useAndroidBridge();
-  
+  const { createPrintJob } = usePrintJobs();
 
   const [activeTab, setActiveTab] = useState('impressoras');
   const [formOpen, setFormOpen] = useState(false);
