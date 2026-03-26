@@ -825,6 +825,10 @@ export default function FichasAdmin() {
                 <Switch checked={prodForm.imprimir_ficha} onCheckedChange={(v) => setProdForm(p => ({ ...p, imprimir_ficha: v }))} />
                 <Label>Imprimir ficha</Label>
               </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={prodForm.enviar_para_kds} onCheckedChange={(v) => setProdForm(p => ({ ...p, enviar_para_kds: v }))} />
+                <Label>Enviar para KDS</Label>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Impressora</Label>
