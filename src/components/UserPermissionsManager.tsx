@@ -27,6 +27,7 @@ interface UserWithPermissions {
   acesso_ficha_consumo: boolean;
   acesso_comanda: boolean;
   acesso_kds: boolean;
+  reimpressao_venda: boolean;
   is_admin: boolean;
   voucher_tempo_acesso: string | null;
 }
@@ -205,6 +206,7 @@ export function UserPermissionsManager() {
   const [formFicha, setFormFicha] = useState(false);
   const [formComanda, setFormComanda] = useState(false);
   const [formKds, setFormKds] = useState(false);
+  const [formReimpressao, setFormReimpressao] = useState(false);
   const [formAdmin, setFormAdmin] = useState(false);
   const [formVoucherTempo, setFormVoucherTempo] = useState<string>('todos');
 
@@ -236,6 +238,7 @@ export function UserPermissionsManager() {
           acesso_ficha_consumo: perm?.acesso_ficha_consumo ?? false,
           acesso_comanda: perm?.acesso_comanda ?? false,
           acesso_kds: perm?.acesso_kds ?? false,
+          reimpressao_venda: (perm as any)?.reimpressao_venda ?? false,
           is_admin: perm?.is_admin ?? false,
           voucher_tempo_acesso: perm?.voucher_tempo_acesso ?? null,
         };
@@ -265,7 +268,7 @@ export function UserPermissionsManager() {
   const resetForm = () => {
     setFormNome(''); setFormCpf(''); setFormEmail(''); setFormSenha('');
     setFormAtivo(true); setFormVoucher(false); setFormProduto(false);
-    setFormFicha(false); setFormComanda(false); setFormKds(false); setFormAdmin(false);
+    setFormFicha(false); setFormComanda(false); setFormKds(false); setFormReimpressao(false); setFormAdmin(false);
     setFormVoucherTempo('todos');
   };
 
@@ -282,6 +285,7 @@ export function UserPermissionsManager() {
     setFormFicha(u.acesso_ficha_consumo);
     setFormComanda(u.acesso_comanda);
     setFormKds(u.acesso_kds);
+    setFormReimpressao(u.reimpressao_venda);
     setFormAdmin(u.is_admin);
     setFormVoucherTempo(u.voucher_tempo_acesso || 'todos');
     setModalMode('edit');
@@ -320,6 +324,7 @@ export function UserPermissionsManager() {
           ficha_consumo: formFicha,
           acesso_comanda: formComanda,
           acesso_kds: formKds,
+          reimpressao_venda: formReimpressao,
           administrador: formAdmin,
         });
         toast({ title: 'Usuário criado com sucesso!' });
@@ -337,6 +342,7 @@ export function UserPermissionsManager() {
             acesso_ficha_consumo: formFicha,
             acesso_comanda: formComanda,
             acesso_kds: formKds,
+            reimpressao_venda: formReimpressao,
             is_admin: formAdmin,
             voucher_tempo_acesso: formVoucher && formVoucherTempo !== 'todos' ? formVoucherTempo : null,
           },
@@ -466,6 +472,7 @@ export function UserPermissionsManager() {
                         {u.acesso_ficha_consumo && <Badge variant="outline" className="text-xs">Fichas</Badge>}
                         {u.acesso_comanda && <Badge variant="outline" className="text-xs">Comanda</Badge>}
                         {u.acesso_kds && <Badge variant="outline" className="text-xs">KDS</Badge>}
+                        {u.reimpressao_venda && <Badge variant="outline" className="text-xs">Reimpressão</Badge>}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
