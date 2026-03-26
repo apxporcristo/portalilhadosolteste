@@ -458,10 +458,17 @@ export default function FichasLista() {
 
     const lines = [
       '\x1B\x40', '\x1B\x61\x01',
+    ];
+
+    if (codigoVenda) {
+      lines.push(dataCmd, normalize(`Venda: ${codigoVenda}`), '\n');
+    }
+
+    lines.push(
       titleCmd, normalize('Ficha de consumo'), '\n',
       subtitleCmd, normalize(`Categoria: ${item.ficha.categoria_nome}`), '\n',
       numberCmd, normalize(item.ficha.nome_produto), '\n',
-    ];
+    );
 
     if (item.selectedItems.length > 0) {
       lines.push('\x1D\x21\x00', '- - - - - - - - - - - - - - - -\n');
