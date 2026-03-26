@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Printer, Wifi, Bluetooth, Monitor, Plus, Pencil, Trash2, Star, Power,
-  Loader2, Smartphone, Search, Settings, CheckCircle, XCircle, Link2, PrinterCheck, List
+  Loader2, Smartphone, Search, Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
