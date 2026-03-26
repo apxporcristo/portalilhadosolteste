@@ -350,6 +350,7 @@ export default function FichasLista() {
     if (cart.length === 0) return;
     setPrinting(true);
     try {
+      const codigoVenda = generateCodigoVenda();
       const sbClient = await getSupabaseClient();
       for (const item of cart) {
         const unitTotal = cartItemTotal(item);
