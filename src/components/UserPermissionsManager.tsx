@@ -590,6 +590,10 @@ export function UserPermissionsManager() {
                     <Switch checked={formKds} onCheckedChange={setFormKds} />
                   </div>
                   <div className="flex items-center justify-between">
+                    <Label className="text-sm">Reimpressão de Venda</Label>
+                    <Switch checked={formReimpressao} onCheckedChange={setFormReimpressao} />
+                  </div>
+                  <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold text-destructive">Administrador</Label>
                     <Switch checked={formAdmin} onCheckedChange={setFormAdmin} />
                   </div>
