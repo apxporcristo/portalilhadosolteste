@@ -47,25 +47,12 @@ export default function KdsPage() {
   const handlePrint = async (order: KdsOrder) => {
     setPrinting(true);
     try {
-      // Check Bluetooth
-      if (!navigator.bluetooth) {
-        toast({ title: 'Bluetooth não suportado', description: 'Use Chrome ou Edge para impressão Bluetooth.', variant: 'destructive' });
+      // Connect to Bluetooth (auto-reconnect with 3 retries)
+      const characteristic = await printerCtx.ensureBluetoothConnected();
+      if (!characteristic) {
+        toast({ title: 'Impressora não conectada', description: 'Não foi possível conectar à impressora Bluetooth.', variant: 'destructive' });
         setPrinting(false);
         return;
-      }
-
-      let char: any = null;
-      if (!printerCtx.isBluetoothConnected()) {
-        toast({ title: 'Selecione a impressora', description: 'Selecione a impressora Bluetooth na janela do navegador.' });
-        const devices = await printerCtx.scanBluetoothDevices();
-        if (devices.length > 0) {
-          char = await printerCtx.connectBluetooth(devices[0].device);
-        }
-        if (!char) {
-          toast({ title: 'Impressora não conectada', variant: 'destructive' });
-          setPrinting(false);
-          return;
-        }
       }
 
       // Generate ESC/POS
@@ -91,7 +78,7 @@ export default function KdsPage() {
       lines.push('================================\n\n\n', '\x1D\x56\x00');
 
       const data = new TextEncoder().encode(lines.join(''));
-      await printerCtx.printData(data, char || undefined);
+      await printerCtx.writeToCharacteristic(characteristic, data);
 
       await updateStatus(order.id, 'impresso');
       toast({ title: 'Impresso com sucesso!' });
