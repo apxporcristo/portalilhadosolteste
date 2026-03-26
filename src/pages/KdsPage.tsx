@@ -20,7 +20,6 @@ const statusConfig: Record<KdsStatus, { label: string; color: string; icon: Reac
 };
 
 const filterOptions: { value: KdsStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'Ativos' },
   { value: 'novo', label: 'Novos' },
   { value: 'em_preparo', label: 'Em Preparo' },
   { value: 'pronto', label: 'Prontos' },
