@@ -500,12 +500,13 @@ export default function FichasLista() {
     return new TextEncoder().encode(lines.join(''));
   };
 
-  const executePrint = async (printableItems: CartItem[]) => {
+  const executePrint = async (printableItems: CartItem[], isConference: boolean = false) => {
     setPrinting(true);
     try {
       const now = new Date();
       const dateStr = now.toLocaleDateString('pt-BR');
       const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const codigoVenda = generateCodigoVenda();
 
       // Register all prints in DB first
       const sbClient = await getSupabaseClient();
@@ -541,6 +542,7 @@ export default function FichasLista() {
             nome_cliente: nomeCliente.trim() || null,
             telefone_cliente: telefoneCliente.trim() || null,
             nome_atendente: nomeAtendente.trim() || null,
+            codigo_venda: codigoVenda,
           });
         } catch (insErr) {
           console.warn('[Ficha Print] fichas_impressas insert falhou (continuando):', insErr);
@@ -573,18 +575,18 @@ export default function FichasLista() {
         const characteristic = await ensureBluetoothConnected();
         if (!characteristic) {
           toast({ title: 'Impressora não conectada', description: 'Não foi possível conectar à impressora Bluetooth.', variant: 'destructive' });
-          // Still save data, just skip printing
         } else {
           for (const item of printableItems) {
             for (let i = 0; i < item.quantidade; i++) {
-              const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
+              const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr, codigoVenda);
               await writeToCharacteristic(characteristic, escposData);
             }
           }
         }
       }
 
-      toast({ title: 'Impressão enviada!', description: `${totalItems} ficha(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
+      const label = isConference ? 'Conferência impressa!' : 'Impressão enviada!';
+      toast({ title: label, description: `Venda ${codigoVenda} - ${totalItems} ficha(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
       console.error('[Ficha Print] Erro em executePrint:', err);
