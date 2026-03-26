@@ -31,6 +31,7 @@ interface PrinterStatus {
 }
 
 const STORAGE_KEY = 'voucher_printer_config';
+const BT_SAVED_KEY = 'bt_printer_saved';
 
 // ESC/POS Commands
 const ESC_POS = {
