@@ -207,6 +207,14 @@ export function usePrinter() {
               }));
               setStatus({ status: 'connected', message: `Conectado a ${device.name}` });
               
+              // Save printer name and id to localStorage for auto-reconnect
+              try {
+                localStorage.setItem(BT_SAVED_KEY, JSON.stringify({
+                  name: device.name || 'Impressora Bluetooth',
+                  id: device.id,
+                }));
+              } catch {}
+
               toast({
                 title: 'Conectado',
                 description: `Impressora ${device.name} conectada com sucesso!`,
