@@ -1,21 +1,19 @@
 import { useState, useCallback, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase-external';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Package, PackageCheck, AlertCircle, Shield, LogOut, Printer, Database, DollarSign, Plus, Clock, List, User, LogIn, CreditCard, ClipboardList, Settings, ArrowLeft, Scale, FileText, ChefHat, RotateCcw } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Ticket, Package, PackageCheck, AlertCircle, LogOut, Printer, Database, DollarSign, Clock, List, User, LogIn, CreditCard, ClipboardList, Settings, ArrowLeft, FileText, ChefHat } from 'lucide-react';
 import { useVouchers } from '@/hooks/useVouchers';
 import { usePrinterContext } from '@/contexts/PrinterContext';
-import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
 import { useVoucherCart } from '@/hooks/useVoucherCart';
 import { useAndroidBridge } from '@/hooks/useAndroidBridge';
-import { usePrintJobs } from '@/hooks/usePrintJobs';
 import { FileUpload } from '@/components/FileUpload';
 import { StatsCard } from '@/components/StatsCard';
 import { StatsDetailDialog } from '@/components/StatsDetailDialog';
 import { VoucherReport } from '@/components/VoucherReport';
 import { AdminSettings } from '@/components/AdminSettings';
-import { SupabaseSettings } from '@/components/SupabaseSettings';
-import { PrinterSettings } from '@/components/PrinterSettings';
+  import { SupabaseSettings } from '@/components/SupabaseSettings';
+  import { PrintLayoutSettings } from '@/components/PrintLayoutSettings';
+  import { FichaLayoutSettings } from '@/components/FichaLayoutSettings';
 import { PackageSettings } from '@/components/PackageSettings';
 import { VoucherCart } from '@/components/VoucherCart';
 import { UserPermissionsManager } from '@/components/UserPermissionsManager';
@@ -35,7 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useBalanca } from '@/hooks/useBalanca';
+
 
 
 const timeColors: Record<string, string> = {
@@ -55,20 +53,15 @@ const Index = () => {
   } = useVouchers();
 
   const [isAdmin, setIsAdmin] = useState(false);
-  const { createVoucherData } = usePrinterContext();
-  const { getVoucherPrinter, voucherConfig } = useImpressoras();
+  const { createVoucherData, ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const cart = useVoucherCart();
   const fichasConsumo = useFichasConsumo();
   const { comandasAbertas } = useComandas();
   const navigate = useNavigate();
   const androidBridge = useAndroidBridge();
-  const { createPrintJob, createPrintJobFromBinary } = usePrintJobs();
-  const { impressoras } = useImpressoras();
-  const impressorasAtivas = impressoras.filter(p => p.ativa);
-  const [showPrinterSelect, setShowPrinterSelect] = useState(false);
   const [batchPrinting, setBatchPrinting] = useState(false);
   const [statsDialog, setStatsDialog] = useState<{ open: boolean; type: 'total' | 'livres' | 'usados' | 'reservados'; title: string }>({ open: false, type: 'total', title: '' });
-  const balanca = useBalanca();
+  
   const userSession = useOptionalUserSession();
   const userAccess = userSession?.access;
   const isLoggedIn = !!userSession?.user;
@@ -95,30 +88,27 @@ const Index = () => {
     if (isAdmin) refetch();
   }, [isAdmin, refetch]);
 
-  const executeBatchPrint = useCallback(async (printer: Impressora) => {
+  const handleBatchPrint = useCallback(async () => {
     setBatchPrinting(true);
     try {
       const voucherItems = cart.items;
       const selectedVouchers = voucherItems.length > 0 ? getFreVouchersBatch(voucherItems) : [];
       if (selectedVouchers.length === 0) { setBatchPrinting(false); return; }
 
-      console.log('[Index Print] Impressora selecionada:', printer.nome, 'id:', printer.id);
+      const characteristic = await ensureBluetoothConnected();
+      if (!characteristic) {
+        toast({ title: 'Impressora não conectada', description: 'Não foi possível conectar à impressora Bluetooth.', variant: 'destructive' });
+        setBatchPrinting(false);
+        return;
+      }
 
       for (const v of selectedVouchers) {
         const escposData = await createVoucherData(v.voucher_id, v.tempo_validade);
-        await createPrintJobFromBinary({
-          printer_id: printer.id,
-          printer_name: printer.nome,
-          device_ip: printer.ip || undefined,
-          data: escposData,
-          formato: 'escpos',
-          tipo_documento: 'voucher',
-          referencia_id: v.voucher_id,
-        });
+        await writeToCharacteristic(characteristic, escposData);
       }
 
       await markVouchersPreReservado(selectedVouchers.map(v => v.voucher_id));
-      toast({ title: 'Enviado para fila!', description: `${selectedVouchers.length} voucher(s) na fila de impressão.` });
+      toast({ title: 'Impresso!', description: `${selectedVouchers.length} voucher(s) impresso(s) com sucesso.` });
       cart.clearCart();
     } catch (error) {
       console.error('Erro na impressão em lote:', error);
@@ -126,35 +116,7 @@ const Index = () => {
     } finally {
       setBatchPrinting(false);
     }
-  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, createPrintJobFromBinary]);
-
-  const handleBatchPrint = useCallback(async () => {
-    const { printer: voucherPrinter, error: voucherError } = getVoucherPrinter();
-    
-    if (voucherPrinter) {
-      await executeBatchPrint(voucherPrinter);
-      return;
-    }
-
-    // Fallback: use default or first active printer
-    const defaultPrinter = impressorasAtivas.find(p => p.padrao) || impressorasAtivas[0];
-    if (defaultPrinter) {
-      await executeBatchPrint(defaultPrinter);
-      return;
-    }
-
-    if (voucherError) {
-      toast({ title: 'Impressora não configurada', description: voucherError, variant: 'destructive' });
-    } else {
-      toast({ title: 'Nenhuma impressora encontrada', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
-    }
-    setShowPrinterSelect(true);
-  }, [getVoucherPrinter, executeBatchPrint, impressorasAtivas]);
-
-  const handlePrinterSelected = useCallback(async (printer: Impressora) => {
-    setShowPrinterSelect(false);
-    await executeBatchPrint(printer);
-  }, [executeBatchPrint]);
+  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, ensureBluetoothConnected, writeToCharacteristic]);
 
   const temposComVouchersLivres = stats.temposDisponiveis.filter(
     tempo => (stats.livresPorTempo[tempo] || 0) > 0
@@ -264,9 +226,9 @@ const Index = () => {
                   <DollarSign className="h-3 w-3" />
                   Pacotes
                 </TabsTrigger>
-                <TabsTrigger value="printer" className="flex items-center gap-1">
+                <TabsTrigger value="layout" className="flex items-center gap-1">
                   <Printer className="h-3 w-3" />
-                  Impressora
+                  Layout Impressão
                 </TabsTrigger>
                 <TabsTrigger value="payment" className="flex items-center gap-1">
                   <CreditCard className="h-3 w-3" />
@@ -296,8 +258,11 @@ const Index = () => {
               <TabsContent value="packages" className="mt-6">
                 <PackageSettings />
               </TabsContent>
-              <TabsContent value="printer" className="mt-6">
-                <PrinterSettings />
+              <TabsContent value="layout" className="mt-6">
+                <div className="space-y-6">
+                  <PrintLayoutSettings />
+                  <FichaLayoutSettings />
+                </div>
               </TabsContent>
               <TabsContent value="payment" className="mt-6">
                 <FormasPagamentoSettings />
@@ -430,34 +395,6 @@ const Index = () => {
         </div>
       </footer>
 
-      {/* Printer select dialog using DB printers */}
-      <Dialog open={showPrinterSelect} onOpenChange={setShowPrinterSelect}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Printer className="h-5 w-5" />
-              Selecionar Impressora
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 mt-2">
-            {impressorasAtivas.map((imp) => (
-              <Button
-                key={imp.id}
-                variant="outline"
-                className="w-full justify-start gap-3 h-14"
-                onClick={() => handlePrinterSelected(imp)}
-              >
-                <div className="text-left">
-                  <div className="font-medium">{imp.nome}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {imp.tipo === 'bluetooth' ? 'Bluetooth' : `Rede ${imp.ip || ''}`}
-                  </div>
-                </div>
-              </Button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
       <StatsDetailDialog open={statsDialog.open} onOpenChange={(open) => setStatsDialog(prev => ({ ...prev, open }))} title={statsDialog.title} type={statsDialog.type} stats={stats} />
       
     </div>

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label';
 import { useFichasConsumo, FichaAtiva, FichaProduto } from '@/hooks/useFichasConsumo';
 import { useComplementos, Complemento, ComplementoItem, GrupoComplemento } from '@/hooks/useComplementos';
-import { getSupabaseClient } from '@/hooks/useVouchers';
+import { getSupabaseClient, useVouchers } from '@/hooks/useVouchers';
 import { getPrintLayoutConfig } from '@/hooks/usePrintLayout';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
 import { usePrinterContext } from '@/contexts/PrinterContext';
@@ -62,6 +62,7 @@ export default function FichasLista() {
   const userSession = useOptionalUserSession();
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
+  const { getFreVouchersBatch, markVouchersPreReservado } = useVouchers();
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const balanca = useBalanca();
   const { lerPeso } = balanca;
@@ -103,6 +104,33 @@ export default function FichasLista() {
   // Forma de pagamento modal
   const { formasAtivas } = useFormasPagamento();
   const [showPagamentoModal, setShowPagamentoModal] = useState(false);
+
+  // Voucher Pix config
+  const userAccess = userSession?.access;
+  const canGenerateVoucher = !!(userAccess?.acesso_voucher);
+  const voucherTempo = userAccess?.voucher_tempo_acesso || null;
+
+  const handleGeneratePixVoucher = async (tempo: string | null): Promise<{ voucher_id: string; tempo_validade: string } | null> => {
+    // Get a free voucher matching the user's allowed tempo
+    const tempoToUse = tempo || null;
+    const items = tempoToUse ? [{ tempo: tempoToUse, quantity: 1 }] : [];
+    
+    if (tempoToUse) {
+      const batch = getFreVouchersBatch(items);
+      if (batch.length === 0) {
+        toast({ title: 'Sem voucher disponível', description: `Não há voucher de ${tempoToUse} disponível no momento.`, variant: 'destructive' });
+        return null;
+      }
+      const voucher = batch[0];
+      const success = await markVouchersPreReservado([voucher.voucher_id]);
+      if (!success) return null;
+      return { voucher_id: voucher.voucher_id, tempo_validade: voucher.tempo_validade };
+    } else {
+      // User has access to all tempos - shouldn't happen without specific tempo, show error
+      toast({ title: 'Tempo não definido', description: 'Configure o tempo de voucher para este usuário.', variant: 'destructive' });
+      return null;
+    }
+  };
 
   // Dynamic fields dialog
   const [printDialog, setPrintDialog] = useState(false);
@@ -891,6 +919,11 @@ export default function FichasLista() {
           setShowPagamentoModal(false);
           handleSaveOnly();
         }}
+        voucherPix={canGenerateVoucher && voucherTempo ? {
+          canGenerateVoucher: true,
+          voucherTempo,
+          onGenerateVoucher: handleGeneratePixVoucher,
+        } : undefined}
       >
         <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); handleInitConferencePrint(); }} disabled={totalItems === 0 || printing}>
           <FileText className="h-5 w-5 mr-2" />
