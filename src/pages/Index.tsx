@@ -1,14 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase-external';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Package, PackageCheck, AlertCircle, Shield, LogOut, Printer, Database, DollarSign, Plus, Clock, List, User, LogIn, CreditCard, ClipboardList, Settings, ArrowLeft, Scale, FileText, ChefHat, RotateCcw } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Ticket, Package, PackageCheck, AlertCircle, LogOut, Printer, Database, DollarSign, Clock, List, User, LogIn, CreditCard, ClipboardList, Settings, ArrowLeft, FileText, ChefHat } from 'lucide-react';
 import { useVouchers } from '@/hooks/useVouchers';
 import { usePrinterContext } from '@/contexts/PrinterContext';
-import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
 import { useVoucherCart } from '@/hooks/useVoucherCart';
 import { useAndroidBridge } from '@/hooks/useAndroidBridge';
-import { usePrintJobs } from '@/hooks/usePrintJobs';
 import { FileUpload } from '@/components/FileUpload';
 import { StatsCard } from '@/components/StatsCard';
 import { StatsDetailDialog } from '@/components/StatsDetailDialog';
