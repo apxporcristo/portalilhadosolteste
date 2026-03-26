@@ -388,6 +388,27 @@ export default function FichasLista() {
             nome_atendente: nomeAtendente.trim() || null,
           });
         } catch (e) { console.warn('[Ficha Save] fichas_impressas insert falhou:', e); }
+
+        // Send to KDS if product is marked
+        const produto = produtos.find(p => p.id === item.ficha.id);
+        if ((produto as any)?.enviar_para_kds) {
+          try {
+            await sbClient.from('kds_orders' as any).insert({
+              produto_id: item.ficha.id,
+              produto_nome: produtoNome,
+              categoria_nome: item.ficha.categoria_nome || '',
+              quantidade: item.quantidade,
+              valor_unitario: unitTotal,
+              valor_total: unitTotal * item.quantidade,
+              nome_cliente: nomeCliente.trim() || null,
+              telefone_cliente: telefoneCliente.trim() || null,
+              nome_atendente: nomeAtendente.trim() || null,
+              complementos: item.selectedItems.length > 0 ? item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ') : null,
+              observacao: (produto as any)?.obs || null,
+              kds_status: 'novo',
+            });
+          } catch (e) { console.warn('[Ficha Save] kds_orders insert falhou:', e); }
+        }
       }
       toast({ title: 'Salvo!', description: `${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
