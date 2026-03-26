@@ -21,6 +21,14 @@ import { PagamentoDialog, PagamentoSelecionado } from '@/components/PagamentoDia
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useBalanca } from '@/hooks/useBalanca';
 
+function generateCodigoVenda(): string {
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `V${datePart}${timePart}-${rand}`;
+}
 
 interface SelectedItem {
   categoria: string;
