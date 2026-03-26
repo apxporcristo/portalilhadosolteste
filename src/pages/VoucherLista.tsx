@@ -3,9 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle, Plus } from 'lucide-react';
 import { useVouchers } from '@/hooks/useVouchers';
 import { usePrinterContext } from '@/contexts/PrinterContext';
-import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
 import { useVoucherCart } from '@/hooks/useVoucherCart';
-import { usePrintJobs } from '@/hooks/usePrintJobs';
 
 import { VoucherCart } from '@/components/VoucherCart';
 import { VoucherViewDialog } from '@/components/VoucherViewDialog';
@@ -16,8 +14,6 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Bluetooth, Wifi, Printer } from 'lucide-react';
 
 const timeColors: Record<string, string> = {
   '1 Hora': 'bg-time-1h hover:bg-time-1h/90',
@@ -40,13 +36,9 @@ export default function VoucherLista() {
     getFreVouchersBatch, markVouchersPreReservado,
   } = useVouchers();
 
-  const { createVoucherData } = usePrinterContext();
-  const { impressoras, getVoucherPrinter } = useImpressoras();
-  const { createPrintJobFromBinary } = usePrintJobs();
+  const { createVoucherData, ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const cart = useVoucherCart();
-  const impressorasAtivas = impressoras.filter(p => p.ativa);
 
-  const [showPrinterSelect, setShowPrinterSelect] = useState(false);
   const [batchPrinting, setBatchPrinting] = useState(false);
   const [viewVouchers, setViewVouchers] = useState<{ voucher_id: string; tempo_validade: string }[]>([]);
 
@@ -60,33 +52,30 @@ export default function VoucherLista() {
     cart.addItem(tempo);
   }, [cart, stats.livresPorTempo]);
 
-  const executeBatchPrint = useCallback(async (printer: Impressora) => {
+  const handleBatchPrint = useCallback(async () => {
     setBatchPrinting(true);
     try {
       const voucherItems = cart.items;
       const selectedVouchers = voucherItems.length > 0 ? getFreVouchersBatch(voucherItems) : [];
       if (selectedVouchers.length === 0) { setBatchPrinting(false); return; }
 
-      console.log('[Voucher Print] Impressora selecionada:', printer.nome, 'id:', printer.id);
+      // Connect to Bluetooth (auto-reconnect with 3 retries)
+      const characteristic = await ensureBluetoothConnected();
+      if (!characteristic) {
+        toast({ title: 'Impressora não conectada', description: 'Não foi possível conectar à impressora Bluetooth.', variant: 'destructive' });
+        setBatchPrinting(false);
+        return;
+      }
 
-      // Generate ESC/POS data and insert into print_jobs
+      // Generate ESC/POS data and print directly via Bluetooth
       for (const v of selectedVouchers) {
         const escposData = await createVoucherData(v.voucher_id, v.tempo_validade);
-        console.log('[Voucher Print] Job para voucher:', v.voucher_id, 'bytes:', escposData.length);
-        await createPrintJobFromBinary({
-          printer_id: printer.id,
-          printer_name: printer.nome,
-          device_ip: printer.ip || undefined,
-          data: escposData,
-          formato: 'escpos',
-          tipo_documento: 'voucher',
-          referencia_id: v.voucher_id,
-        });
+        await writeToCharacteristic(characteristic, escposData);
       }
 
       // Mark vouchers as pre-reserved
       await markVouchersPreReservado(selectedVouchers.map(v => v.voucher_id));
-      toast({ title: 'Enviado para fila!', description: `${selectedVouchers.length} voucher(s) na fila de impressão.` });
+      toast({ title: 'Impresso!', description: `${selectedVouchers.length} voucher(s) impresso(s) com sucesso.` });
       cart.clearCart();
     } catch (error) {
       console.error('Erro na impressão em lote:', error);
@@ -94,21 +83,7 @@ export default function VoucherLista() {
     } finally {
       setBatchPrinting(false);
     }
-  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, createPrintJobFromBinary]);
-
-  const handleBatchPrint = useCallback(async () => {
-    if (impressorasAtivas.length === 0) {
-      toast({ title: 'Nenhuma impressora disponível', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
-      return;
-    }
-    // Show printer select modal
-    setShowPrinterSelect(true);
-  }, [impressorasAtivas]);
-
-  const handlePrinterSelected = useCallback(async (printer: Impressora) => {
-    setShowPrinterSelect(false);
-    await executeBatchPrint(printer);
-  }, [executeBatchPrint]);
+  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, ensureBluetoothConnected, writeToCharacteristic]);
 
   const handleViewVoucher = useCallback(async () => {
     setBatchPrinting(true);
@@ -224,43 +199,6 @@ export default function VoucherLista() {
           viewMode={isSpecificTempo}
         />
       </main>
-
-      {/* Printer select dialog using DB printers */}
-      <Dialog open={showPrinterSelect} onOpenChange={setShowPrinterSelect}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Printer className="h-5 w-5" />
-              Selecionar Impressora
-            </DialogTitle>
-            <DialogDescription>
-              Escolha em qual impressora deseja imprimir o voucher.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 mt-2">
-            {impressorasAtivas.map((imp) => (
-              <Button
-                key={imp.id}
-                variant="outline"
-                className="w-full justify-start gap-3 h-14"
-                onClick={() => handlePrinterSelected(imp)}
-              >
-                {imp.tipo === 'bluetooth' ? (
-                  <Bluetooth className="h-5 w-5 text-blue-500" />
-                ) : (
-                  <Wifi className="h-5 w-5 text-green-500" />
-                )}
-                <div className="text-left">
-                  <div className="font-medium">{imp.nome}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {imp.tipo === 'bluetooth' ? 'Bluetooth' : `Rede ${imp.ip || ''}`}
-                  </div>
-                </div>
-              </Button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <VoucherViewDialog
         open={viewVouchers.length > 0}
