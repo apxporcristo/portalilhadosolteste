@@ -31,7 +31,7 @@ const filterOptions: { value: KdsStatus | 'all'; label: string }[] = [
 export default function KdsPage() {
   const navigate = useNavigate();
   const { orders, loading, statusFilter, setStatusFilter, updateStatus, refetch } = useKdsOrders();
-  const { scanBluetoothDevices, connectBluetooth, printData, isBluetoothConnected, bluetoothCharacteristic } = usePrinterContext();
+  const printerCtx = usePrinterContext();
   const [detailOrder, setDetailOrder] = useState<KdsOrder | null>(null);
   const [printing, setPrinting] = useState(false);
 
@@ -54,12 +54,12 @@ export default function KdsPage() {
         return;
       }
 
-      let char = bluetoothCharacteristic;
-      if (!isBluetoothConnected()) {
+      let char: any = null;
+      if (!printerCtx.isBluetoothConnected()) {
         toast({ title: 'Selecione a impressora', description: 'Selecione a impressora Bluetooth na janela do navegador.' });
-        const devices = await scanBluetoothDevices();
+        const devices = await printerCtx.scanBluetoothDevices();
         if (devices.length > 0) {
-          char = await connectBluetooth(devices[0].device);
+          char = await printerCtx.connectBluetooth(devices[0].device);
         }
         if (!char) {
           toast({ title: 'Impressora não conectada', variant: 'destructive' });
@@ -91,7 +91,7 @@ export default function KdsPage() {
       lines.push('================================\n\n\n', '\x1D\x56\x00');
 
       const data = new TextEncoder().encode(lines.join(''));
-      await printData(data, char || undefined);
+      await printerCtx.printData(data, char || undefined);
 
       await updateStatus(order.id, 'impresso');
       toast({ title: 'Impresso com sucesso!' });
