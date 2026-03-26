@@ -229,7 +229,7 @@ export default function KdsPage() {
                       <p>{formatTime(order.created_at)} - {formatDate(order.created_at)}</p>
                     </div>
 
-                    {/* Quick actions */}
+                    {/* Quick actions - cozinha: apenas novo→em_preparo e em_preparo→pronto */}
                     <div className="flex gap-1 pt-1" onClick={e => e.stopPropagation()}>
                       {order.kds_status === 'novo' && (
                         <Button size="sm" className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white" onClick={() => handleStatusChange(order, 'em_preparo')}>
@@ -241,14 +241,9 @@ export default function KdsPage() {
                           <Check className="h-3 w-3 mr-1" /> Pronto
                         </Button>
                       )}
-                      {(order.kds_status === 'pronto' || order.kds_status === 'em_preparo') && (
+                      {(order.kds_status === 'novo' || order.kds_status === 'em_preparo') && (
                         <Button size="sm" variant="outline" className="flex-1" onClick={() => handlePrint(order)} disabled={printing}>
                           <Printer className="h-3 w-3 mr-1" /> Imprimir
-                        </Button>
-                      )}
-                      {(order.kds_status === 'pronto' || order.kds_status === 'impresso') && (
-                        <Button size="sm" className="flex-1" onClick={() => handleStatusChange(order, 'entregue')}>
-                          <CheckCircle className="h-3 w-3 mr-1" /> Entregue
                         </Button>
                       )}
                     </div>
@@ -321,12 +316,9 @@ export default function KdsPage() {
                     <Check className="h-4 w-4 mr-1" /> Pronto
                   </Button>
                 )}
-                <Button variant="outline" onClick={() => handlePrint(detailOrder)} disabled={printing}>
-                  <Printer className="h-4 w-4 mr-1" /> Imprimir
-                </Button>
-                {(detailOrder.kds_status === 'pronto' || detailOrder.kds_status === 'impresso') && (
-                  <Button onClick={() => { handleStatusChange(detailOrder, 'entregue'); setDetailOrder(null); }}>
-                    <CheckCircle className="h-4 w-4 mr-1" /> Entregue
+                {(detailOrder.kds_status === 'novo' || detailOrder.kds_status === 'em_preparo') && (
+                  <Button variant="outline" onClick={() => handlePrint(detailOrder)} disabled={printing}>
+                    <Printer className="h-4 w-4 mr-1" /> Imprimir
                   </Button>
                 )}
               </DialogFooter>
