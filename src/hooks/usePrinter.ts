@@ -31,6 +31,7 @@ interface PrinterStatus {
 }
 
 const STORAGE_KEY = 'voucher_printer_config';
+const BT_SAVED_KEY = 'bt_printer_saved';
 
 // ESC/POS Commands
 const ESC_POS = {
@@ -206,6 +207,14 @@ export function usePrinter() {
               }));
               setStatus({ status: 'connected', message: `Conectado a ${device.name}` });
               
+              // Save printer name and id to localStorage for auto-reconnect
+              try {
+                localStorage.setItem(BT_SAVED_KEY, JSON.stringify({
+                  name: device.name || 'Impressora Bluetooth',
+                  id: device.id,
+                }));
+              } catch {}
+
               toast({
                 title: 'Conectado',
                 description: `Impressora ${device.name} conectada com sucesso!`,
@@ -727,6 +736,36 @@ export function usePrinter() {
     return data;
   }, [createQRCodeCommands, createQRCodeRasterCommands]);
 
+  /**
+   * Ensures a Bluetooth connection is available.
+   * 1. If already connected, returns the existing characteristic.
+   * 2. Tries silent reconnect up to 3 times (using saved device or getDevices).
+   * 3. If all attempts fail, opens the Bluetooth picker for manual selection.
+   */
+  const ensureBluetoothConnected = useCallback(async (): Promise<BluetoothRemoteGATTCharacteristic | null> => {
+    // Already connected?
+    if (isBluetoothConnected() && bluetoothCharacteristic) {
+      return bluetoothCharacteristic;
+    }
+
+    // Try silent reconnect up to 3 times
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      console.log(`[BT] Tentativa de reconexão silenciosa ${attempt}/3...`);
+      setStatus({ status: 'connecting', message: `Reconectando... (${attempt}/3)` });
+      const char = await silentReconnectBluetooth();
+      if (char) {
+        console.log('[BT] Reconexão silenciosa bem-sucedida');
+        return char;
+      }
+      // Small delay between attempts
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000));
+    }
+
+    // All silent attempts failed, open picker
+    console.log('[BT] Reconexão falhou, abrindo picker...');
+    return await reconnectBluetooth();
+  }, [isBluetoothConnected, bluetoothCharacteristic, silentReconnectBluetooth, reconnectBluetooth]);
+
   return {
     config,
     status,
@@ -741,5 +780,7 @@ export function usePrinter() {
     isBluetoothConnected,
     reconnectBluetooth,
     silentReconnectBluetooth,
+    ensureBluetoothConnected,
+    writeToCharacteristic,
   };
 }

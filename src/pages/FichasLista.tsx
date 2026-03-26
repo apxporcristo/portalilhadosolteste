@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, Bluetooth, BluetoothSearching, Wifi, RefreshCw, Save } from 'lucide-react';
+import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +11,7 @@ import { useComplementos, Complemento, ComplementoItem, GrupoComplemento } from 
 import { getSupabaseClient } from '@/hooks/useVouchers';
 import { getPrintLayoutConfig } from '@/hooks/usePrintLayout';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
-import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
-import { usePrintJobs } from '@/hooks/usePrintJobs';
+import { usePrinterContext } from '@/contexts/PrinterContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -55,17 +54,12 @@ export default function FichasLista() {
   const userSession = useOptionalUserSession();
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
-  const { impressoras } = useImpressoras();
-  const { createPrintJobFromBinary } = usePrintJobs();
-  const impressorasAtivas = impressoras.filter(p => p.ativa);
+  const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const balanca = useBalanca();
   const { lerPeso } = balanca;
   const [search, setSearch] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
-  const [showPrinterSelectModal, setShowPrinterSelectModal] = useState(false);
-  const [pendingUnassignedItems, setPendingUnassignedItems] = useState<CartItem[]>([]);
-  const [pendingAssignedGroups, setPendingAssignedGroups] = useState<{ printer: Impressora; items: CartItem[] }[]>([]);
 
   // Peso manual input
   const [showPesoModal, setShowPesoModal] = useState(false);
@@ -329,26 +323,15 @@ export default function FichasLista() {
     return cart.filter(c => c.ficha.id === fichaId).reduce((sum, c) => sum + c.quantidade, 0);
   };
 
-  const startDirectPrint = () => {
+  const startDirectPrint = async () => {
     // Filter printable items
     const printableItems = cart.filter(item => {
       const produto = produtos.find(p => p.id === item.ficha.id);
       return (produto as any)?.imprimir_ficha !== false;
     });
 
-    if (printableItems.length === 0) {
-      executePrint([], []);
-      return;
-    }
-
-    // Always show printer selection modal if there are registered printers
-    if (impressorasAtivas.length > 0) {
-      setPendingAssignedGroups([]);
-      setPendingUnassignedItems(printableItems);
-      setShowPrinterSelectModal(true);
-    } else {
-      toast({ title: 'Nenhuma impressora cadastrada', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
-    }
+    // Connect to Bluetooth and print directly
+    executePrint(printableItems);
   };
 
   const handleSaveOnly = async () => {
@@ -440,21 +423,6 @@ export default function FichasLista() {
     startDirectPrint();
   };
 
-  const handleSelectPrinterForUnassigned = (imp: Impressora) => {
-    setShowPrinterSelectModal(false);
-    console.log('[Ficha Print] Impressora selecionada:', imp.nome, 'id:', imp.id, 'pendingUnassigned:', pendingUnassignedItems.length);
-    // Merge unassigned items into assigned groups under the selected printer
-    const merged = [...pendingAssignedGroups];
-    const existingGroup = merged.find(g => g.printer.id === imp.id);
-    if (existingGroup) {
-      existingGroup.items.push(...pendingUnassignedItems);
-    } else {
-      merged.push({ printer: imp, items: [...pendingUnassignedItems] });
-    }
-    setPendingUnassignedItems([]);
-    executePrint(merged, []);
-  };
-
   const buildItemsText = (item: CartItem): string => {
     if (item.selectedItems.length === 0) return '';
     return item.selectedItems.map(si => `  ${si.item.nome} R$${Number(si.item.valor).toFixed(2).replace('.', ',')}`).join('\n');
@@ -487,7 +455,6 @@ export default function FichasLista() {
       numberCmd, normalize(item.ficha.nome_produto), '\n',
     ];
 
-    // Print complementos (items selected)
     if (item.selectedItems.length > 0) {
       lines.push('\x1D\x21\x00', '- - - - - - - - - - - - - - - -\n');
       for (const si of item.selectedItems) {
@@ -498,7 +465,6 @@ export default function FichasLista() {
       }
     }
 
-    // Show total if items add value
     const unitTotal = cartItemTotal(item);
     if (item.selectedItems.length > 0) {
       lines.push(subtitleCmd, `Total: R$ ${unitTotal.toFixed(2).replace('.', ',')}`, '\n');
@@ -515,40 +481,15 @@ export default function FichasLista() {
     return new TextEncoder().encode(lines.join(''));
   };
 
-  // All printing goes through print_jobs queue only
-
-  const sendToPrintQueue = async (printer: Impressora, items: CartItem[], dateStr: string, timeStr: string) => {
-    console.log('[Ficha Print] Enviando para fila - impressora:', printer.nome, 'id:', printer.id, 'itens:', items.length);
-    for (const item of items) {
-      for (let i = 0; i < item.quantidade; i++) {
-        const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
-        console.log('[Ficha Print] ESC/POS gerado, bytes:', escposData.length);
-        const jobResult = await createPrintJobFromBinary({
-          printer_id: printer.id,
-          printer_name: printer.nome,
-          device_ip: printer.ip || undefined,
-          data: escposData,
-          formato: 'escpos',
-          tipo_documento: 'ficha',
-          referencia_id: item.ficha.id,
-        });
-        console.log('[Ficha Print] Job criado:', jobResult, 'produto:', item.ficha.nome_produto);
-      }
-    }
-  };
-
-  const executePrint = async (
-    assignedGroups: { printer: Impressora; items: CartItem[] }[] = [],
-    unassignedItems: CartItem[] = []
-  ) => {
+  const executePrint = async (printableItems: CartItem[]) => {
     setPrinting(true);
-    console.log('[Ficha Print] executePrint iniciado - assignedGroups:', assignedGroups.length, 'unassignedItems:', unassignedItems.length);
     try {
       const now = new Date();
       const dateStr = now.toLocaleDateString('pt-BR');
       const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
       // Register all prints in DB first
+      const sbClient = await getSupabaseClient();
       for (const item of cart) {
         const unitTotal = cartItemTotal(item);
         const dadosExtras: any = {};
@@ -561,16 +502,10 @@ export default function FichasLista() {
         }
         try {
           await registrarImpressao(item.ficha.id, item.quantidade, unitTotal, dadosExtras);
-          console.log('[Ficha Print] registrarImpressao OK para:', item.ficha.nome_produto);
         } catch (regErr) {
           console.warn('[Ficha Print] registrarImpressao falhou (continuando):', regErr);
         }
-      }
 
-      // Contabilizar em fichas_impressas para relatório
-      const sbClient = await getSupabaseClient();
-      for (const item of cart) {
-        const unitTotal = cartItemTotal(item);
         let produtoNome = item.ficha.nome_produto;
         if (item.selectedItems.length > 0) {
           produtoNome += ' | ' + item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ');
@@ -588,7 +523,6 @@ export default function FichasLista() {
             telefone_cliente: telefoneCliente.trim() || null,
             nome_atendente: nomeAtendente.trim() || null,
           });
-          console.log('[Ficha Print] fichas_impressas insert OK para:', produtoNome);
         } catch (insErr) {
           console.warn('[Ficha Print] fichas_impressas insert falhou (continuando):', insErr);
         }
@@ -615,19 +549,19 @@ export default function FichasLista() {
         }
       }
 
-      // Send assigned groups to print queue
-      for (const group of assignedGroups) {
-        console.log('[Ficha Print] Processando grupo - impressora:', group.printer.nome, 'id:', group.printer.id, 'itens:', group.items.length);
-        await sendToPrintQueue(group.printer, group.items, dateStr, timeStr);
-      }
-
-      // Unassigned items: also send to print queue using default printer or first active
-      if (unassignedItems.length > 0) {
-        const defaultPrinter = impressorasAtivas.find(p => p.padrao) || impressorasAtivas[0];
-        if (defaultPrinter) {
-          await sendToPrintQueue(defaultPrinter, unassignedItems, dateStr, timeStr);
+      // Print via Bluetooth if there are printable items
+      if (printableItems.length > 0) {
+        const characteristic = await ensureBluetoothConnected();
+        if (!characteristic) {
+          toast({ title: 'Impressora não conectada', description: 'Não foi possível conectar à impressora Bluetooth.', variant: 'destructive' });
+          // Still save data, just skip printing
         } else {
-          toast({ title: 'Nenhuma impressora ativa', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
+          for (const item of printableItems) {
+            for (let i = 0; i < item.quantidade; i++) {
+              const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
+              await writeToCharacteristic(characteristic, escposData);
+            }
+          }
         }
       }
 
@@ -1083,45 +1017,7 @@ export default function FichasLista() {
         cancelText="Não"
       />
 
-      {/* Printer Selection Modal - for items without printer_id */}
-      <Dialog open={showPrinterSelectModal} onOpenChange={setShowPrinterSelectModal}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Printer className="h-5 w-5" />
-              Selecionar Impressora
-            </DialogTitle>
-            <DialogDescription>
-              Escolha a impressora para enviar as fichas:
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 mt-2">
-            {impressorasAtivas.map((imp) => (
-              <Button
-                key={imp.id}
-                variant="outline"
-                className="w-full justify-start gap-3 h-14"
-                onClick={() => handleSelectPrinterForUnassigned(imp)}
-              >
-                {imp.tipo === 'bluetooth' ? (
-                  <Bluetooth className="h-5 w-5 text-blue-500 shrink-0" />
-                ) : (
-                  <Wifi className="h-5 w-5 text-green-500 shrink-0" />
-                )}
-                <div className="text-left">
-                  <div className="font-medium">{imp.nome}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {imp.tipo === 'rede' ? `${imp.ip}:${imp.porta || '9100'}` : imp.bluetooth_nome || 'Bluetooth'}
-                  </div>
-                </div>
-              </Button>
-            ))}
-            <Button variant="ghost" className="w-full" onClick={() => { setShowPrinterSelectModal(false); executePrint(pendingAssignedGroups, pendingUnassignedItems); }}>
-              Imprimir sem selecionar (padrão)
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+
     </div>
   );
 }
