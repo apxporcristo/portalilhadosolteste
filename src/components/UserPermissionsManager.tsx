@@ -14,6 +14,7 @@ import { Users, RefreshCw, Plus, Pencil, KeyRound, Trash2, Power, Search } from 
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { formatCPF, cleanCPF, isValidCPF } from '@/lib/cpf-utils';
+import { hashPassword } from '@/lib/password-utils';
 
 interface UserWithPermissions {
   user_id: string;
@@ -43,24 +44,144 @@ function getCallerUserId(): string {
   throw new Error('Sessão expirada. Faça login novamente.');
 }
 
+async function invokeManageUsersDirect(body: Record<string, unknown>) {
+  const db = await getSupabaseClient();
+  const action = typeof body.action === 'string' ? body.action : null;
+  const userId = typeof body.user_id === 'string' ? body.user_id : null;
+
+  if (!action) throw new Error('Ação inválida.');
+  if (!userId) throw new Error('user_id é obrigatório.');
+
+  if (action === 'update-user') {
+    const profile = typeof body.profile === 'object' && body.profile !== null ? body.profile as Record<string, unknown> : {};
+    const permissions = typeof body.permissions === 'object' && body.permissions !== null ? body.permissions as Record<string, unknown> : {};
+
+    const profileUpdate: Record<string, unknown> = {};
+    if (profile.nome !== undefined) profileUpdate.nome = String(profile.nome ?? '').trim();
+    if (profile.email !== undefined) profileUpdate.email = String(profile.email ?? '').trim().toLowerCase();
+    if (profile.cpf !== undefined) profileUpdate.cpf = cleanCPF(String(profile.cpf ?? ''));
+    if (profile.ativo !== undefined) profileUpdate.ativo = !!profile.ativo;
+
+    if (Object.keys(profileUpdate).length > 0) {
+      const { error } = await db.from('user_profiles').update(profileUpdate as any).eq('id', userId);
+      if (error) throw new Error(`Erro perfil: ${error.message}`);
+    }
+
+    const permUpdate: Record<string, unknown> = {};
+    if (permissions.acesso_voucher !== undefined) permUpdate.acesso_voucher = !!permissions.acesso_voucher;
+    if (permissions.acesso_cadastrar_produto !== undefined) permUpdate.acesso_cadastrar_produto = !!permissions.acesso_cadastrar_produto;
+    if (permissions.acesso_ficha_consumo !== undefined) permUpdate.acesso_ficha_consumo = !!permissions.acesso_ficha_consumo;
+    if (permissions.acesso_comanda !== undefined) permUpdate.acesso_comanda = !!permissions.acesso_comanda;
+    if (permissions.acesso_kds !== undefined) permUpdate.acesso_kds = !!permissions.acesso_kds;
+    if (permissions.is_admin !== undefined) permUpdate.is_admin = !!permissions.is_admin;
+    if (permissions.voucher_tempo_acesso !== undefined) {
+      const value = permissions.voucher_tempo_acesso;
+      permUpdate.voucher_tempo_acesso = typeof value === 'string' && value.trim() ? value.trim() : null;
+    }
+
+    if (Object.keys(permUpdate).length > 0) {
+      const { error } = await db
+        .from('user_permissions')
+        .upsert({ user_id: userId, ...permUpdate } as any, { onConflict: 'user_id' });
+      if (error) throw new Error(`Erro permissões: ${error.message}`);
+    }
+
+    return { success: true };
+  }
+
+  if (action === 'reset-password') {
+    const newPassword = typeof body.new_password === 'string' ? body.new_password : '';
+    if (newPassword.length < 6) throw new Error('Senha deve ter pelo menos 6 caracteres.');
+
+    const { data: userProfile, error: profileError } = await db
+      .from('user_profiles')
+      .select('cpf')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileError) throw new Error(profileError.message);
+    if (!userProfile?.cpf) throw new Error('Usuário sem CPF cadastrado.');
+
+    const senhaHash = await hashPassword(newPassword, String(userProfile.cpf));
+    const { error } = await db
+      .from('user_profiles')
+      .update({ senha_hash: senhaHash } as any)
+      .eq('id', userId);
+
+    if (error) throw new Error(error.message);
+    return { success: true };
+  }
+
+  if (action === 'delete-user') {
+    const [permRes, profRes] = await Promise.all([
+      db.from('user_permissions').delete().eq('user_id', userId),
+      db.from('user_profiles').delete().eq('id', userId),
+    ]);
+
+    if (permRes.error) throw new Error(permRes.error.message);
+    if (profRes.error) throw new Error(profRes.error.message);
+    return { success: true };
+  }
+
+  if (action === 'toggle-ativo') {
+    const { error } = await db
+      .from('user_profiles')
+      .update({ ativo: !!body.ativo } as any)
+      .eq('id', userId);
+
+    if (error) throw new Error(error.message);
+    return { success: true };
+  }
+
+  throw new Error(`Ação desconhecida: ${action}`);
+}
+
 async function invokeEdgeFunction(functionName: string, body: Record<string, unknown>): Promise<any> {
   const callerUserId = getCallerUserId();
   const config = await getSupabaseConfig();
   const url = `${config.url}/functions/v1/${functionName}`;
+  const requestBody = { ...body, caller_user_id: callerUserId };
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.anonKey}`,
-      'apikey': config.anonKey,
-    },
-    body: JSON.stringify({ ...body, caller_user_id: callerUserId }),
-  });
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.anonKey}`,
+        'apikey': config.anonKey,
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
-  return data;
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+
+    if (!res.ok) {
+      if (functionName === 'manage-users' && (res.status === 404 || data?.code === 'NOT_FOUND')) {
+        return invokeManageUsersDirect(requestBody);
+      }
+      throw new Error(data?.error || data?.message || `Erro ${res.status}`);
+    }
+
+    if (functionName === 'manage-users' && data?.success !== true) {
+      return invokeManageUsersDirect(requestBody);
+    }
+
+    if (functionName === 'create-user-admin' && data?.success !== true) {
+      throw new Error(data?.error || 'Falha ao criar usuário.');
+    }
+
+    return data;
+  } catch (err: any) {
+    if (functionName === 'manage-users' && String(err?.message || '').toLowerCase().includes('failed to fetch')) {
+      return invokeManageUsersDirect(requestBody);
+    }
+    throw err;
+  }
 }
 
 export function UserPermissionsManager() {
