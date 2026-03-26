@@ -226,9 +226,9 @@ const Index = () => {
                   <DollarSign className="h-3 w-3" />
                   Pacotes
                 </TabsTrigger>
-                <TabsTrigger value="printer" className="flex items-center gap-1">
+                <TabsTrigger value="layout" className="flex items-center gap-1">
                   <Printer className="h-3 w-3" />
-                  Impressora
+                  Layout Impressão
                 </TabsTrigger>
                 <TabsTrigger value="payment" className="flex items-center gap-1">
                   <CreditCard className="h-3 w-3" />
@@ -258,8 +258,11 @@ const Index = () => {
               <TabsContent value="packages" className="mt-6">
                 <PackageSettings />
               </TabsContent>
-              <TabsContent value="printer" className="mt-6">
-                <PrinterSettings />
+              <TabsContent value="layout" className="mt-6">
+                <div className="space-y-6">
+                  <PrintLayoutSettings />
+                  <FichaLayoutSettings />
+                </div>
               </TabsContent>
               <TabsContent value="payment" className="mt-6">
                 <FormasPagamentoSettings />
