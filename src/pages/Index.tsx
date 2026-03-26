@@ -33,7 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useBalanca } from '@/hooks/useBalanca';
+
 
 
 const timeColors: Record<string, string> = {
@@ -61,7 +61,7 @@ const Index = () => {
   const androidBridge = useAndroidBridge();
   const [batchPrinting, setBatchPrinting] = useState(false);
   const [statsDialog, setStatsDialog] = useState<{ open: boolean; type: 'total' | 'livres' | 'usados' | 'reservados'; title: string }>({ open: false, type: 'total', title: '' });
-  const balanca = useBalanca();
+  
   const userSession = useOptionalUserSession();
   const userAccess = userSession?.access;
   const isLoggedIn = !!userSession?.user;
