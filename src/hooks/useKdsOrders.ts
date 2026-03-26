@@ -152,9 +152,12 @@ export function useKdsOrders() {
   const updateStatus = useCallback(async (orderId: string, newStatus: KdsStatus) => {
     try {
       const supabase = await getSupabaseClient();
+      const updateData: any = { kds_status: newStatus, updated_at: new Date().toISOString() };
+      if (newStatus === 'pronto') updateData.pronto_at = new Date().toISOString();
+      if (newStatus === 'entregue') updateData.entregue_at = new Date().toISOString();
       const { error } = await supabase
         .from('kds_orders' as any)
-        .update({ kds_status: newStatus, updated_at: new Date().toISOString() } as any)
+        .update(updateData)
         .eq('id', orderId);
       if (error) throw error;
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, kds_status: newStatus } : o));
