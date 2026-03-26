@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase-external';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Package, PackageCheck, AlertCircle, Shield, LogOut, Printer, Database, DollarSign, Plus, Clock, List, User, LogIn, CreditCard, ClipboardList, Settings, ArrowLeft, Scale, FileText } from 'lucide-react';
+import { Ticket, Package, PackageCheck, AlertCircle, Shield, LogOut, Printer, Database, DollarSign, Plus, Clock, List, User, LogIn, CreditCard, ClipboardList, Settings, ArrowLeft, Scale, FileText, ChefHat } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useVouchers } from '@/hooks/useVouchers';
 import { usePrinterContext } from '@/contexts/PrinterContext';
@@ -161,6 +161,7 @@ const Index = () => {
   const canSeeVoucher = isLoggedIn ? (userAccess?.acesso_voucher ?? false) : showVoucher;
   const canSeeFichas = isLoggedIn ? (userAccess?.acesso_ficha_consumo ?? false) : showFichasConsumo;
   const canSeeFichasAdmin = isLoggedIn ? (userAccess?.acesso_cadastrar_produto ?? false) : false;
+  const canSeeKds = isLoggedIn ? (userAccess?.acesso_kds ?? false) : false;
 
   if (loading) {
     return (
@@ -380,6 +381,26 @@ const Index = () => {
                         {comandasAbertas.length}
                       </Badge>
                     )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* KDS */}
+              {canSeeKds && (
+                <Card
+                  className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-[1.02] border-2 hover:border-primary"
+                  onClick={() => navigate('/kds')}
+                >
+                  <CardContent className="flex items-center justify-between gap-3 p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-primary/10 rounded-xl">
+                        <ChefHat className="h-8 w-8 text-primary" />
+                      </div>
+                      <div>
+                        <span className="text-base font-semibold text-foreground">KDS Cozinha</span>
+                        <p className="text-sm text-muted-foreground">Painel de pedidos da cozinha</p>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               )}

@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { caller_user_id, nome, email, password, cpf, acesso_voucher, tempo_voucher, cadastrar_produto, ficha_consumo, acesso_comanda, administrador } = body;
+    const { caller_user_id, nome, email, password, cpf, acesso_voucher, tempo_voucher, cadastrar_produto, ficha_consumo, acesso_comanda, acesso_kds, administrador } = body;
 
     if (!caller_user_id) {
       return jsonResponse({ error: "Sessão inválida." }, 401);
@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
       acesso_cadastrar_produto: !!cadastrar_produto,
       acesso_ficha_consumo: !!ficha_consumo,
       acesso_comanda: !!acesso_comanda,
+      acesso_kds: !!acesso_kds,
       is_admin: !!administrador,
       voucher_tempo_acesso: tempoVoucher,
     });
