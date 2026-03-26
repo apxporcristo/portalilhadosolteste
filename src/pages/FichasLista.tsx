@@ -436,7 +436,7 @@ export default function FichasLista() {
     return item.selectedItems.map(si => `  ${si.item.nome} R$${Number(si.item.valor).toFixed(2).replace('.', ',')}`).join('\n');
   };
 
-  const generateFichaConsumoEscPos = (item: CartItem, dateStr: string, timeStr: string): Uint8Array => {
+  const generateFichaConsumoEscPos = (item: CartItem, dateStr: string, timeStr: string, codigoVenda?: string): Uint8Array => {
     const layoutCfg = getPrintLayoutConfig();
     const normalize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
