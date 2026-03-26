@@ -3,13 +3,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Check } from 'lucide-react';
+import { Check, Ticket, Loader2, Copy } from 'lucide-react';
 import { FormaPagamento } from '@/hooks/useFormasPagamento';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
 
 export interface PagamentoSelecionado {
   forma: FormaPagamento;
   valor: number;
+}
+
+interface VoucherPixConfig {
+  canGenerateVoucher: boolean;
+  voucherTempo: string | null; // tempo allowed or null for all
+  onGenerateVoucher: (tempo: string | null) => Promise<{ voucher_id: string; tempo_validade: string } | null>;
 }
 
 interface PagamentoDialogProps {
@@ -25,6 +32,7 @@ interface PagamentoDialogProps {
   saveLabel?: string;
   saveIcon?: React.ReactNode;
   children?: React.ReactNode;
+  voucherPix?: VoucherPixConfig;
 }
 
 export function PagamentoDialog({
@@ -40,10 +48,16 @@ export function PagamentoDialog({
   saveLabel = 'Salvar',
   saveIcon,
   children,
+  voucherPix,
 }: PagamentoDialogProps) {
   const [selected, setSelected] = useState<Record<string, string>>({});
+  const [generatingVoucher, setGeneratingVoucher] = useState(false);
+  const [generatedVoucher, setGeneratedVoucher] = useState<{ voucher_id: string; tempo_validade: string } | null>(null);
 
-  const resetState = () => setSelected({});
+  const resetState = () => {
+    setSelected({});
+    setGeneratedVoucher(null);
+  };
 
   const toggleForma = (forma: FormaPagamento) => {
     setSelected(prev => {
@@ -56,6 +70,8 @@ export function PagamentoDialog({
       }
       return next;
     });
+    // Clear generated voucher when toggling payment
+    setGeneratedVoucher(null);
   };
 
   const setValor = (formaId: string, valor: string) => {
@@ -81,6 +97,29 @@ export function PagamentoDialog({
   const showTroco = trocoForma?.exibir_troco && totalPago > totalConta + 0.01;
   const troco = totalPago - totalConta;
 
+  // Check if Pix is selected
+  const pixSelected = useMemo(() => {
+    return pagamentos.some(p => p.forma.nome.toLowerCase().includes('pix'));
+  }, [pagamentos]);
+
+  const showVoucherButton = pixSelected && voucherPix?.canGenerateVoucher && !generatedVoucher;
+
+  const handleGenerateVoucher = async () => {
+    if (!voucherPix || generatingVoucher) return;
+    setGeneratingVoucher(true);
+    try {
+      const result = await voucherPix.onGenerateVoucher(voucherPix.voucherTempo);
+      if (result) {
+        setGeneratedVoucher(result);
+        toast({ title: 'Voucher gerado!', description: `Voucher ${result.voucher_id} pré-reservado com sucesso.` });
+      }
+    } catch (err) {
+      toast({ title: 'Erro', description: 'Não foi possível gerar o voucher.', variant: 'destructive' });
+    } finally {
+      setGeneratingVoucher(false);
+    }
+  };
+
   const handleConfirm = () => {
     if (!canConfirm && !showTroco) return;
     onConfirm(pagamentos);
@@ -96,6 +135,13 @@ export function PagamentoDialog({
   const handleOpenChange = (v: boolean) => {
     if (!v) resetState();
     onOpenChange(v);
+  };
+
+  const copyVoucherId = () => {
+    if (generatedVoucher) {
+      navigator.clipboard.writeText(generatedVoucher.voucher_id).catch(() => {});
+      toast({ title: 'Copiado!', description: 'Código do voucher copiado.' });
+    }
   };
 
   return (
@@ -185,6 +231,42 @@ export function PagamentoDialog({
             <p className="text-sm text-muted-foreground text-center py-4">Nenhuma forma de pagamento ativa.</p>
           )}
         </div>
+
+        {/* Pix Voucher Generation */}
+        {showVoucherButton && (
+          <Button
+            variant="outline"
+            className="w-full border-primary/50 text-primary"
+            onClick={handleGenerateVoucher}
+            disabled={generatingVoucher}
+          >
+            {generatingVoucher ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando voucher...</>
+            ) : (
+              <><Ticket className="h-4 w-4 mr-2" /> Gerar voucher{voucherPix?.voucherTempo ? ` (${voucherPix.voucherTempo})` : ''}</>
+            )}
+          </Button>
+        )}
+
+        {/* Generated Voucher Display */}
+        {generatedVoucher && (
+          <div className="bg-primary/5 border-2 border-primary rounded-xl p-6 text-center space-y-2">
+            <div className="flex items-center justify-center gap-2">
+              <Ticket className="h-5 w-5 text-primary" />
+              <span className="text-sm font-medium text-muted-foreground">Voucher Gerado</span>
+            </div>
+            <p className="text-3xl font-bold text-primary tracking-wider font-mono">
+              {generatedVoucher.voucher_id}
+            </p>
+            <Badge variant="secondary" className="text-sm">{generatedVoucher.tempo_validade}</Badge>
+            <Badge variant="outline" className="text-xs ml-2">Pré-reservado</Badge>
+            <div className="pt-2">
+              <Button variant="ghost" size="sm" onClick={copyVoucherId}>
+                <Copy className="h-3 w-3 mr-1" /> Copiar código
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <div className="flex gap-2">
