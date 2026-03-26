@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase-external';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Package, PackageCheck, AlertCircle, Shield, LogOut, Printer, Database, DollarSign, Plus, Clock, List, User, LogIn, CreditCard, ClipboardList, Settings, ArrowLeft, Scale, FileText, ChefHat } from 'lucide-react';
+import { Ticket, Package, PackageCheck, AlertCircle, Shield, LogOut, Printer, Database, DollarSign, Plus, Clock, List, User, LogIn, CreditCard, ClipboardList, Settings, ArrowLeft, Scale, FileText, ChefHat, RotateCcw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useVouchers } from '@/hooks/useVouchers';
 import { usePrinterContext } from '@/contexts/PrinterContext';
@@ -26,6 +26,7 @@ import { PedidosProntosAtendente } from '@/components/PedidosProntosAtendente';
 import { useFichasConsumo } from '@/hooks/useFichasConsumo';
 import { useComandas } from '@/hooks/useComandas';
 import { AuditoriaComandas } from '@/components/AuditoriaComandas';
+import { ReimpressaoVendas } from '@/components/ReimpressaoVendas';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -412,6 +413,10 @@ const Index = () => {
 
               {/* Serve Service removido da tela inicial - agora está dentro de Fichas */}
 
+              {/* Reimpressão de vendas - only for users with permission */}
+              {isLoggedIn && userAccess?.reimpressao_venda && (
+                <ReimpressaoVendas />
+              )}
             </div>
           </div>
         )}

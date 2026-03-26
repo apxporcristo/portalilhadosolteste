@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save } from 'lucide-react';
+import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,14 @@ import { PagamentoDialog, PagamentoSelecionado } from '@/components/PagamentoDia
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useBalanca } from '@/hooks/useBalanca';
 
+function generateCodigoVenda(): string {
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `V${datePart}${timePart}-${rand}`;
+}
 
 interface SelectedItem {
   categoria: string;
@@ -324,20 +332,25 @@ export default function FichasLista() {
   };
 
   const startDirectPrint = async () => {
-    // Filter printable items
+    // Filter printable items (imprimir_ficha = true)
     const printableItems = cart.filter(item => {
       const produto = produtos.find(p => p.id === item.ficha.id);
       return (produto as any)?.imprimir_ficha !== false;
     });
 
-    // Connect to Bluetooth and print directly
-    executePrint(printableItems);
+    executePrint(printableItems, false);
+  };
+
+  const startConferencePrint = async () => {
+    // Print ALL items for conference
+    executePrint([...cart], true);
   };
 
   const handleSaveOnly = async () => {
     if (cart.length === 0) return;
     setPrinting(true);
     try {
+      const codigoVenda = generateCodigoVenda();
       const sbClient = await getSupabaseClient();
       for (const item of cart) {
         const unitTotal = cartItemTotal(item);
@@ -369,6 +382,7 @@ export default function FichasLista() {
             nome_cliente: nomeCliente.trim() || null,
             telefone_cliente: telefoneCliente.trim() || null,
             nome_atendente: nomeAtendente.trim() || null,
+            codigo_venda: codigoVenda,
           });
         } catch (e) { console.warn('[Ficha Save] fichas_impressas insert falhou:', e); }
 
@@ -393,7 +407,7 @@ export default function FichasLista() {
           } catch (e) { console.warn('[Ficha Save] kds_orders insert falhou:', e); }
         }
       }
-      toast({ title: 'Salvo!', description: `${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
+      toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
       toast({ title: 'Erro', description: `Falha ao salvar: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
@@ -418,6 +432,11 @@ export default function FichasLista() {
     }
   };
 
+  const handleInitConferencePrint = () => {
+    if (cart.length === 0) return;
+    startConferencePrint();
+  };
+
   const handleConfirmPrint = () => {
     setPrintDialog(false);
     startDirectPrint();
@@ -428,7 +447,7 @@ export default function FichasLista() {
     return item.selectedItems.map(si => `  ${si.item.nome} R$${Number(si.item.valor).toFixed(2).replace('.', ',')}`).join('\n');
   };
 
-  const generateFichaConsumoEscPos = (item: CartItem, dateStr: string, timeStr: string): Uint8Array => {
+  const generateFichaConsumoEscPos = (item: CartItem, dateStr: string, timeStr: string, codigoVenda?: string): Uint8Array => {
     const layoutCfg = getPrintLayoutConfig();
     const normalize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -450,10 +469,17 @@ export default function FichasLista() {
 
     const lines = [
       '\x1B\x40', '\x1B\x61\x01',
+    ];
+
+    if (codigoVenda) {
+      lines.push(dataCmd, normalize(`Venda: ${codigoVenda}`), '\n');
+    }
+
+    lines.push(
       titleCmd, normalize('Ficha de consumo'), '\n',
       subtitleCmd, normalize(`Categoria: ${item.ficha.categoria_nome}`), '\n',
       numberCmd, normalize(item.ficha.nome_produto), '\n',
-    ];
+    );
 
     if (item.selectedItems.length > 0) {
       lines.push('\x1D\x21\x00', '- - - - - - - - - - - - - - - -\n');
@@ -481,12 +507,13 @@ export default function FichasLista() {
     return new TextEncoder().encode(lines.join(''));
   };
 
-  const executePrint = async (printableItems: CartItem[]) => {
+  const executePrint = async (printableItems: CartItem[], isConference: boolean = false) => {
     setPrinting(true);
     try {
       const now = new Date();
       const dateStr = now.toLocaleDateString('pt-BR');
       const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const codigoVenda = generateCodigoVenda();
 
       // Register all prints in DB first
       const sbClient = await getSupabaseClient();
@@ -522,6 +549,7 @@ export default function FichasLista() {
             nome_cliente: nomeCliente.trim() || null,
             telefone_cliente: telefoneCliente.trim() || null,
             nome_atendente: nomeAtendente.trim() || null,
+            codigo_venda: codigoVenda,
           });
         } catch (insErr) {
           console.warn('[Ficha Print] fichas_impressas insert falhou (continuando):', insErr);
@@ -554,18 +582,18 @@ export default function FichasLista() {
         const characteristic = await ensureBluetoothConnected();
         if (!characteristic) {
           toast({ title: 'Impressora não conectada', description: 'Não foi possível conectar à impressora Bluetooth.', variant: 'destructive' });
-          // Still save data, just skip printing
         } else {
           for (const item of printableItems) {
             for (let i = 0; i < item.quantidade; i++) {
-              const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr);
+              const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr, codigoVenda);
               await writeToCharacteristic(characteristic, escposData);
             }
           }
         }
       }
 
-      toast({ title: 'Impressão enviada!', description: `${totalItems} ficha(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
+      const label = isConference ? 'Conferência impressa!' : 'Impressão enviada!';
+      toast({ title: label, description: `Venda ${codigoVenda} - ${totalItems} ficha(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
       console.error('[Ficha Print] Erro em executePrint:', err);
@@ -864,6 +892,10 @@ export default function FichasLista() {
           handleSaveOnly();
         }}
       >
+        <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); handleInitConferencePrint(); }} disabled={totalItems === 0 || printing}>
+          <FileText className="h-5 w-5 mr-2" />
+          Imprimir tudo para conferência
+        </Button>
         {comandasAbertas.length > 0 && (
           <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setComandaSearch(''); setShowComandaModal(true); }} disabled={totalItems === 0}>
             <ClipboardList className="h-5 w-5 mr-2" />
