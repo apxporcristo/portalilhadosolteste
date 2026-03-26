@@ -919,6 +919,11 @@ export default function FichasLista() {
           setShowPagamentoModal(false);
           handleSaveOnly();
         }}
+        voucherPix={canGenerateVoucher && voucherTempo ? {
+          canGenerateVoucher: true,
+          voucherTempo,
+          onGenerateVoucher: handleGeneratePixVoucher,
+        } : undefined}
       >
         <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); handleInitConferencePrint(); }} disabled={totalItems === 0 || printing}>
           <FileText className="h-5 w-5 mr-2" />
