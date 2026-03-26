@@ -892,6 +892,10 @@ export default function FichasLista() {
           handleSaveOnly();
         }}
       >
+        <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); handleInitConferencePrint(); }} disabled={totalItems === 0 || printing}>
+          <FileText className="h-5 w-5 mr-2" />
+          Imprimir tudo para conferência
+        </Button>
         {comandasAbertas.length > 0 && (
           <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setComandaSearch(''); setShowComandaModal(true); }} disabled={totalItems === 0}>
             <ClipboardList className="h-5 w-5 mr-2" />
