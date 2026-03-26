@@ -112,12 +112,13 @@ Deno.serve(async (req) => {
         return json({ error: `Erro perfil: ${profErr.message}` }, 400);
       }
 
-      const permData = {
+      const permData: Record<string, unknown> = {
         user_id: userId,
         acesso_voucher: !!permissions.acesso_voucher,
         acesso_cadastrar_produto: !!permissions.acesso_cadastrar_produto,
         acesso_ficha_consumo: !!permissions.acesso_ficha_consumo,
         acesso_comanda: !!permissions.acesso_comanda,
+        acesso_kds: !!permissions.acesso_kds,
         is_admin: !!permissions.is_admin,
         voucher_tempo_acesso: normalizeString(permissions.voucher_tempo_acesso),
       };
@@ -158,6 +159,7 @@ Deno.serve(async (req) => {
         if (permissions.acesso_cadastrar_produto !== undefined) permUpdate.acesso_cadastrar_produto = !!permissions.acesso_cadastrar_produto;
         if (permissions.acesso_ficha_consumo !== undefined) permUpdate.acesso_ficha_consumo = !!permissions.acesso_ficha_consumo;
         if (permissions.acesso_comanda !== undefined) permUpdate.acesso_comanda = !!permissions.acesso_comanda;
+        if (permissions.acesso_kds !== undefined) permUpdate.acesso_kds = !!permissions.acesso_kds;
         if (permissions.is_admin !== undefined) permUpdate.is_admin = !!permissions.is_admin;
         if (permissions.voucher_tempo_acesso !== undefined) permUpdate.voucher_tempo_acesso = normalizeString(permissions.voucher_tempo_acesso);
 
