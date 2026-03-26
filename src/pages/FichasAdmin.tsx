@@ -45,7 +45,7 @@ export default function FichasAdmin() {
   const impressorasAtivas = impressoras.filter(p => p.ativa);
 
   // Product form
-  const [prodForm, setProdForm] = useState({ categoria_id: '', nome_produto: '', valor: '', ativo: true, tem_complementos: false, printer_id: '', forma_venda: 'unitario', valor_por_kg: '', obs: '', imprimir_ficha: true });
+  const [prodForm, setProdForm] = useState({ categoria_id: '', nome_produto: '', valor: '', ativo: true, tem_complementos: false, printer_id: '', forma_venda: 'unitario', valor_por_kg: '', obs: '', imprimir_ficha: true, enviar_para_kds: false });
   const [editProd, setEditProd] = useState<FichaProduto | null>(null);
   const [deleteProdId, setDeleteProdId] = useState<string | null>(null);
   const [filterAtivo, setFilterAtivo] = useState<'all' | 'true' | 'false'>('all');
@@ -179,6 +179,7 @@ export default function FichasAdmin() {
           valor_por_kg: prodForm.forma_venda === 'por_peso' ? parseFloat(prodForm.valor_por_kg) || 0 : 0,
           obs: prodForm.obs.trim() || null,
           imprimir_ficha: prodForm.imprimir_ficha,
+          enviar_para_kds: prodForm.enviar_para_kds,
         };
         if (isPrinted(editProd.id) && !isNameSimilar(editProd.nome_produto, prodForm.nome_produto.trim())) {
           toast({ title: 'Nome não pode ser alterado', description: 'Este produto já foi impresso. Apenas correções pequenas são permitidas.', variant: 'destructive' });
@@ -201,11 +202,12 @@ export default function FichasAdmin() {
           valor_por_kg: prodForm.forma_venda === 'por_peso' ? parseFloat(prodForm.valor_por_kg) || 0 : 0,
           obs: prodForm.obs.trim() || null,
           imprimir_ficha: prodForm.imprimir_ficha,
+          enviar_para_kds: prodForm.enviar_para_kds,
         } as any);
         setShowProdModal(false);
         toast({ title: 'Produto cadastrado!' });
       }
-      setProdForm({ categoria_id: '', nome_produto: '', valor: '', ativo: true, tem_complementos: false, printer_id: '', forma_venda: 'unitario', valor_por_kg: '', obs: '', imprimir_ficha: true });
+      setProdForm({ categoria_id: '', nome_produto: '', valor: '', ativo: true, tem_complementos: false, printer_id: '', forma_venda: 'unitario', valor_por_kg: '', obs: '', imprimir_ficha: true, enviar_para_kds: false });
     } catch (err: any) {
       toast({ title: 'Erro ao salvar produto', description: err?.message || 'Erro desconhecido', variant: 'destructive' });
     } finally {
@@ -226,6 +228,7 @@ export default function FichasAdmin() {
       valor_por_kg: p.valor_por_kg ? String(p.valor_por_kg) : '',
       obs: (p as any).obs || '',
       imprimir_ficha: (p as any).imprimir_ficha ?? true,
+      enviar_para_kds: (p as any).enviar_para_kds ?? false,
     });
     setShowProdModal(true);
   };
