@@ -105,6 +105,33 @@ export default function FichasLista() {
   const { formasAtivas } = useFormasPagamento();
   const [showPagamentoModal, setShowPagamentoModal] = useState(false);
 
+  // Voucher Pix config
+  const userAccess = userSession?.access;
+  const canGenerateVoucher = !!(userAccess?.acesso_voucher);
+  const voucherTempo = userAccess?.voucher_tempo_acesso || null;
+
+  const handleGeneratePixVoucher = async (tempo: string | null): Promise<{ voucher_id: string; tempo_validade: string } | null> => {
+    // Get a free voucher matching the user's allowed tempo
+    const tempoToUse = tempo || null;
+    const items = tempoToUse ? [{ tempo: tempoToUse, quantity: 1 }] : [];
+    
+    if (tempoToUse) {
+      const batch = getFreVouchersBatch(items);
+      if (batch.length === 0) {
+        toast({ title: 'Sem voucher disponível', description: `Não há voucher de ${tempoToUse} disponível no momento.`, variant: 'destructive' });
+        return null;
+      }
+      const voucher = batch[0];
+      const success = await markVouchersPreReservado([voucher.voucher_id]);
+      if (!success) return null;
+      return { voucher_id: voucher.voucher_id, tempo_validade: voucher.tempo_validade };
+    } else {
+      // User has access to all tempos - shouldn't happen without specific tempo, show error
+      toast({ title: 'Tempo não definido', description: 'Configure o tempo de voucher para este usuário.', variant: 'destructive' });
+      return null;
+    }
+  };
+
   // Dynamic fields dialog
   const [printDialog, setPrintDialog] = useState(false);
   const [nomeCliente, setNomeCliente] = useState('');
