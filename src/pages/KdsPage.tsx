@@ -23,6 +23,7 @@ const filterOptions: { value: KdsStatus | 'all'; label: string }[] = [
   { value: 'novo', label: 'Novos' },
   { value: 'em_preparo', label: 'Em Preparo' },
   { value: 'pronto', label: 'Prontos' },
+  { value: 'entregue', label: 'Entregues' },
 ];
 
 export default function KdsPage() {
