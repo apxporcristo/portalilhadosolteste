@@ -87,30 +87,27 @@ const Index = () => {
     if (isAdmin) refetch();
   }, [isAdmin, refetch]);
 
-  const executeBatchPrint = useCallback(async (printer: Impressora) => {
+  const handleBatchPrint = useCallback(async () => {
     setBatchPrinting(true);
     try {
       const voucherItems = cart.items;
       const selectedVouchers = voucherItems.length > 0 ? getFreVouchersBatch(voucherItems) : [];
       if (selectedVouchers.length === 0) { setBatchPrinting(false); return; }
 
-      console.log('[Index Print] Impressora selecionada:', printer.nome, 'id:', printer.id);
+      const characteristic = await ensureBluetoothConnected();
+      if (!characteristic) {
+        toast({ title: 'Impressora não conectada', description: 'Não foi possível conectar à impressora Bluetooth.', variant: 'destructive' });
+        setBatchPrinting(false);
+        return;
+      }
 
       for (const v of selectedVouchers) {
         const escposData = await createVoucherData(v.voucher_id, v.tempo_validade);
-        await createPrintJobFromBinary({
-          printer_id: printer.id,
-          printer_name: printer.nome,
-          device_ip: printer.ip || undefined,
-          data: escposData,
-          formato: 'escpos',
-          tipo_documento: 'voucher',
-          referencia_id: v.voucher_id,
-        });
+        await writeToCharacteristic(characteristic, escposData);
       }
 
       await markVouchersPreReservado(selectedVouchers.map(v => v.voucher_id));
-      toast({ title: 'Enviado para fila!', description: `${selectedVouchers.length} voucher(s) na fila de impressão.` });
+      toast({ title: 'Impresso!', description: `${selectedVouchers.length} voucher(s) impresso(s) com sucesso.` });
       cart.clearCart();
     } catch (error) {
       console.error('Erro na impressão em lote:', error);
@@ -118,35 +115,7 @@ const Index = () => {
     } finally {
       setBatchPrinting(false);
     }
-  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, createPrintJobFromBinary]);
-
-  const handleBatchPrint = useCallback(async () => {
-    const { printer: voucherPrinter, error: voucherError } = getVoucherPrinter();
-    
-    if (voucherPrinter) {
-      await executeBatchPrint(voucherPrinter);
-      return;
-    }
-
-    // Fallback: use default or first active printer
-    const defaultPrinter = impressorasAtivas.find(p => p.padrao) || impressorasAtivas[0];
-    if (defaultPrinter) {
-      await executeBatchPrint(defaultPrinter);
-      return;
-    }
-
-    if (voucherError) {
-      toast({ title: 'Impressora não configurada', description: voucherError, variant: 'destructive' });
-    } else {
-      toast({ title: 'Nenhuma impressora encontrada', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
-    }
-    setShowPrinterSelect(true);
-  }, [getVoucherPrinter, executeBatchPrint, impressorasAtivas]);
-
-  const handlePrinterSelected = useCallback(async (printer: Impressora) => {
-    setShowPrinterSelect(false);
-    await executeBatchPrint(printer);
-  }, [executeBatchPrint]);
+  }, [cart, getFreVouchersBatch, markVouchersPreReservado, createVoucherData, ensureBluetoothConnected, writeToCharacteristic]);
 
   const temposComVouchersLivres = stats.temposDisponiveis.filter(
     tempo => (stats.livresPorTempo[tempo] || 0) > 0
