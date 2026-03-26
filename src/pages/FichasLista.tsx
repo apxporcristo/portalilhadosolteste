@@ -54,17 +54,12 @@ export default function FichasLista() {
   const userSession = useOptionalUserSession();
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
-  const { impressoras } = useImpressoras();
-  const { createPrintJobFromBinary } = usePrintJobs();
-  const impressorasAtivas = impressoras.filter(p => p.ativa);
+  const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const balanca = useBalanca();
   const { lerPeso } = balanca;
   const [search, setSearch] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
-  const [showPrinterSelectModal, setShowPrinterSelectModal] = useState(false);
-  const [pendingUnassignedItems, setPendingUnassignedItems] = useState<CartItem[]>([]);
-  const [pendingAssignedGroups, setPendingAssignedGroups] = useState<{ printer: Impressora; items: CartItem[] }[]>([]);
 
   // Peso manual input
   const [showPesoModal, setShowPesoModal] = useState(false);
