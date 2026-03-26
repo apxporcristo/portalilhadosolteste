@@ -19,6 +19,7 @@ import FichasAdmin from "./pages/FichasAdmin";
 import FichasRelatorio from "./pages/FichasRelatorio";
 import VoucherLista from "./pages/VoucherLista";
 import ComandasLista from "./pages/ComandasLista";
+import KdsPage from "./pages/KdsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },
@@ -58,6 +59,11 @@ const App = () => (
               <Route path="/comandas" element={
                 <ProtectedRoute permission="acesso_ficha_consumo">
                   <ComandasLista />
+                </ProtectedRoute>
+              } />
+              <Route path="/kds" element={
+                <ProtectedRoute permission="acesso_kds">
+                  <KdsPage />
                 </ProtectedRoute>
               } />
               <Route path="/install" element={<Install />} />
