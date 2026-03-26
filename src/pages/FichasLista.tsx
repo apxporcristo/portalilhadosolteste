@@ -382,6 +382,7 @@ export default function FichasLista() {
             nome_cliente: nomeCliente.trim() || null,
             telefone_cliente: telefoneCliente.trim() || null,
             nome_atendente: nomeAtendente.trim() || null,
+            codigo_venda: codigoVenda,
           });
         } catch (e) { console.warn('[Ficha Save] fichas_impressas insert falhou:', e); }
 
