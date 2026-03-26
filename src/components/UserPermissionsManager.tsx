@@ -45,23 +45,15 @@ function getCallerUserId(): string {
 
 async function invokeEdgeFunction(functionName: string, body: Record<string, unknown>): Promise<any> {
   const callerUserId = getCallerUserId();
-  const db = await getSupabaseClient();
-  // Extract URL and key from the supabase client
-  const supabaseUrl = (db as any).supabaseUrl || (db as any).rest?.url?.replace('/rest/v1', '') || '';
-  const supabaseKey = (db as any).supabaseKey || (db as any).rest?.headers?.apikey || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Configuração do Supabase não encontrada.');
-  }
-
-  const url = `${supabaseUrl}/functions/v1/${functionName}`;
+  const config = await getSupabaseConfig();
+  const url = `${config.url}/functions/v1/${functionName}`;
 
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${supabaseKey}`,
-      'apikey': supabaseKey,
+      'Authorization': `Bearer ${config.anonKey}`,
+      'apikey': config.anonKey,
     },
     body: JSON.stringify({ ...body, caller_user_id: callerUserId }),
   });
