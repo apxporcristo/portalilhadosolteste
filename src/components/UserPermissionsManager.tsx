@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSupabaseClient } from '@/lib/supabase-external';
+import { getSupabaseClient, getSupabaseConfig } from '@/lib/supabase-external';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -45,16 +45,15 @@ function getCallerUserId(): string {
 
 async function invokeEdgeFunction(functionName: string, body: Record<string, unknown>): Promise<any> {
   const callerUserId = getCallerUserId();
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  const url = `https://${projectId}.supabase.co/functions/v1/${functionName}`;
+  const config = await getSupabaseConfig();
+  const url = `${config.url}/functions/v1/${functionName}`;
 
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${anonKey}`,
-      'apikey': anonKey,
+      'Authorization': `Bearer ${config.anonKey}`,
+      'apikey': config.anonKey,
     },
     body: JSON.stringify({ ...body, caller_user_id: callerUserId }),
   });

@@ -74,6 +74,19 @@ export async function getSupabaseClient(): Promise<SupabaseClient> {
 }
 
 /**
+ * Returns the resolved Supabase URL and anon key.
+ */
+export async function getSupabaseConfig(): Promise<{ url: string; anonKey: string }> {
+  const config = await getConfigPromise();
+  if (config) return config;
+  // Fallback to cloud client hardcoded values
+  return {
+    url: 'https://tuchlxzgsgsgeiqmclcq.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1Y2hseHpnc2dzZ2VpcW1jbGNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MjY1NDcsImV4cCI6MjA4NTMwMjU0N30.qXDxKb8JosOV4gQj-bd6GmAAT5NciwYToFYG9fhhfds',
+  };
+}
+
+/**
  * Resets cached client (useful when config changes).
  */
 export function resetExternalClient() {
