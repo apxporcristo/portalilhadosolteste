@@ -70,7 +70,7 @@ function speakOrder(order: KdsOrder) {
 export function useKdsOrders() {
   const [orders, setOrders] = useState<KdsOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<KdsStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<KdsStatus | 'all'>('novo');
   const announcedRef = useRef<Set<string>>(getAnnouncedIds());
 
   const fetchOrders = useCallback(async () => {
