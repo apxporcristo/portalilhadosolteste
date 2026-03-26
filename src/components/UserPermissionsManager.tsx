@@ -45,16 +45,23 @@ function getCallerUserId(): string {
 
 async function invokeEdgeFunction(functionName: string, body: Record<string, unknown>): Promise<any> {
   const callerUserId = getCallerUserId();
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  const url = `https://${projectId}.supabase.co/functions/v1/${functionName}`;
+  const db = await getSupabaseClient();
+  // Extract URL and key from the supabase client
+  const supabaseUrl = (db as any).supabaseUrl || (db as any).rest?.url?.replace('/rest/v1', '') || '';
+  const supabaseKey = (db as any).supabaseKey || (db as any).rest?.headers?.apikey || '';
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Configuração do Supabase não encontrada.');
+  }
+
+  const url = `${supabaseUrl}/functions/v1/${functionName}`;
 
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${anonKey}`,
-      'apikey': anonKey,
+      'Authorization': `Bearer ${supabaseKey}`,
+      'apikey': supabaseKey,
     },
     body: JSON.stringify({ ...body, caller_user_id: callerUserId }),
   });
