@@ -432,6 +432,11 @@ export default function FichasLista() {
     }
   };
 
+  const handleInitConferencePrint = () => {
+    if (cart.length === 0) return;
+    startConferencePrint();
+  };
+
   const handleConfirmPrint = () => {
     setPrintDialog(false);
     startDirectPrint();
