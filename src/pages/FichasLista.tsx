@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label';
 import { useFichasConsumo, FichaAtiva, FichaProduto } from '@/hooks/useFichasConsumo';
 import { useComplementos, Complemento, ComplementoItem, GrupoComplemento } from '@/hooks/useComplementos';
-import { getSupabaseClient } from '@/hooks/useVouchers';
+import { getSupabaseClient, useVouchers } from '@/hooks/useVouchers';
 import { getPrintLayoutConfig } from '@/hooks/usePrintLayout';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
 import { usePrinterContext } from '@/contexts/PrinterContext';
