@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, Bluetooth, BluetoothSearching, Wifi, RefreshCw, Save } from 'lucide-react';
+import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +11,7 @@ import { useComplementos, Complemento, ComplementoItem, GrupoComplemento } from 
 import { getSupabaseClient } from '@/hooks/useVouchers';
 import { getPrintLayoutConfig } from '@/hooks/usePrintLayout';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
-import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
-import { usePrintJobs } from '@/hooks/usePrintJobs';
+import { usePrinterContext } from '@/contexts/PrinterContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
