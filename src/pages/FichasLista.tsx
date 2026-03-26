@@ -323,26 +323,15 @@ export default function FichasLista() {
     return cart.filter(c => c.ficha.id === fichaId).reduce((sum, c) => sum + c.quantidade, 0);
   };
 
-  const startDirectPrint = () => {
+  const startDirectPrint = async () => {
     // Filter printable items
     const printableItems = cart.filter(item => {
       const produto = produtos.find(p => p.id === item.ficha.id);
       return (produto as any)?.imprimir_ficha !== false;
     });
 
-    if (printableItems.length === 0) {
-      executePrint([], []);
-      return;
-    }
-
-    // Always show printer selection modal if there are registered printers
-    if (impressorasAtivas.length > 0) {
-      setPendingAssignedGroups([]);
-      setPendingUnassignedItems(printableItems);
-      setShowPrinterSelectModal(true);
-    } else {
-      toast({ title: 'Nenhuma impressora cadastrada', description: 'Cadastre uma impressora nas configurações.', variant: 'destructive' });
-    }
+    // Connect to Bluetooth and print directly
+    executePrint(printableItems);
   };
 
   const handleSaveOnly = async () => {
