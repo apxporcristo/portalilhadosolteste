@@ -16,12 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { useImpressoras, Impressora, VoucherPrintTarget } from '@/hooks/useImpressoras';
+import { useImpressoras, Impressora } from '@/hooks/useImpressoras';
 import { usePrinterContext } from '@/contexts/PrinterContext';
 import { useAndroidBridge, isAndroidApp } from '@/hooks/useAndroidBridge';
 import { PrintLayoutSettings } from '@/components/PrintLayoutSettings';
 import { FichaLayoutSettings } from '@/components/FichaLayoutSettings';
-import { usePrintJobs } from '@/hooks/usePrintJobs';
+
 
 interface PrinterFormData {
   nome: string;
@@ -43,14 +43,14 @@ const emptyForm: PrinterFormData = {
 
 export function PrinterSettings() {
   const {
-    impressoras, loading, voucherConfig,
+    impressoras, loading,
     createImpressora, updateImpressora, deleteImpressora,
-    setAsDefault, toggleAtiva, getBluetoothPrinters, saveVoucherConfig,
+    setAsDefault, toggleAtiva,
   } = useImpressoras();
 
   const { config, status, bluetoothDevices, updateConfig, saveConfig, scanBluetoothDevices, connectBluetooth, testConnection } = usePrinterContext();
   const androidBridge = useAndroidBridge();
-  const { jobs, loading: jobsLoading, fetchJobs, createPrintJob } = usePrintJobs();
+  
 
   const [activeTab, setActiveTab] = useState('impressoras');
   const [formOpen, setFormOpen] = useState(false);
@@ -88,14 +88,6 @@ export function PrinterSettings() {
     }
   }, [createPrintJob]);
 
-  // Voucher config local state
-  const [localTarget, setLocalTarget] = useState<VoucherPrintTarget>(voucherConfig.voucher_print_target);
-  const [localBtId, setLocalBtId] = useState<string>(voucherConfig.voucher_bluetooth_printer_id || '');
-
-  useEffect(() => {
-    setLocalTarget(voucherConfig.voucher_print_target);
-    setLocalBtId(voucherConfig.voucher_bluetooth_printer_id || '');
-  }, [voucherConfig]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -140,14 +132,6 @@ export function PrinterSettings() {
     if (ok) setFormOpen(false);
   };
 
-  const handleSaveVoucherConfig = async () => {
-    await saveVoucherConfig({
-      voucher_print_target: localTarget,
-      voucher_bluetooth_printer_id: localTarget === 'bluetooth_printer' ? localBtId || null : null,
-    });
-  };
-
-  const btPrinters = getBluetoothPrinters();
 
   const isBluetoothSupported = typeof navigator !== 'undefined' && 'bluetooth' in navigator;
   const [bluetoothAvailability, setBluetoothAvailability] = useState<'checking' | 'available' | 'disabled' | 'unsupported'>('checking');
@@ -172,18 +156,10 @@ export function PrinterSettings() {
       </CardHeader>
       <CardContent className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="impressoras" className="flex items-center gap-1 text-xs">
               <Printer className="h-4 w-4" />
               Impressoras
-            </TabsTrigger>
-            <TabsTrigger value="fila" className="flex items-center gap-1 text-xs">
-              <List className="h-4 w-4" />
-              Fila
-            </TabsTrigger>
-            <TabsTrigger value="voucher-config" className="flex items-center gap-1 text-xs">
-              <Settings className="h-4 w-4" />
-              Destino Voucher
             </TabsTrigger>
             <TabsTrigger value="layout-voucher" className="flex items-center gap-1 text-xs">
               <Monitor className="h-4 w-4" />
