@@ -264,7 +264,7 @@ export function PagamentoDialog({
         )}
 
         {/* Tempo Selection */}
-        {showTempoSelection && voucherPix && (
+        {pixSelected && showTempoSelection && voucherPix && (
           <div className="border rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="h-4 w-4 text-primary" />
@@ -294,7 +294,7 @@ export function PagamentoDialog({
         )}
 
         {/* Generated Voucher Display */}
-        {generatedVoucher && (
+        {pixSelected && generatedVoucher && (
           <div className="bg-primary/5 border-2 border-primary rounded-xl p-6 text-center space-y-2">
             <div className="flex items-center justify-center gap-2">
               <Ticket className="h-5 w-5 text-primary" />
