@@ -107,11 +107,23 @@ export function PagamentoDialog({
 
   const showVoucherButton = pixSelected && voucherPix?.canGenerateVoucher && !generatedVoucher;
 
-  const handleGenerateVoucher = async () => {
+  const handleVoucherClick = () => {
+    if (!voucherPix) return;
+    if (voucherPix.voucherTempo) {
+      // User has specific tempo - generate directly
+      handleGenerateVoucher(voucherPix.voucherTempo);
+    } else {
+      // User has all tempos - show selection
+      setShowTempoSelection(true);
+    }
+  };
+
+  const handleGenerateVoucher = async (tempo: string) => {
     if (!voucherPix || generatingVoucher) return;
     setGeneratingVoucher(true);
+    setShowTempoSelection(false);
     try {
-      const result = await voucherPix.onGenerateVoucher(voucherPix.voucherTempo);
+      const result = await voucherPix.onGenerateVoucher(tempo);
       if (result) {
         setGeneratedVoucher(result);
         toast({ title: 'Voucher gerado!', description: `Voucher ${result.voucher_id} pré-reservado com sucesso.` });
