@@ -227,17 +227,24 @@ export function AdminSettings() {
 
 function BalancaConfigSection() {
   const {
-    config, saveConfig, testarConexao, loading, status, tentativa,
+    config, allConfigs, saveConfig, deleteBalancaConfig, activateConfig,
+    testarConexao, loading, status, tentativa,
     parearNovoDispositivo, listarDispositivosPareados, conectarDispositivo, disconnect,
     serialConfig, updateSerialConfig, verificarConexaoHeartbeat
   } = useBalanca();
 
+  const [editingConfig, setEditingConfig] = useState<BalancaConfig | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    tipo_conexao: config.tipo_conexao || 'serial',
-    dispositivo_nome: config.dispositivo_nome || '',
-    porta_serial: config.porta_serial || '',
-    baud_rate: config.baud_rate || 9600,
-    valor_peso: config.valor_peso || 0,
+    tipo_conexao: 'bluetooth' as string,
+    dispositivo_nome: '',
+    endereco_dispositivo: '',
+    porta_serial: '',
+    baud_rate: 9600,
+    data_bits: 8,
+    stop_bits: 1,
+    parity: 'none',
+    valor_peso: 0,
   });
   const [testing, setTesting] = useState(false);
   const [pairing, setPairing] = useState(false);
@@ -245,51 +252,73 @@ function BalancaConfigSection() {
   const [showDevices, setShowDevices] = useState(false);
 
   useEffect(() => {
-    setForm({
-      tipo_conexao: config.tipo_conexao || 'serial',
-      dispositivo_nome: config.dispositivo_nome || '',
-      porta_serial: config.porta_serial || '',
-      baud_rate: config.baud_rate || 9600,
-      valor_peso: config.valor_peso || 0,
-    });
-  }, [config]);
-
-  useEffect(() => {
     verificarConexaoHeartbeat();
-
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        verificarConexaoHeartbeat();
-      }
+      if (document.visibilityState === 'visible') verificarConexaoHeartbeat();
     };
-
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [verificarConexaoHeartbeat]);
 
-  const handleSave = () => {
-    // Save main config to DB
-    // Save main config to DB
-    saveConfig({
-      ...config,
+  const openNewForm = () => {
+    setEditingConfig(null);
+    setForm({
+      tipo_conexao: 'bluetooth',
+      dispositivo_nome: '',
+      endereco_dispositivo: '',
+      porta_serial: '',
+      baud_rate: 9600,
+      data_bits: 8,
+      stop_bits: 1,
+      parity: 'none',
+      valor_peso: 0,
+    });
+    setShowForm(true);
+  };
+
+  const openEditForm = (cfg: BalancaConfig) => {
+    setEditingConfig(cfg);
+    setForm({
+      tipo_conexao: cfg.tipo_conexao || 'bluetooth',
+      dispositivo_nome: cfg.dispositivo_nome || '',
+      endereco_dispositivo: cfg.endereco_dispositivo || '',
+      porta_serial: cfg.porta_serial || '',
+      baud_rate: cfg.baud_rate || 9600,
+      data_bits: cfg.data_bits ?? 8,
+      stop_bits: cfg.stop_bits ?? 1,
+      parity: cfg.parity || 'none',
+      valor_peso: cfg.valor_peso || 0,
+    });
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    const configToSave: BalancaConfig = {
+      ...(editingConfig?.id ? { id: editingConfig.id } : {}),
       tipo_conexao: form.tipo_conexao as BalancaConfig['tipo_conexao'],
       dispositivo_nome: form.dispositivo_nome || null,
+      dispositivo_id: editingConfig?.dispositivo_id || null,
+      endereco_dispositivo: form.endereco_dispositivo || null,
       porta_serial: form.porta_serial || null,
-      baud_rate: serialConfig.baudRate,
+      baud_rate: form.baud_rate,
+      data_bits: form.data_bits,
+      stop_bits: form.stop_bits,
+      parity: form.parity,
       valor_peso: form.valor_peso,
-    });
+      ativo: editingConfig?.ativo ?? (allConfigs.length === 0),
+    };
+    await saveConfig(configToSave);
+    setShowForm(false);
+    setEditingConfig(null);
   };
 
   const handleTest = async () => {
     setTesting(true);
-
-    // If bluetooth, also list paired devices
     if (form.tipo_conexao === 'bluetooth') {
       const devices = await listarDispositivosPareados();
       setPairedDevices(devices);
       if (devices.length > 0) setShowDevices(true);
     }
-
     await testarConexao();
     setTesting(false);
   };
@@ -316,8 +345,8 @@ function BalancaConfigSection() {
     switch (status) {
       case 'conectada': return { text: 'Conectada', variant: 'default' as const };
       case 'conectando': return { text: 'Conectando...', variant: 'secondary' as const };
-      case 'tentando': return { text: `Tentando novamente (${tentativa}/3)`, variant: 'secondary' as const };
-      case 'falha': return { text: 'Falha na conexão', variant: 'destructive' as const };
+      case 'tentando': return { text: `Tentando (${tentativa}/3)`, variant: 'secondary' as const };
+      case 'falha': return { text: 'Falha', variant: 'destructive' as const };
       default: return { text: 'Desconectada', variant: 'outline' as const };
     }
   };
@@ -331,135 +360,187 @@ function BalancaConfigSection() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Scale className="h-4 w-4 text-primary" />
-          Configuração da Balança (Toledo Prix 3)
+          Balanças Configuradas
         </div>
         <Badge variant={sl.variant}>{sl.text}</Badge>
       </div>
 
-      {/* Dispositivo salvo */}
-      {config.dispositivo_nome && (
-        <div className="p-2 border rounded-md bg-muted/50 text-sm flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bluetooth className="h-4 w-4 text-primary" />
-            <span>{config.dispositivo_nome}</span>
+      {/* Lista de balanças cadastradas */}
+      {allConfigs.length > 0 ? (
+        <div className="space-y-2">
+          {allConfigs.map(cfg => (
+            <div key={cfg.id} className={`p-3 border rounded-md text-sm space-y-1 ${cfg.ativo ? 'border-primary bg-primary/5' : 'bg-muted/30'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bluetooth className="h-4 w-4 text-primary" />
+                  <span className="font-medium">{cfg.dispositivo_nome || 'Sem nome'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {cfg.ativo ? (
+                    <Badge variant="default" className="text-xs">Ativa</Badge>
+                  ) : (
+                    <Button variant="ghost" size="sm" className="text-xs h-6" onClick={() => cfg.id && activateConfig(cfg.id)}>
+                      Ativar
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {cfg.tipo_conexao} · {cfg.baud_rate} baud · R$ {(cfg.valor_peso || 0).toFixed(2)}/kg
+                {cfg.endereco_dispositivo && ` · ${cfg.endereco_dispositivo}`}
+              </div>
+              <div className="flex gap-1 pt-1">
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openEditForm(cfg)}>
+                  Editar
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => {
+                  if (cfg.id && confirm('Excluir esta balança?')) deleteBalancaConfig(cfg.id);
+                }}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Nenhuma balança cadastrada.</p>
+      )}
+
+      {!showForm && (
+        <Button variant="outline" onClick={openNewForm} className="w-full">
+          <Scale className="h-4 w-4 mr-2" />
+          Nova balança
+        </Button>
+      )}
+
+      {/* Formulário de cadastro/edição */}
+      {showForm && (
+        <div className="border rounded-md p-4 space-y-3 bg-muted/20">
+          <p className="text-sm font-medium">{editingConfig ? 'Editar balança' : 'Nova balança'}</p>
+          <div>
+            <Label className="text-sm">Nome do dispositivo</Label>
+            <Input value={form.dispositivo_nome} onChange={e => setForm(f => ({ ...f, dispositivo_nome: e.target.value }))} placeholder="Ex: Toledo Prix 3" />
           </div>
-          {status === 'conectada' && (
-            <Button variant="ghost" size="sm" onClick={disconnect}>Desconectar</Button>
+          <div>
+            <Label className="text-sm">Endereço do dispositivo</Label>
+            <Input value={form.endereco_dispositivo} onChange={e => setForm(f => ({ ...f, endereco_dispositivo: e.target.value }))} placeholder="Ex: AA:BB:CC:DD:EE:FF" />
+          </div>
+          <div>
+            <Label className="text-sm">Tipo de conexão</Label>
+            <select value={form.tipo_conexao} onChange={e => setForm(f => ({ ...f, tipo_conexao: e.target.value }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm">
+              <option value="serial">Serial</option>
+              <option value="usb_serial">USB Serial</option>
+              <option value="bluetooth">Bluetooth</option>
+            </select>
+          </div>
+          {(form.tipo_conexao === 'serial' || form.tipo_conexao === 'usb_serial') && (
+            <div>
+              <Label className="text-sm">Porta serial / COM</Label>
+              <Input value={form.porta_serial} onChange={e => setForm(f => ({ ...f, porta_serial: e.target.value }))} placeholder="Ex: COM3" />
+            </div>
           )}
+          <div>
+            <Label className="text-sm">Valor por kg (R$)</Label>
+            <Input type="number" step="0.01" value={form.valor_peso} onChange={e => setForm(f => ({ ...f, valor_peso: parseFloat(e.target.value) || 0 }))} placeholder="0.00" />
+          </div>
+
+          <Separator className="my-2" />
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Settings2 className="h-4 w-4" />
+            Configuração Serial
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Baud Rate</Label>
+              <Select value={String(form.baud_rate)} onValueChange={v => { setForm(f => ({ ...f, baud_rate: Number(v) })); updateSerialConfig({ baudRate: Number(v) }); }}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[9600, 19200, 38400, 57600, 115200].map(r => (
+                    <SelectItem key={r} value={String(r)}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Data Bits</Label>
+              <Select value={String(form.data_bits)} onValueChange={v => { setForm(f => ({ ...f, data_bits: Number(v) })); updateSerialConfig({ dataBits: Number(v) as 7 | 8 }); }}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7</SelectItem>
+                  <SelectItem value="8">8</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Stop Bits</Label>
+              <Select value={String(form.stop_bits)} onValueChange={v => { setForm(f => ({ ...f, stop_bits: Number(v) })); updateSerialConfig({ stopBits: Number(v) as 1 | 2 }); }}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1</SelectItem>
+                  <SelectItem value="2">2</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Paridade</Label>
+              <Select value={form.parity} onValueChange={v => { setForm(f => ({ ...f, parity: v })); updateSerialConfig({ parity: v as 'none' | 'even' | 'odd' }); }}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="even">Even</SelectItem>
+                  <SelectItem value="odd">Odd</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Salvar</Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); setEditingConfig(null); }}>Cancelar</Button>
+          </div>
         </div>
       )}
 
-      <div className="space-y-3">
-        <div>
-          <Label className="text-sm">Tipo de conexão</Label>
-          <select value={form.tipo_conexao} onChange={e => setForm(f => ({ ...f, tipo_conexao: e.target.value as any }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm">
-            <option value="serial">Serial</option>
-            <option value="usb_serial">USB Serial</option>
-            <option value="bluetooth">Bluetooth</option>
-          </select>
-        </div>
-        <div>
-          <Label className="text-sm">Nome do dispositivo</Label>
-          <Input value={form.dispositivo_nome} onChange={e => setForm(f => ({ ...f, dispositivo_nome: e.target.value }))} placeholder="Ex: Toledo Prix 3" />
-        </div>
-        {(form.tipo_conexao === 'serial' || form.tipo_conexao === 'usb_serial') && (
-          <div>
-            <Label className="text-sm">Porta serial / COM</Label>
-            <Input value={form.porta_serial} onChange={e => setForm(f => ({ ...f, porta_serial: e.target.value }))} placeholder="Ex: COM3" />
-          </div>
-         )}
-
-        <Separator className="my-2" />
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Settings2 className="h-4 w-4" />
-          Configuração Serial
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label className="text-xs">Baud Rate</Label>
-            <Select value={String(serialConfig.baudRate)} onValueChange={v => updateSerialConfig({ baudRate: Number(v) })}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {[9600, 19200, 38400, 57600, 115200].map(r => (
-                  <SelectItem key={r} value={String(r)}>{r}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Data Bits</Label>
-            <Select value={String(serialConfig.dataBits)} onValueChange={v => updateSerialConfig({ dataBits: Number(v) as 7 | 8 })}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">7</SelectItem>
-                <SelectItem value="8">8</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Stop Bits</Label>
-            <Select value={String(serialConfig.stopBits)} onValueChange={v => updateSerialConfig({ stopBits: Number(v) as 1 | 2 })}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1</SelectItem>
-                <SelectItem value="2">2</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Paridade</Label>
-            <Select value={serialConfig.parity} onValueChange={v => updateSerialConfig({ parity: v as 'none' | 'even' | 'odd' })}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="even">Even</SelectItem>
-                <SelectItem value="odd">Odd</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Salvar</Button>
-          <Button variant="outline" onClick={handleTest} disabled={testing}>
-            {testing ? (status === 'tentando' ? `Tentando (${tentativa}/3)...` : 'Testando...') : 'Testar balança'}
+      {/* Ações de conexão/teste */}
+      <div className="flex gap-2 flex-wrap">
+        <Button variant="outline" onClick={handleTest} disabled={testing}>
+          {testing ? (status === 'tentando' ? `Tentando (${tentativa}/3)...` : 'Testando...') : 'Testar balança'}
+        </Button>
+        {config.tipo_conexao === 'bluetooth' && (
+          <Button variant="outline" onClick={handleParear} disabled={pairing}>
+            <BluetoothSearching className="h-4 w-4 mr-2" />
+            {pairing ? 'Buscando...' : 'Parear novo'}
           </Button>
-          {form.tipo_conexao === 'bluetooth' && (
-            <Button variant="outline" onClick={handleParear} disabled={pairing}>
-              <BluetoothSearching className="h-4 w-4 mr-2" />
-              {pairing ? 'Buscando...' : 'Parear novo'}
-            </Button>
-          )}
-        </div>
-
-        {/* Lista de dispositivos BT pareados */}
-        {showDevices && pairedDevices.length > 0 && (
-          <div className="border rounded-md p-3 space-y-2">
-            <p className="text-sm font-medium">Dispositivos Bluetooth pareados:</p>
-            {pairedDevices.map((d, i) => (
-              <div key={d.id || i} className="flex items-center justify-between p-2 border rounded bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <Bluetooth className="h-4 w-4 text-primary" />
-                  <span className="text-sm">{d.name}</span>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => handleSelectDevice(d.device)} disabled={testing}>
-                  Conectar
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Botão parear novamente após falha */}
-        {status === 'falha' && (
-          <div className="p-3 border border-destructive/30 rounded-md bg-destructive/5">
-            <p className="text-sm text-destructive mb-2">Não foi possível conectar após 3 tentativas.</p>
-            <Button variant="outline" onClick={handleParear} disabled={pairing}>
-              <BluetoothSearching className="h-4 w-4 mr-2" />
-              {pairing ? 'Buscando...' : 'Parear novamente'}
-            </Button>
-          </div>
         )}
       </div>
+
+      {/* Dispositivos BT pareados */}
+      {showDevices && pairedDevices.length > 0 && (
+        <div className="border rounded-md p-3 space-y-2">
+          <p className="text-sm font-medium">Dispositivos Bluetooth pareados:</p>
+          {pairedDevices.map((d, i) => (
+            <div key={d.id || i} className="flex items-center justify-between p-2 border rounded bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Bluetooth className="h-4 w-4 text-primary" />
+                <span className="text-sm">{d.name}</span>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => handleSelectDevice(d.device)} disabled={testing}>
+                Conectar
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {status === 'falha' && (
+        <div className="p-3 border border-destructive/30 rounded-md bg-destructive/5">
+          <p className="text-sm text-destructive mb-2">Não foi possível conectar após 3 tentativas.</p>
+          <Button variant="outline" onClick={handleParear} disabled={pairing}>
+            <BluetoothSearching className="h-4 w-4 mr-2" />
+            {pairing ? 'Buscando...' : 'Parear novamente'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

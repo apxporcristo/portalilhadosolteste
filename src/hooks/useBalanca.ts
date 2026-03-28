@@ -16,9 +16,15 @@ export interface BalancaConfig {
   tipo_conexao: 'bluetooth' | 'serial' | 'usb_serial';
   dispositivo_nome: string | null;
   dispositivo_id: string | null;
+  endereco_dispositivo?: string | null;
   porta_serial: string | null;
   baud_rate: number;
+  data_bits?: number;
+  stop_bits?: number;
+  parity?: string;
   valor_peso: number;
+  ativo?: boolean;
+  user_id?: string | null;
 }
 
 export type BalancaStatus = 'desconectada' | 'conectando' | 'conectada' | 'falha' | 'tentando';
@@ -27,9 +33,11 @@ const DEFAULT_CONFIG: BalancaConfig = {
   tipo_conexao: 'serial',
   dispositivo_nome: null,
   dispositivo_id: null,
+  endereco_dispositivo: null,
   porta_serial: null,
   baud_rate: 9600,
   valor_peso: 0,
+  ativo: true,
 };
 
 // Toledo Prix 3 protocol: STX (0x02) + weight digits + ETX (0x03)
@@ -70,6 +78,7 @@ function saveSerialConfig(sc: SerialConfig): void {
 
 export function useBalanca() {
   const [config, setConfig] = useState<BalancaConfig>(DEFAULT_CONFIG);
+  const [allConfigs, setAllConfigs] = useState<BalancaConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<BalancaStatus>('desconectada');
   const [tentativa, setTentativa] = useState(0);
@@ -87,21 +96,32 @@ export function useBalanca() {
 
   const connected = status === 'conectada';
 
+  const mapRowToConfig = (row: any): BalancaConfig => ({
+    id: row.id,
+    tipo_conexao: row.tipo_conexao || 'serial',
+    dispositivo_nome: row.dispositivo_nome || null,
+    dispositivo_id: row.dispositivo_id || null,
+    endereco_dispositivo: row.endereco_dispositivo || null,
+    porta_serial: row.porta_serial || null,
+    baud_rate: row.baud_rate || 9600,
+    data_bits: row.data_bits ?? 8,
+    stop_bits: row.stop_bits ?? 1,
+    parity: row.parity || 'none',
+    valor_peso: row.valor_peso || 0,
+    ativo: row.ativo ?? false,
+    user_id: row.user_id || null,
+  });
+
   const fetchConfig = useCallback(async () => {
     try {
       const supabase = await getSupabaseClient();
-      const { data, error } = await supabase.from('balanca_config' as any).select('*').limit(1).maybeSingle();
+      const { data, error } = await supabase.from('balanca_config' as any).select('*').order('ativo', { ascending: false });
       if (error) console.error('Erro ao buscar config balança:', error);
-      if (data) {
-        setConfig({
-          id: (data as any).id,
-          tipo_conexao: (data as any).tipo_conexao || 'serial',
-          dispositivo_nome: (data as any).dispositivo_nome || null,
-          dispositivo_id: (data as any).dispositivo_id || null,
-          porta_serial: (data as any).porta_serial || null,
-          baud_rate: (data as any).baud_rate || 9600,
-          valor_peso: (data as any).valor_peso || 0,
-        });
+      if (data && (data as any[]).length > 0) {
+        const configs = (data as any[]).map(mapRowToConfig);
+        setAllConfigs(configs);
+        const active = configs.find(c => c.ativo) || configs[0];
+        setConfig(active);
       }
     } catch (err) {
       console.error('Erro fetchConfig balança:', err);
@@ -114,16 +134,22 @@ export function useBalanca() {
   const saveConfig = useCallback(async (newConfig: BalancaConfig, options?: { silent?: boolean }) => {
     try {
       const supabase = await getSupabaseClient();
-      const payload = {
+      const payload: any = {
         tipo_conexao: newConfig.tipo_conexao,
         dispositivo_nome: newConfig.dispositivo_nome || null,
         dispositivo_id: newConfig.dispositivo_id || null,
+        endereco_dispositivo: newConfig.endereco_dispositivo || null,
         porta_serial: newConfig.porta_serial || null,
         baud_rate: newConfig.baud_rate,
+        data_bits: newConfig.data_bits ?? 8,
+        stop_bits: newConfig.stop_bits ?? 1,
+        parity: newConfig.parity || 'none',
         valor_peso: newConfig.valor_peso || 0,
+        ativo: newConfig.ativo ?? true,
       };
 
       if (newConfig.id) {
+        // UPDATE existing record
         const { error } = await supabase.from('balanca_config' as any)
           .update({ ...payload, updated_at: new Date().toISOString() } as any)
           .eq('id', newConfig.id);
@@ -133,18 +159,61 @@ export function useBalanca() {
           return;
         }
       } else {
-        const { data, error } = await supabase.from('balanca_config' as any)
-          .insert(payload as any)
-          .select()
-          .single();
-        if (error) {
-          console.error('Erro ao inserir balança:', error);
-          toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
-          return;
+        // Check for existing record with same dispositivo_id or endereco_dispositivo
+        let existingId: string | null = null;
+        if (newConfig.dispositivo_id) {
+          const { data: existing } = await supabase.from('balanca_config' as any)
+            .select('id')
+            .eq('dispositivo_id', newConfig.dispositivo_id)
+            .limit(1)
+            .maybeSingle();
+          if (existing) existingId = (existing as any).id;
         }
-        if (data) newConfig = { ...newConfig, id: (data as any).id };
+        if (!existingId && newConfig.endereco_dispositivo) {
+          const { data: existing } = await supabase.from('balanca_config' as any)
+            .select('id')
+            .eq('endereco_dispositivo', newConfig.endereco_dispositivo)
+            .limit(1)
+            .maybeSingle();
+          if (existing) existingId = (existing as any).id;
+        }
+
+        if (existingId) {
+          // Update existing instead of inserting duplicate
+          const { error } = await supabase.from('balanca_config' as any)
+            .update({ ...payload, updated_at: new Date().toISOString() } as any)
+            .eq('id', existingId);
+          if (error) {
+            console.error('Erro ao atualizar balança existente:', error);
+            toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+            return;
+          }
+          newConfig = { ...newConfig, id: existingId };
+        } else {
+          // INSERT new record
+          const { data, error } = await supabase.from('balanca_config' as any)
+            .insert(payload as any)
+            .select()
+            .single();
+          if (error) {
+            console.error('Erro ao inserir balança:', error);
+            toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+            return;
+          }
+          if (data) newConfig = { ...newConfig, id: (data as any).id };
+        }
       }
+
+      // If this config is active, deactivate others
+      if (newConfig.ativo && newConfig.id) {
+        const supabase2 = await getSupabaseClient();
+        await supabase2.from('balanca_config' as any)
+          .update({ ativo: false, updated_at: new Date().toISOString() } as any)
+          .neq('id', newConfig.id);
+      }
+
       setConfig(newConfig);
+      await fetchConfig(); // Refresh all configs
       if (!options?.silent) {
         toast({ title: 'Configuração da balança salva' });
       }
@@ -152,7 +221,40 @@ export function useBalanca() {
       console.error('Erro saveConfig balança:', err);
       toast({ title: 'Erro ao salvar', description: 'Falha inesperada ao salvar configuração.', variant: 'destructive' });
     }
-  }, []);
+  }, [fetchConfig]);
+
+  const deleteBalancaConfig = useCallback(async (id: string) => {
+    try {
+      const supabase = await getSupabaseClient();
+      const { error } = await supabase.from('balanca_config' as any).delete().eq('id', id);
+      if (error) {
+        toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Balança excluída' });
+      await fetchConfig();
+    } catch (err) {
+      console.error('Erro deleteConfig balança:', err);
+    }
+  }, [fetchConfig]);
+
+  const activateConfig = useCallback(async (id: string) => {
+    try {
+      const supabase = await getSupabaseClient();
+      // Deactivate all
+      await supabase.from('balanca_config' as any)
+        .update({ ativo: false, updated_at: new Date().toISOString() } as any)
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // update all
+      // Activate the chosen one
+      await supabase.from('balanca_config' as any)
+        .update({ ativo: true, updated_at: new Date().toISOString() } as any)
+        .eq('id', id);
+      toast({ title: 'Balança ativada' });
+      await fetchConfig();
+    } catch (err) {
+      console.error('Erro activateConfig:', err);
+    }
+  }, [fetchConfig]);
 
   const persistConnectedConfig = useCallback(async (patch?: Partial<BalancaConfig>) => {
     const nextConfig: BalancaConfig = {
@@ -760,11 +862,14 @@ export function useBalanca() {
 
   return {
     config,
+    allConfigs,
     loading,
     connected,
     status,
     tentativa,
     saveConfig,
+    deleteBalancaConfig,
+    activateConfig,
     lerPeso,
     testarConexao,
     buscarDispositivosSerial,
