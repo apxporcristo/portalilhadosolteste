@@ -228,12 +228,32 @@ export function useBalanca() {
       return false;
     }
 
+    // Try Web Serial API (Chrome Android 89+)
     const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
     if (hasWebSerial) {
-      toast({
-        title: 'Use Web Serial',
-        description: 'Conecte a balança pela opção Web Serial na tela de pesagem.',
-      });
+      try {
+        const port = await (navigator as any).serial.requestPort();
+        await port.open({ baudRate: config.baud_rate || 9600 });
+        setSerialPort(port);
+        setStatus('conectada');
+        const newConfig: BalancaConfig = {
+          ...config,
+          tipo_conexao: 'serial',
+          dispositivo_nome: 'Web Serial',
+        };
+        await saveConfig(newConfig);
+        toast({ title: 'Balança conectada', description: 'Conectado via Web Serial.' });
+        return true;
+      } catch (err: any) {
+        console.error('[Balança] Web Serial pairing error:', err);
+        if (err?.name === 'NotFoundError') {
+          toast({ title: 'Nenhuma porta selecionada', description: 'Usuário cancelou a seleção da porta.', variant: 'destructive' });
+        } else {
+          toast({ title: 'Falha ao conectar', description: err?.message || 'Falha ao abrir a porta serial.', variant: 'destructive' });
+        }
+        setStatus('falha');
+        return false;
+      }
     } else {
       toast({
         title: 'Web Serial não suportado',
