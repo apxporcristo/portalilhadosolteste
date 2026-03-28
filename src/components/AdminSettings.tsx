@@ -228,7 +228,8 @@ export function AdminSettings() {
 function BalancaConfigSection() {
   const {
     config, saveConfig, testarConexao, loading, status, tentativa,
-    parearNovoDispositivo, listarDispositivosPareados, conectarDispositivo, disconnect
+    parearNovoDispositivo, listarDispositivosPareados, conectarDispositivo, disconnect,
+    serialConfig, updateSerialConfig
   } = useBalanca();
 
   const [form, setForm] = useState({
