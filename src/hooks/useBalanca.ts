@@ -511,6 +511,32 @@ export function useBalanca() {
     try {
       if (!('serial' in navigator)) return null;
       let port = serialPort;
+
+      // If current port is not readable, try to recover from granted ports
+      if (!port || !port.readable) {
+        try {
+          const ports = await (navigator as any).serial.getPorts();
+          const openPort = ports?.find((p: any) => p.readable);
+          if (openPort) {
+            port = openPort;
+            setSerialPort(openPort);
+          } else if (ports?.length) {
+            // Try to reopen the first granted port
+            const p = ports[0];
+            await p.open({
+              baudRate: serialConfig.baudRate,
+              dataBits: serialConfig.dataBits,
+              stopBits: serialConfig.stopBits,
+              parity: serialConfig.parity,
+            });
+            port = p;
+            setSerialPort(p);
+          }
+        } catch (reopenErr) {
+          console.warn('[Balança] Falha ao reabrir porta:', reopenErr);
+        }
+      }
+
       if (!port || !port.readable) {
         console.log('[Balança] Nenhuma porta serial aberta para leitura.');
         return null;
@@ -524,6 +550,16 @@ export function useBalanca() {
           writer.releaseLock();
         } catch (writeErr) {
           console.warn('[Balança] Falha ao enviar ENQ:', writeErr);
+        }
+      }
+
+      // Check if readable is locked (another reader active)
+      if (port.readable.locked) {
+        console.warn('[Balança] Porta serial com reader travado, aguardando...');
+        await new Promise(r => setTimeout(r, 500));
+        if (port.readable.locked) {
+          console.warn('[Balança] Reader ainda travado, tentando ENQ novamente...');
+          return null;
         }
       }
 
@@ -543,7 +579,7 @@ export function useBalanca() {
       console.error('[Balança] Erro serial:', err);
       return null;
     }
-  }, [serialPort]);
+  }, [serialPort, serialConfig]);
   const conectarBalancaAndroid = useCallback((): boolean => {
     const bridge = window.AndroidBridge;
     if (!bridge?.connectScale) return false;

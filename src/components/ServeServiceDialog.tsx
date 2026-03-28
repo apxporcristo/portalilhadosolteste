@@ -3,10 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Scale, RefreshCw, Bluetooth, BluetoothSearching, Plug, Unplug, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Scale, RefreshCw, Plug, AlertTriangle } from 'lucide-react';
 import { useBalanca } from '@/hooks/useBalanca';
-import { useScaleSerial } from '@/hooks/useScaleSerial';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 
@@ -17,50 +15,54 @@ interface ServeServiceDialogProps {
 }
 
 export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeServiceDialogProps) {
-  const { config, lerPeso, status, tentativa, connectBluetoothWithRetries, parearNovoDispositivo } = useBalanca();
-  const serial = useScaleSerial();
+  const {
+    config,
+    status,
+    tentativa,
+    lerPeso,
+    garantirConexaoComTentativas,
+    parearNovoDispositivo,
+  } = useBalanca();
 
   const [peso, setPeso] = useState<number | null>(null);
   const [pesoManual, setPesoManual] = useState('');
   const [lendo, setLendo] = useState(false);
+  const [tentouConectar, setTentouConectar] = useState(false);
 
   const valorPeso = config.valor_peso || 0;
   const pesoFinal = peso ?? (parseFloat(pesoManual) || 0);
   const valorTotal = pesoFinal * valorPeso;
 
-  // When serial auto-read updates weight, apply it
+  const conectada = status === 'conectada';
+  const falha = status === 'falha';
+  const tentando = status === 'tentando' || status === 'conectando';
+
+  // Auto-connect when dialog opens if not connected
   useEffect(() => {
-    if (serial.currentWeight !== null && serial.currentWeight > 0) {
-      setPeso(serial.currentWeight);
+    if (open && !conectada && !tentando && !tentouConectar) {
+      setTentouConectar(true);
+      garantirConexaoComTentativas(3);
     }
-  }, [serial.currentWeight]);
+  }, [open, conectada, tentando, tentouConectar, garantirConexaoComTentativas]);
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setTentouConectar(false);
+    }
+  }, [open]);
 
   const statusLabel = () => {
-    switch (status) {
-      case 'conectada': return { text: 'Conectada', variant: 'default' as const };
-      case 'conectando': return { text: 'Conectando...', variant: 'secondary' as const };
-      case 'tentando': return { text: `Tentando (${tentativa}/3)`, variant: 'secondary' as const };
-      case 'falha': return { text: 'Falha', variant: 'destructive' as const };
-      default: return { text: 'Desconectada', variant: 'outline' as const };
-    }
+    if (tentando) return { text: tentativa > 0 ? `Tentando (${tentativa}/3)` : 'Conectando...', variant: 'secondary' as const };
+    if (conectada) return { text: 'Conectada', variant: 'default' as const };
+    if (falha) return { text: 'Falha', variant: 'destructive' as const };
+    return { text: 'Desconectada', variant: 'outline' as const };
   };
 
   const handleLerPeso = useCallback(async () => {
     setLendo(true);
     setPeso(null);
 
-    // Try Web Serial first if connected
-    if (serial.connected) {
-      await serial.refreshWeight();
-      if (serial.currentWeight !== null && serial.currentWeight > 0) {
-        setPeso(serial.currentWeight);
-        toast({ title: 'Peso lido', description: `${serial.currentWeight.toFixed(3)} kg` });
-        setLendo(false);
-        return;
-      }
-    }
-
-    // Fallback to existing balança hook
     const resultado = await lerPeso(3);
     if (resultado !== null && resultado > 0) {
       setPeso(resultado);
@@ -69,24 +71,11 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
       toast({ title: 'Não foi possível ler o peso', description: 'Digite o peso manualmente.', variant: 'destructive' });
     }
     setLendo(false);
-  }, [lerPeso, serial]);
+  }, [lerPeso]);
 
-  const handleSerialConnect = useCallback(async () => {
-    await serial.connect();
-  }, [serial]);
-
-  const handleSerialDisconnect = useCallback(async () => {
-    await serial.disconnect();
-    // Don't clear manually entered weight
-  }, [serial]);
-
-  const handleToggleAutoRead = useCallback((checked: boolean) => {
-    if (checked) {
-      serial.startAutoRead();
-    } else {
-      serial.stopAutoRead();
-    }
-  }, [serial]);
+  const handleConectar = useCallback(async () => {
+    await parearNovoDispositivo();
+  }, [parearNovoDispositivo]);
 
   const handleAdicionar = useCallback(() => {
     if (pesoFinal <= 0) {
@@ -128,10 +117,8 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Scale className="h-5 w-5 text-primary" />
-            Serve Service
-            {config.tipo_conexao === 'bluetooth' && (
-              <Badge variant={sl.variant} className="ml-auto text-xs">{sl.text}</Badge>
-            )}
+            COMIDA KG
+            <Badge variant={sl.variant} className="ml-auto text-xs">{sl.text}</Badge>
           </DialogTitle>
           <DialogDescription>
             Leia o peso da balança e calcule o valor.
@@ -139,110 +126,31 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* ─── Web Serial Card ─── */}
-          {serial.supported && (
-            <div className="p-3 border rounded-lg space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium flex items-center gap-1.5">
-                  {serial.connected ? (
-                    <Wifi className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <WifiOff className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  Balança Serial (Web Serial)
-                </span>
-                <Badge variant={serial.connected ? 'default' : 'outline'} className="text-xs">
-                  {serial.connecting ? 'Conectando...' : serial.connected ? (serial.reading ? 'Lendo...' : 'Conectada') : 'Desconectada'}
-                </Badge>
-              </div>
+          {/* Show connect button only when connection failed */}
+          {falha && (
+            <Button
+              variant="outline"
+              onClick={handleConectar}
+              className="w-full"
+            >
+              <Plug className="h-4 w-4 mr-2" />
+              Conectar balança
+            </Button>
+          )}
 
-              {!serial.connected ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSerialConnect}
-                  disabled={serial.connecting}
-                  className="w-full"
-                >
-                  <Plug className="h-4 w-4 mr-2" />
-                  {serial.connecting ? 'Conectando...' : 'Conectar balança'}
-                </Button>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => serial.refreshWeight()} className="flex-1">
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Ler peso agora
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleSerialDisconnect}>
-                      <Unplug className="h-4 w-4 mr-1" />
-                      Desconectar
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="autoread-toggle" className="text-xs text-muted-foreground">
-                      Leitura automática
-                    </Label>
-                    <Switch
-                      id="autoread-toggle"
-                      checked={serial.autoRead}
-                      onCheckedChange={handleToggleAutoRead}
-                    />
-                  </div>
-
-                  {serial.rawData && (
-                    <p className="text-xs text-muted-foreground font-mono truncate">
-                      Último dado: {serial.rawData}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {serial.error && (
-                <p className="text-xs text-destructive flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  {serial.error}
-                </p>
-              )}
+          {tentando && (
+            <div className="p-3 bg-muted rounded-lg text-center text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin inline mr-2" />
+              Tentando conectar à balança...
+              {tentativa > 0 && ` (tentativa ${tentativa}/3)`}
             </div>
           )}
 
-          {/* Info when Web Serial not supported */}
-          {!serial.supported && (
-            <div className="p-3 bg-muted rounded-lg text-xs text-muted-foreground">
-              <p className="font-medium text-foreground mb-1">Web Serial não suportado</p>
-              <p>Para leitura automática, abra no <strong>Chrome Android</strong> compatível com Web Serial e conecte uma balança Bluetooth serial.</p>
-            </div>
-          )}
-
-          {status === 'conectada' && !serial.connected && (
-            <div className="flex gap-2">
-              <Button onClick={handleLerPeso} disabled={lendo} className="flex-1">
-                <RefreshCw className={`h-4 w-4 mr-2 ${lendo ? 'animate-spin' : ''}`} />
-                {lendo ? 'Lendo...' : 'Ler Peso da Balança'}
-              </Button>
-            </div>
-          )}
-
-          {config.tipo_conexao === 'bluetooth' && !window.IS_ANDROID_APP && !serial.supported && (
-            <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-              <p className="font-medium text-foreground mb-1">Web Serial não disponível</p>
-              <p>Abra no <strong>Chrome Android 89+</strong> para conectar a balança via Web Serial, ou digite o peso manualmente abaixo.</p>
-            </div>
-          )}
-
-          {config.tipo_conexao === 'bluetooth' && window.IS_ANDROID_APP && (status === 'falha' || status === 'desconectada') && (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => connectBluetoothWithRetries()} className="flex-1">
-                <Bluetooth className="h-4 w-4 mr-2" />
-                Reconectar
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => parearNovoDispositivo()} className="flex-1">
-                <BluetoothSearching className="h-4 w-4 mr-2" />
-                Parear novo
-              </Button>
-            </div>
+          {conectada && (
+            <Button onClick={handleLerPeso} disabled={lendo} className="w-full">
+              <RefreshCw className={`h-4 w-4 mr-2 ${lendo ? 'animate-spin' : ''}`} />
+              {lendo ? 'Lendo...' : 'Ler Peso da Balança'}
+            </Button>
           )}
 
           {peso !== null ? (
