@@ -1006,7 +1006,6 @@ export default function FichasLista() {
                 const resultado = await lerPeso(3);
                 if (resultado !== null && resultado > 0) {
                   setPesoManual(resultado.toFixed(3));
-                  toast({ title: 'Peso lido', description: `${resultado.toFixed(3)} kg` });
                 } else {
                   toast({ title: 'Não foi possível ler o peso', description: 'Digite o peso manualmente.', variant: 'destructive' });
                 }
