@@ -534,6 +534,8 @@ export function useBalanca() {
     buscarDispositivosSerial,
     disconnect,
     fetchConfig,
+    serialConfig,
+    updateSerialConfig,
     // BT-specific (Web Bluetooth)
     parearNovoDispositivo,
     listarDispositivosPareados,
