@@ -141,7 +141,7 @@ export function ReimpressaoVendas() {
     return new TextEncoder().encode(lines.join(''));
   };
 
-  const handleReprint = async (venda: VendaGroup, onlyPrintable: boolean) => {
+  const handleReprint = async (venda: VendaGroup, mode: 'all' | 'printable' | 'selected') => {
     setPrinting(true);
     try {
       const characteristic = await ensureBluetoothConnected();
@@ -156,15 +156,17 @@ export function ReimpressaoVendas() {
       const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
       let itemsToPrint = venda.items;
-      if (onlyPrintable) {
+      if (mode === 'printable') {
         itemsToPrint = venda.items.filter(item => {
           const produto = produtos.find(p => p.id === item.produto_id);
           return (produto as any)?.imprimir_ficha !== false;
         });
+      } else if (mode === 'selected') {
+        itemsToPrint = venda.items.filter(item => selectedItemIds.has(item.id));
       }
 
       if (itemsToPrint.length === 0) {
-        toast({ title: 'Nenhum item para reimprimir', description: 'Nenhum produto desta venda possui impressão habilitada.' });
+        toast({ title: 'Nenhum item para reimprimir', description: 'Nenhum produto selecionado para impressão.' });
         setPrinting(false);
         return;
       }
@@ -178,6 +180,7 @@ export function ReimpressaoVendas() {
 
       toast({ title: 'Reimpressão enviada!', description: `Venda ${venda.codigo_venda} - ${itemsToPrint.length} item(ns) reimpresso(s).` });
       setSelectedVenda(null);
+      setSelectedItemIds(new Set());
     } catch (err) {
       console.error('Erro na reimpressão:', err);
       toast({ title: 'Erro', description: 'Falha na reimpressão.', variant: 'destructive' });
