@@ -228,11 +228,19 @@ export function useBalanca() {
       return false;
     }
 
-    toast({
-      title: 'Bluetooth Classic não suportado no navegador',
-      description: 'Balanças seriais usam Bluetooth Classic (SPP), que não é suportado pelo Chrome. Use o app Android auxiliar.',
-      variant: 'destructive',
-    });
+    const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
+    if (hasWebSerial) {
+      toast({
+        title: 'Use Web Serial',
+        description: 'Conecte a balança pela opção Web Serial na tela de pesagem.',
+      });
+    } else {
+      toast({
+        title: 'Web Serial não suportado',
+        description: 'Abra no Chrome Android 89+ para conectar a balança, ou use o app auxiliar.',
+        variant: 'destructive',
+      });
+    }
     return false;
   }, [config, saveConfig, listarDispositivosPareadosAndroid]);
 
@@ -377,14 +385,13 @@ export function useBalanca() {
 
     // All retries failed for BT
     if (config.tipo_conexao === 'bluetooth') {
-      const isAndroidApp = !!window.IS_ANDROID_APP;
-      if (isAndroidApp) {
+      const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
+      if (hasWebSerial) {
+        toast({ title: 'Balança não respondeu', description: 'Tente conectar pela opção Web Serial na tela de pesagem.' });
+      } else if (window.IS_ANDROID_APP) {
         toast({ title: 'Balança não respondeu', description: 'Verifique se o app auxiliar está conectado à balança.' });
       } else {
-        toast({
-          title: 'Bluetooth indisponível no navegador',
-          description: 'O Web Bluetooth não suporta este tipo de balança. Use o app Android auxiliar ou digite o peso manualmente.',
-        });
+        toast({ title: 'Balança não respondeu', description: 'Use o Chrome Android com Web Serial ou digite o peso manualmente.' });
       }
     }
 

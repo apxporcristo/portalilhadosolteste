@@ -227,8 +227,8 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
 
           {config.tipo_conexao === 'bluetooth' && !window.IS_ANDROID_APP && !serial.supported && (
             <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-              <p className="font-medium text-foreground mb-1">Balança Bluetooth Classic (SPP)</p>
-              <p>Balanças seriais usam Bluetooth Classic, que <strong>não é suportado</strong> pelo Chrome/navegador. Use o <strong>app Android auxiliar</strong> para leitura automática, ou digite o peso manualmente abaixo.</p>
+              <p className="font-medium text-foreground mb-1">Web Serial não disponível</p>
+              <p>Abra no <strong>Chrome Android 89+</strong> para conectar a balança via Web Serial, ou digite o peso manualmente abaixo.</p>
             </div>
           )}
 
