@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { getSupabaseClient } from '@/hooks/useVouchers';
 import { getPrintLayoutConfig } from '@/hooks/usePrintLayout';
 import { usePrinterContext } from '@/contexts/PrinterContext';
@@ -39,6 +40,7 @@ export function ReimpressaoVendas() {
   const [vendas, setVendas] = useState<VendaGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVenda, setSelectedVenda] = useState<VendaGroup | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [printing, setPrinting] = useState(false);
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const { produtos } = useFichasConsumo();
@@ -139,7 +141,7 @@ export function ReimpressaoVendas() {
     return new TextEncoder().encode(lines.join(''));
   };
 
-  const handleReprint = async (venda: VendaGroup, onlyPrintable: boolean) => {
+  const handleReprint = async (venda: VendaGroup, mode: 'all' | 'printable' | 'selected') => {
     setPrinting(true);
     try {
       const characteristic = await ensureBluetoothConnected();
@@ -154,15 +156,17 @@ export function ReimpressaoVendas() {
       const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
       let itemsToPrint = venda.items;
-      if (onlyPrintable) {
+      if (mode === 'printable') {
         itemsToPrint = venda.items.filter(item => {
           const produto = produtos.find(p => p.id === item.produto_id);
           return (produto as any)?.imprimir_ficha !== false;
         });
+      } else if (mode === 'selected') {
+        itemsToPrint = venda.items.filter(item => selectedItemIds.has(item.id));
       }
 
       if (itemsToPrint.length === 0) {
-        toast({ title: 'Nenhum item para reimprimir', description: 'Nenhum produto desta venda possui impressão habilitada.' });
+        toast({ title: 'Nenhum item para reimprimir', description: 'Nenhum produto selecionado para impressão.' });
         setPrinting(false);
         return;
       }
@@ -176,6 +180,7 @@ export function ReimpressaoVendas() {
 
       toast({ title: 'Reimpressão enviada!', description: `Venda ${venda.codigo_venda} - ${itemsToPrint.length} item(ns) reimpresso(s).` });
       setSelectedVenda(null);
+      setSelectedItemIds(new Set());
     } catch (err) {
       console.error('Erro na reimpressão:', err);
       toast({ title: 'Erro', description: 'Falha na reimpressão.', variant: 'destructive' });
@@ -233,7 +238,7 @@ export function ReimpressaoVendas() {
       </Card>
 
       {/* Detalhes da venda para reimpressão */}
-      <Dialog open={!!selectedVenda} onOpenChange={(open) => { if (!open) setSelectedVenda(null); }}>
+      <Dialog open={!!selectedVenda} onOpenChange={(open) => { if (!open) { setSelectedVenda(null); setSelectedItemIds(new Set()); } }}>
         <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -254,8 +259,20 @@ export function ReimpressaoVendas() {
                 {selectedVenda.items.map(item => {
                   const produto = produtos.find(p => p.id === item.produto_id);
                   const isPrintable = (produto as any)?.imprimir_ficha !== false;
+                  const isSelected = selectedItemIds.has(item.id);
                   return (
-                    <div key={item.id} className="flex items-center justify-between p-3">
+                    <label key={item.id} className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          setSelectedItemIds(prev => {
+                            const next = new Set(prev);
+                            if (checked) next.add(item.id);
+                            else next.delete(item.id);
+                            return next;
+                          });
+                        }}
+                      />
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium">{item.produto_nome}</span>
                         <div className="flex items-center gap-2 mt-0.5">
@@ -264,7 +281,7 @@ export function ReimpressaoVendas() {
                         </div>
                       </div>
                       <span className="text-sm font-bold text-primary">R$ {Number(item.valor_total).toFixed(2).replace('.', ',')}</span>
-                    </div>
+                    </label>
                   );
                 })}
               </div>
@@ -280,20 +297,22 @@ export function ReimpressaoVendas() {
             <Button
               variant="outline"
               className="w-full sm:w-auto"
-              onClick={() => selectedVenda && handleReprint(selectedVenda, false)}
+              onClick={() => selectedVenda && handleReprint(selectedVenda, 'all')}
               disabled={printing}
             >
               <FileText className="h-4 w-4 mr-2" />
               {printing ? 'Imprimindo...' : 'Reimprimir tudo (conferência)'}
             </Button>
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => selectedVenda && handleReprint(selectedVenda, true)}
-              disabled={printing}
-            >
-              <Printer className="h-4 w-4 mr-2" />
-              {printing ? 'Imprimindo...' : 'Reimprimir fichas'}
-            </Button>
+            {selectedItemIds.size > 0 && (
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => selectedVenda && handleReprint(selectedVenda, 'selected')}
+                disabled={printing}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                {printing ? 'Imprimindo...' : `Reimprimir fichas (${selectedItemIds.size})`}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
