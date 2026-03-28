@@ -1,10 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Scale, RefreshCw, Bluetooth, BluetoothSearching } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Scale, RefreshCw, Bluetooth, BluetoothSearching, Plug, Unplug, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 import { useBalanca } from '@/hooks/useBalanca';
+import { useScaleSerial } from '@/hooks/useScaleSerial';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 
@@ -16,6 +18,8 @@ interface ServeServiceDialogProps {
 
 export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeServiceDialogProps) {
   const { config, lerPeso, status, tentativa, connectBluetoothWithRetries, parearNovoDispositivo } = useBalanca();
+  const serial = useScaleSerial();
+
   const [peso, setPeso] = useState<number | null>(null);
   const [pesoManual, setPesoManual] = useState('');
   const [lendo, setLendo] = useState(false);
@@ -23,6 +27,13 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
   const valorPeso = config.valor_peso || 0;
   const pesoFinal = peso ?? (parseFloat(pesoManual) || 0);
   const valorTotal = pesoFinal * valorPeso;
+
+  // When serial auto-read updates weight, apply it
+  useEffect(() => {
+    if (serial.currentWeight !== null && serial.currentWeight > 0) {
+      setPeso(serial.currentWeight);
+    }
+  }, [serial.currentWeight]);
 
   const statusLabel = () => {
     switch (status) {
@@ -38,6 +49,18 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
     setLendo(true);
     setPeso(null);
 
+    // Try Web Serial first if connected
+    if (serial.connected) {
+      await serial.refreshWeight();
+      if (serial.currentWeight !== null && serial.currentWeight > 0) {
+        setPeso(serial.currentWeight);
+        toast({ title: 'Peso lido', description: `${serial.currentWeight.toFixed(3)} kg` });
+        setLendo(false);
+        return;
+      }
+    }
+
+    // Fallback to existing balança hook
     const resultado = await lerPeso(3);
     if (resultado !== null && resultado > 0) {
       setPeso(resultado);
@@ -46,7 +69,24 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
       toast({ title: 'Não foi possível ler o peso', description: 'Digite o peso manualmente.', variant: 'destructive' });
     }
     setLendo(false);
-  }, [lerPeso]);
+  }, [lerPeso, serial]);
+
+  const handleSerialConnect = useCallback(async () => {
+    await serial.connect();
+  }, [serial]);
+
+  const handleSerialDisconnect = useCallback(async () => {
+    await serial.disconnect();
+    // Don't clear manually entered weight
+  }, [serial]);
+
+  const handleToggleAutoRead = useCallback((checked: boolean) => {
+    if (checked) {
+      serial.startAutoRead();
+    } else {
+      serial.stopAutoRead();
+    }
+  }, [serial]);
 
   const handleAdicionar = useCallback(() => {
     if (pesoFinal <= 0) {
@@ -71,7 +111,6 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
       description: `${pesoFinal.toFixed(3)} kg × R$ ${valorPeso.toFixed(2)} = R$ ${valorTotal.toFixed(2)}`,
     });
 
-    // Limpar para próximo item
     setPeso(null);
     setPesoManual('');
   }, [pesoFinal, valorPeso, valorTotal, onAddToCart]);
@@ -85,7 +124,7 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Scale className="h-5 w-5 text-primary" />
@@ -100,7 +139,84 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
         </DialogHeader>
 
         <div className="space-y-4">
-          {status === 'conectada' && (
+          {/* ─── Web Serial Card ─── */}
+          {serial.supported && (
+            <div className="p-3 border rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium flex items-center gap-1.5">
+                  {serial.connected ? (
+                    <Wifi className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <WifiOff className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  Balança Serial (Web Serial)
+                </span>
+                <Badge variant={serial.connected ? 'default' : 'outline'} className="text-xs">
+                  {serial.connecting ? 'Conectando...' : serial.connected ? (serial.reading ? 'Lendo...' : 'Conectada') : 'Desconectada'}
+                </Badge>
+              </div>
+
+              {!serial.connected ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSerialConnect}
+                  disabled={serial.connecting}
+                  className="w-full"
+                >
+                  <Plug className="h-4 w-4 mr-2" />
+                  {serial.connecting ? 'Conectando...' : 'Conectar balança'}
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => serial.refreshWeight()} className="flex-1">
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Ler peso agora
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleSerialDisconnect}>
+                      <Unplug className="h-4 w-4 mr-1" />
+                      Desconectar
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="autoread-toggle" className="text-xs text-muted-foreground">
+                      Leitura automática
+                    </Label>
+                    <Switch
+                      id="autoread-toggle"
+                      checked={serial.autoRead}
+                      onCheckedChange={handleToggleAutoRead}
+                    />
+                  </div>
+
+                  {serial.rawData && (
+                    <p className="text-xs text-muted-foreground font-mono truncate">
+                      Último dado: {serial.rawData}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {serial.error && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {serial.error}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Info when Web Serial not supported */}
+          {!serial.supported && (
+            <div className="p-3 bg-muted rounded-lg text-xs text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Web Serial não suportado</p>
+              <p>Para leitura automática, abra no <strong>Chrome Android</strong> compatível com Web Serial e conecte uma balança Bluetooth serial.</p>
+            </div>
+          )}
+
+          {status === 'conectada' && !serial.connected && (
             <div className="flex gap-2">
               <Button onClick={handleLerPeso} disabled={lendo} className="flex-1">
                 <RefreshCw className={`h-4 w-4 mr-2 ${lendo ? 'animate-spin' : ''}`} />
@@ -109,8 +225,7 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
             </div>
           )}
 
-          {/* BT Classic scales require Android app - show guidance */}
-          {config.tipo_conexao === 'bluetooth' && !window.IS_ANDROID_APP && (
+          {config.tipo_conexao === 'bluetooth' && !window.IS_ANDROID_APP && !serial.supported && (
             <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Balança Bluetooth Classic (SPP)</p>
               <p>Balanças seriais usam Bluetooth Classic, que <strong>não é suportado</strong> pelo Chrome/navegador. Use o <strong>app Android auxiliar</strong> para leitura automática, ou digite o peso manualmente abaixo.</p>
