@@ -437,7 +437,7 @@ function BalancaConfigSection() {
         )}
 
         {/* Botão parear novamente após falha */}
-        {status === 'falha' && form.tipo_conexao === 'bluetooth' && (
+        {status === 'falha' && (
           <div className="p-3 border border-destructive/30 rounded-md bg-destructive/5">
             <p className="text-sm text-destructive mb-2">Não foi possível conectar após 3 tentativas.</p>
             <Button variant="outline" onClick={handleParear} disabled={pairing}>
