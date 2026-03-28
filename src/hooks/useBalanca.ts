@@ -332,6 +332,7 @@ export function useBalanca() {
     // Try Web Serial API (Chrome Android 89+)
     const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
     if (hasWebSerial) {
+      let port: any = null;
       try {
         // Close ALL previously opened ports (granted + state) before selecting a new one
         try {
@@ -355,7 +356,7 @@ export function useBalanca() {
         if (serialPort) setSerialPort(null);
 
         console.log('[Balança] Solicitando porta serial...');
-        const port = await (navigator as any).serial.requestPort();
+        port = await (navigator as any).serial.requestPort();
         console.log('[Balança] Porta selecionada, info:', port.getInfo?.() || 'N/A');
 
         const openOpts = {
@@ -370,7 +371,7 @@ export function useBalanca() {
         console.log('[Balança] Porta aberta com sucesso');
       } catch (openErr: any) {
         // If port is already open (e.g. reselected same port), try using it directly
-        if (openErr?.message?.includes('already open') || port?.readable) {
+        if (port && (openErr?.message?.includes('already open') || port?.readable)) {
           console.log('[Balança] Porta já estava aberta, reutilizando...');
         } else {
           throw openErr;
