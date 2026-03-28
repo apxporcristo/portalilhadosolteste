@@ -354,10 +354,56 @@ function BalancaConfigSection() {
             <Label className="text-sm">Porta serial / COM</Label>
             <Input value={form.porta_serial} onChange={e => setForm(f => ({ ...f, porta_serial: e.target.value }))} placeholder="Ex: COM3" />
           </div>
-        )}
-        <div>
-          <Label className="text-sm">Baud Rate</Label>
-          <Input type="number" value={form.baud_rate} onChange={e => setForm(f => ({ ...f, baud_rate: parseInt(e.target.value) || 9600 }))} />
+         )}
+
+        <Separator className="my-2" />
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Settings2 className="h-4 w-4" />
+          Configuração Serial
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs">Baud Rate</Label>
+            <Select value={String(serialConfig.baudRate)} onValueChange={v => updateSerialConfig({ baudRate: Number(v) })}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[9600, 19200, 38400, 57600, 115200].map(r => (
+                  <SelectItem key={r} value={String(r)}>{r}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Data Bits</Label>
+            <Select value={String(serialConfig.dataBits)} onValueChange={v => updateSerialConfig({ dataBits: Number(v) as 7 | 8 })}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">7</SelectItem>
+                <SelectItem value="8">8</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Stop Bits</Label>
+            <Select value={String(serialConfig.stopBits)} onValueChange={v => updateSerialConfig({ stopBits: Number(v) as 1 | 2 })}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1</SelectItem>
+                <SelectItem value="2">2</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Paridade</Label>
+            <Select value={serialConfig.parity} onValueChange={v => updateSerialConfig({ parity: v as 'none' | 'even' | 'odd' })}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="even">Even</SelectItem>
+                <SelectItem value="odd">Odd</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Salvar</Button>
