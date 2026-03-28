@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Check, Ticket, Loader2, Copy } from 'lucide-react';
+import { Check, Ticket, Loader2, Copy, Clock } from 'lucide-react';
 import { FormaPagamento } from '@/hooks/useFormasPagamento';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -15,7 +15,9 @@ export interface PagamentoSelecionado {
 
 interface VoucherPixConfig {
   canGenerateVoucher: boolean;
-  voucherTempo: string | null; // tempo allowed or null for all
+  voucherTempo: string | null; // specific tempo or null for all
+  availableTempos: string[];
+  availableByTempo: Record<string, number>;
   onGenerateVoucher: (tempo: string | null) => Promise<{ voucher_id: string; tempo_validade: string } | null>;
 }
 
