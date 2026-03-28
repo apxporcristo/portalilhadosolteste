@@ -2,6 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from '@/lib/supabase-external';
 import { toast } from '@/hooks/use-toast';
 
+export type SerialParity = 'none' | 'even' | 'odd';
+
+export interface SerialConfig {
+  baudRate: number;
+  dataBits: 7 | 8;
+  stopBits: 1 | 2;
+  parity: SerialParity;
+}
+
 export interface BalancaConfig {
   id?: string;
   tipo_conexao: 'bluetooth' | 'serial' | 'usb_serial';
@@ -45,13 +54,36 @@ let _btDevice: any = null;
 let _btServer: any = null;
 let _btCharacteristic: any = null;
 
+const SERIAL_CONFIG_KEY = 'balanca_serial_config';
+
+function loadSerialConfig(): SerialConfig {
+  try {
+    const raw = localStorage.getItem(SERIAL_CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' };
+}
+
+function saveSerialConfig(sc: SerialConfig): void {
+  try { localStorage.setItem(SERIAL_CONFIG_KEY, JSON.stringify(sc)); } catch { /* ignore */ }
+}
+
 export function useBalanca() {
   const [config, setConfig] = useState<BalancaConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<BalancaStatus>('desconectada');
   const [tentativa, setTentativa] = useState(0);
   const [serialPort, setSerialPort] = useState<any>(null);
+  const [serialConfig, setSerialConfigState] = useState<SerialConfig>(loadSerialConfig);
   const autoConnectAttempted = useRef(false);
+
+  const updateSerialConfig = useCallback((partial: Partial<SerialConfig>) => {
+    setSerialConfigState(prev => {
+      const next = { ...prev, ...partial };
+      saveSerialConfig(next);
+      return next;
+    });
+  }, []);
 
   const connected = status === 'conectada';
 
