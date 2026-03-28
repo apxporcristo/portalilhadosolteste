@@ -46,7 +46,8 @@ interface CartItem {
 
 function cartItemKey(item: CartItem) {
   const itemIds = item.selectedItems.map(si => si.item.id).sort().join(',');
-  return `${item.ficha.id}__${itemIds}`;
+  const pesoKey = item.peso != null ? `__peso_${item.peso.toFixed(3)}` : '';
+  return `${item.ficha.id}__${itemIds}${pesoKey}`;
 }
 
 function cartItemTotal(item: CartItem) {
