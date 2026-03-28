@@ -9,7 +9,7 @@ export interface SerialConfig {
   baudRate: number;
   dataBits: 7 | 8;
   stopBits: 1 | 2;
-  parity: ParityType;
+  parity: 'none' | 'even' | 'odd';
   bufferSize: number;
 }
 
@@ -91,8 +91,8 @@ export function parseWeightFromLine(line: string): { kg: number; raw: string } |
 }
 
 // ─── Serial connection singleton ────────────────────────────────────
-let _port: SerialPort | null = null;
-let _reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+let _port: any = null;
+let _reader: any = null;
 let _keepReading = false;
 
 export async function connectScale(config?: Partial<SerialConfig>): Promise<void> {
@@ -101,7 +101,7 @@ export async function connectScale(config?: Partial<SerialConfig>): Promise<void
   const cfg = { ...SERIAL_DEFAULTS, ...config };
 
   // Request port (user gesture required)
-  _port = await navigator.serial.requestPort();
+  _port = await (navigator as any).serial.requestPort();
   await _port.open({
     baudRate: cfg.baudRate,
     dataBits: cfg.dataBits,
