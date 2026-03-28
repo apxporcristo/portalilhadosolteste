@@ -947,12 +947,23 @@ export default function FichasLista() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Connect button when not connected */}
+            {/* Connect/Disconnect buttons */}
             {!balanca.connected && (
               <Button onClick={() => balanca.parearNovoDispositivo()} className="w-full" variant="outline">
                 <Scale className="h-4 w-4 mr-2" />
                 Conectar balança
               </Button>
+            )}
+
+            {balanca.connected && (
+              <div className="flex gap-2">
+                <Button onClick={async () => {
+                  await balanca.disconnect();
+                  toast({ title: 'Balança desconectada' });
+                }} variant="outline" size="sm">
+                  Desconectar
+                </Button>
+              </div>
             )}
 
             {balanca.connected && (
