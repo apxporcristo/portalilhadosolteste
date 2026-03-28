@@ -2,6 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from '@/lib/supabase-external';
 import { toast } from '@/hooks/use-toast';
 
+export type SerialParity = 'none' | 'even' | 'odd';
+
+export interface SerialConfig {
+  baudRate: number;
+  dataBits: 7 | 8;
+  stopBits: 1 | 2;
+  parity: SerialParity;
+}
+
 export interface BalancaConfig {
   id?: string;
   tipo_conexao: 'bluetooth' | 'serial' | 'usb_serial';
@@ -45,13 +54,36 @@ let _btDevice: any = null;
 let _btServer: any = null;
 let _btCharacteristic: any = null;
 
+const SERIAL_CONFIG_KEY = 'balanca_serial_config';
+
+function loadSerialConfig(): SerialConfig {
+  try {
+    const raw = localStorage.getItem(SERIAL_CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' };
+}
+
+function saveSerialConfig(sc: SerialConfig): void {
+  try { localStorage.setItem(SERIAL_CONFIG_KEY, JSON.stringify(sc)); } catch { /* ignore */ }
+}
+
 export function useBalanca() {
   const [config, setConfig] = useState<BalancaConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<BalancaStatus>('desconectada');
   const [tentativa, setTentativa] = useState(0);
   const [serialPort, setSerialPort] = useState<any>(null);
+  const [serialConfig, setSerialConfigState] = useState<SerialConfig>(loadSerialConfig);
   const autoConnectAttempted = useRef(false);
+
+  const updateSerialConfig = useCallback((partial: Partial<SerialConfig>) => {
+    setSerialConfigState(prev => {
+      const next = { ...prev, ...partial };
+      saveSerialConfig(next);
+      return next;
+    });
+  }, []);
 
   const connected = status === 'conectada';
 
@@ -232,8 +264,21 @@ export function useBalanca() {
     const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
     if (hasWebSerial) {
       try {
+        console.log('[Balança] Solicitando porta serial...');
         const port = await (navigator as any).serial.requestPort();
-        await port.open({ baudRate: config.baud_rate || 9600 });
+        console.log('[Balança] Porta selecionada, info:', port.getInfo?.() || 'N/A');
+
+        const openOpts = {
+          baudRate: serialConfig.baudRate,
+          dataBits: serialConfig.dataBits,
+          stopBits: serialConfig.stopBits,
+          parity: serialConfig.parity,
+        };
+        console.log('[Balança] Abrindo porta com config:', JSON.stringify(openOpts));
+
+        await port.open(openOpts);
+        console.log('[Balança] Porta aberta com sucesso');
+
         setSerialPort(port);
         setStatus('conectada');
         const newConfig: BalancaConfig = {
@@ -245,11 +290,16 @@ export function useBalanca() {
         toast({ title: 'Balança conectada', description: 'Conectado via Web Serial.' });
         return true;
       } catch (err: any) {
-        console.error('[Balança] Web Serial pairing error:', err);
+        console.error('[Balança] Web Serial erro bruto:', err);
+        console.error('[Balança] Web Serial erro name:', err?.name, 'message:', err?.message);
         if (err?.name === 'NotFoundError') {
           toast({ title: 'Nenhuma porta selecionada', description: 'Usuário cancelou a seleção da porta.', variant: 'destructive' });
         } else {
-          toast({ title: 'Falha ao conectar', description: err?.message || 'Falha ao abrir a porta serial.', variant: 'destructive' });
+          toast({
+            title: 'Falha ao abrir a porta serial',
+            description: 'Verifique se a balança está livre, pareada e com configuração serial correta.',
+            variant: 'destructive',
+          });
         }
         setStatus('falha');
         return false;
@@ -262,7 +312,7 @@ export function useBalanca() {
       });
     }
     return false;
-  }, [config, saveConfig, listarDispositivosPareadosAndroid]);
+  }, [config, serialConfig, saveConfig, listarDispositivosPareadosAndroid]);
 
   // List previously paired BT devices (only via Android Bridge)
   const listarDispositivosPareados = useCallback(async (): Promise<Array<{ id: string; name: string; device: any }>> => {
@@ -484,6 +534,8 @@ export function useBalanca() {
     buscarDispositivosSerial,
     disconnect,
     fetchConfig,
+    serialConfig,
+    updateSerialConfig,
     // BT-specific (Web Bluetooth)
     parearNovoDispositivo,
     listarDispositivosPareados,

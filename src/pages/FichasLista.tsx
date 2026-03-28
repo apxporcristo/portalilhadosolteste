@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save, FileText } from 'lucide-react';
+import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save, FileText, Settings2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -937,18 +938,74 @@ export default function FichasLista() {
             <DialogTitle className="flex items-center gap-2">
               <Scale className="h-5 w-5 text-primary" />
               {pendingPesoFicha?.ficha.nome_produto || 'Informar peso'}
-              {balanca.config.tipo_conexao === 'bluetooth' && (
-                <Badge variant={balanca.status === 'conectada' ? 'default' : balanca.status === 'conectando' || balanca.status === 'tentando' ? 'secondary' : 'outline'} className="ml-auto text-xs">
-                  {balanca.status === 'conectada' ? 'Conectada' : balanca.status === 'conectando' ? 'Conectando...' : balanca.status === 'tentando' ? `Tentando...` : balanca.status === 'falha' ? 'Falha' : 'Desconectada'}
-                </Badge>
-              )}
+              <Badge variant={balanca.status === 'conectada' ? 'default' : balanca.status === 'conectando' || balanca.status === 'tentando' ? 'secondary' : 'outline'} className="ml-auto text-xs">
+                {balanca.status === 'conectada' ? 'Conectada' : balanca.status === 'conectando' ? 'Conectando...' : balanca.status === 'tentando' ? `Tentando...` : balanca.status === 'falha' ? 'Falha' : 'Desconectada'}
+              </Badge>
             </DialogTitle>
             <DialogDescription>
               Leia o peso da balança e calcule o valor.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {balanca.status === 'conectada' && (
+            {/* Serial Config */}
+            {!balanca.connected && (
+              <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Settings2 className="h-4 w-4" />
+                  Configuração Serial
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Baud Rate</Label>
+                    <Select value={String(balanca.serialConfig.baudRate)} onValueChange={v => balanca.updateSerialConfig({ baudRate: Number(v) })}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[9600, 19200, 38400, 57600, 115200].map(r => (
+                          <SelectItem key={r} value={String(r)}>{r}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Data Bits</Label>
+                    <Select value={String(balanca.serialConfig.dataBits)} onValueChange={v => balanca.updateSerialConfig({ dataBits: Number(v) as 7 | 8 })}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7">7</SelectItem>
+                        <SelectItem value="8">8</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Stop Bits</Label>
+                    <Select value={String(balanca.serialConfig.stopBits)} onValueChange={v => balanca.updateSerialConfig({ stopBits: Number(v) as 1 | 2 })}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1</SelectItem>
+                        <SelectItem value="2">2</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Paridade</Label>
+                    <Select value={balanca.serialConfig.parity} onValueChange={v => balanca.updateSerialConfig({ parity: v as 'none' | 'even' | 'odd' })}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="even">Even</SelectItem>
+                        <SelectItem value="odd">Odd</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button onClick={() => balanca.parearNovoDispositivo()} className="w-full" variant="outline">
+                  <Scale className="h-4 w-4 mr-2" />
+                  Conectar balança
+                </Button>
+              </div>
+            )}
+
+            {balanca.connected && (
               <Button onClick={async () => {
                 const resultado = await lerPeso(3);
                 if (resultado !== null && resultado > 0) {
