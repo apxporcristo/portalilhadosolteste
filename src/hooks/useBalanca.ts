@@ -290,8 +290,7 @@ export function useBalanca() {
         setStatus('conectada');
         const newConfig: BalancaConfig = {
           ...config,
-          tipo_conexao: 'serial',
-          dispositivo_nome: 'Web Serial',
+          dispositivo_nome: config.dispositivo_nome || 'Web Serial',
         };
         await saveConfig(newConfig);
         toast({ title: 'Balança conectada', description: 'Conectado via Web Serial.' });
