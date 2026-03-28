@@ -938,11 +938,9 @@ export default function FichasLista() {
             <DialogTitle className="flex items-center gap-2">
               <Scale className="h-5 w-5 text-primary" />
               {pendingPesoFicha?.ficha.nome_produto || 'Informar peso'}
-              {balanca.config.tipo_conexao === 'bluetooth' && (
-                <Badge variant={balanca.status === 'conectada' ? 'default' : balanca.status === 'conectando' || balanca.status === 'tentando' ? 'secondary' : 'outline'} className="ml-auto text-xs">
-                  {balanca.status === 'conectada' ? 'Conectada' : balanca.status === 'conectando' ? 'Conectando...' : balanca.status === 'tentando' ? `Tentando...` : balanca.status === 'falha' ? 'Falha' : 'Desconectada'}
-                </Badge>
-              )}
+              <Badge variant={balanca.status === 'conectada' ? 'default' : balanca.status === 'conectando' || balanca.status === 'tentando' ? 'secondary' : 'outline'} className="ml-auto text-xs">
+                {balanca.status === 'conectada' ? 'Conectada' : balanca.status === 'conectando' ? 'Conectando...' : balanca.status === 'tentando' ? `Tentando...` : balanca.status === 'falha' ? 'Falha' : 'Desconectada'}
+              </Badge>
             </DialogTitle>
             <DialogDescription>
               Leia o peso da balança e calcule o valor.
