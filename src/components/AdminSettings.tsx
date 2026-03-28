@@ -255,8 +255,7 @@ function BalancaConfigSection() {
   }, [config]);
 
   const handleSave = () => {
-    // Save serial config to localStorage
-    saveSerialConfig(serialConfig);
+    // Save main config to DB
     // Save main config to DB
     saveConfig({
       ...config,
