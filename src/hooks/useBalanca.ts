@@ -111,7 +111,7 @@ export function useBalanca() {
 
   useEffect(() => { fetchConfig(); }, [fetchConfig]);
 
-  const saveConfig = useCallback(async (newConfig: BalancaConfig) => {
+  const saveConfig = useCallback(async (newConfig: BalancaConfig, options?: { silent?: boolean }) => {
     try {
       const supabase = await getSupabaseClient();
       const payload = {
@@ -145,12 +145,64 @@ export function useBalanca() {
         if (data) newConfig = { ...newConfig, id: (data as any).id };
       }
       setConfig(newConfig);
-      toast({ title: 'Configuração da balança salva' });
+      if (!options?.silent) {
+        toast({ title: 'Configuração da balança salva' });
+      }
     } catch (err) {
       console.error('Erro saveConfig balança:', err);
       toast({ title: 'Erro ao salvar', description: 'Falha inesperada ao salvar configuração.', variant: 'destructive' });
     }
   }, []);
+
+  const persistConnectedConfig = useCallback(async (patch?: Partial<BalancaConfig>) => {
+    const nextConfig: BalancaConfig = {
+      ...config,
+      ...(patch || {}),
+    };
+    await saveConfig(nextConfig, { silent: true });
+  }, [config, saveConfig]);
+
+  const reconnectSerialFromGrantedPorts = useCallback(async (): Promise<boolean> => {
+    try {
+      if (typeof navigator === 'undefined' || !('serial' in navigator)) return false;
+
+      if (serialPort?.readable) {
+        setStatus('conectada');
+        return true;
+      }
+
+      const ports = await (navigator as any).serial.getPorts();
+      if (!ports?.length) return false;
+
+      const port = ports[0];
+      if (!port.readable) {
+        await port.open({
+          baudRate: serialConfig.baudRate,
+          dataBits: serialConfig.dataBits,
+          stopBits: serialConfig.stopBits,
+          parity: serialConfig.parity,
+        });
+      }
+
+      setSerialPort(port);
+      setStatus('conectada');
+
+      const info = port.getInfo?.();
+      const serialId = info?.usbVendorId && info?.usbProductId
+        ? `${info.usbVendorId}:${info.usbProductId}`
+        : config.dispositivo_id;
+
+      await persistConnectedConfig({
+        tipo_conexao: config.tipo_conexao,
+        dispositivo_nome: config.dispositivo_nome || 'Web Serial',
+        dispositivo_id: serialId || null,
+      });
+      return true;
+    } catch (err) {
+      console.warn('[Balança] Não foi possível reconectar porta serial já autorizada:', err);
+      return false;
+    }
+  }, [serialPort, serialConfig, config.tipo_conexao, config.dispositivo_nome, config.dispositivo_id, persistConnectedConfig]);
 
   // ========== BLUETOOTH CONNECTION ==========
   // Web Bluetooth (BLE/GATT) does NOT work with classic serial scales (SPP/RFCOMM).
@@ -179,24 +231,41 @@ export function useBalanca() {
       console.log('[Balança] Tentando reconectar via AndroidBridge:', address);
       const ok = window.AndroidBridge.connectScale(address, config.baud_rate);
       setStatus(ok ? 'conectada' : 'falha');
+      if (ok) {
+        await persistConnectedConfig({
+          tipo_conexao: config.tipo_conexao,
+          dispositivo_id: address,
+        });
+      }
       return ok;
     }
     return false;
-  }, [isBtConnected, config.dispositivo_id, config.baud_rate]);
+  }, [isBtConnected, config.dispositivo_id, config.baud_rate, config.tipo_conexao, persistConnectedConfig]);
 
-  // Auto-reconnect on mount if BT config exists
+  // Auto-reconnect on mount using saved config
   useEffect(() => {
-    if (!loading && config.tipo_conexao === 'bluetooth' && config.dispositivo_id && !autoConnectAttempted.current) {
+    if (!loading && !autoConnectAttempted.current) {
       autoConnectAttempted.current = true;
-      reconnectSavedDevice().then(ok => {
-        if (ok) {
-          console.log('Balança BT reconectada automaticamente');
-        } else {
-          console.log('Auto-reconexão BT falhou, aguardando ação manual');
-        }
-      });
+
+      if (config.tipo_conexao === 'bluetooth' && config.dispositivo_id) {
+        reconnectSavedDevice().then(ok => {
+          if (ok) {
+            console.log('Balança BT reconectada automaticamente');
+          } else {
+            console.log('Auto-reconexão BT falhou, aguardando ação manual');
+          }
+        });
+      }
+
+      if ((config.tipo_conexao === 'serial' || config.tipo_conexao === 'usb_serial')) {
+        reconnectSerialFromGrantedPorts().then(ok => {
+          if (ok) {
+            console.log('Balança Serial reconectada automaticamente');
+          }
+        });
+      }
     }
-  }, [loading, config.tipo_conexao, config.dispositivo_id, reconnectSavedDevice]);
+  }, [loading, config.tipo_conexao, config.dispositivo_id, reconnectSavedDevice, reconnectSerialFromGrantedPorts]);
 
   // Reconnect with 3 retries, then fallback to new pairing
   const connectBluetoothWithRetries = useCallback(async (): Promise<boolean> => {
@@ -264,6 +333,14 @@ export function useBalanca() {
     const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
     if (hasWebSerial) {
       try {
+        // Close any previously opened granted ports before selecting a new one
+        const grantedPorts = await (navigator as any).serial.getPorts();
+        for (const grantedPort of grantedPorts) {
+          if (grantedPort?.readable) {
+            try { await grantedPort.close(); } catch { /* ignore */ }
+          }
+        }
+
         // Close existing port before opening a new one
         if (serialPort) {
           console.log('[Balança] Fechando porta serial anterior...');
@@ -288,9 +365,17 @@ export function useBalanca() {
 
         setSerialPort(port);
         setStatus('conectada');
+
+        const info = port.getInfo?.();
+        const serialId = info?.usbVendorId && info?.usbProductId
+          ? `${info.usbVendorId}:${info.usbProductId}`
+          : config.dispositivo_id;
+
         const newConfig: BalancaConfig = {
           ...config,
+          tipo_conexao: config.tipo_conexao,
           dispositivo_nome: config.dispositivo_nome || 'Web Serial',
+          dispositivo_id: serialId || null,
         };
         await saveConfig(newConfig);
         toast({ title: 'Balança conectada', description: 'Conectado via Web Serial.' });
@@ -481,18 +566,22 @@ export function useBalanca() {
   }, [config.tipo_conexao, lerPesoSerial, lerPesoAndroid, lerPesoBluetooth, isBtConnected, reconnectSavedDevice]);
 
   const testarConexao = useCallback(async (): Promise<boolean> => {
-    if (config.tipo_conexao === 'bluetooth') {
-      const ok = await connectBluetoothWithRetries();
+    if (config.tipo_conexao === 'bluetooth' || config.tipo_conexao === 'serial' || config.tipo_conexao === 'usb_serial') {
+      const ok = config.tipo_conexao === 'bluetooth'
+        ? await connectBluetoothWithRetries()
+        : await reconnectSerialFromGrantedPorts();
+
       if (!ok) {
-        toast({ title: 'Falha na conexão', description: 'Não foi possível conectar à balança. Tente parear novamente.', variant: 'destructive' });
+        toast({ title: 'Falha na conexão', description: 'Não foi possível conectar à balança. Tente conectar novamente.', variant: 'destructive' });
         return false;
       }
-      // Try reading weight
-      const peso = await lerPesoBluetooth();
+
+      const peso = config.tipo_conexao === 'bluetooth' ? await lerPesoBluetooth() : await lerPesoSerial();
       if (peso !== null) {
         toast({ title: 'Conexão OK', description: `Peso lido: ${peso.toFixed(3)} kg` });
         return true;
       }
+
       toast({ title: 'Conectada', description: 'Balança conectada, mas sem leitura de peso no momento.' });
       return true;
     }
@@ -506,7 +595,49 @@ export function useBalanca() {
     toast({ title: 'Falha na conexão', description: 'Não foi possível ler peso da balança.', variant: 'destructive' });
     setStatus('falha');
     return false;
-  }, [config.tipo_conexao, connectBluetoothWithRetries, lerPesoBluetooth, lerPeso]);
+  }, [config.tipo_conexao, connectBluetoothWithRetries, reconnectSerialFromGrantedPorts, lerPesoBluetooth, lerPesoSerial, lerPeso]);
+
+  const verificarConexaoHeartbeat = useCallback(async (): Promise<boolean> => {
+    if (config.tipo_conexao === 'bluetooth') {
+      const ok = window.IS_ANDROID_APP ? isScaleConnectedAndroid() : isBtConnected();
+      setStatus(ok ? 'conectada' : 'desconectada');
+      return ok;
+    }
+
+    if (config.tipo_conexao === 'serial' || config.tipo_conexao === 'usb_serial') {
+      const ok = await reconnectSerialFromGrantedPorts();
+      if (!ok) setStatus('desconectada');
+      return ok;
+    }
+
+    return false;
+  }, [config.tipo_conexao, isScaleConnectedAndroid, isBtConnected, reconnectSerialFromGrantedPorts]);
+
+  const garantirConexaoComTentativas = useCallback(async (maxTentativas = 3): Promise<boolean> => {
+    const conectado = await verificarConexaoHeartbeat();
+    if (conectado) return true;
+
+    for (let attempt = 1; attempt <= maxTentativas; attempt++) {
+      setStatus('tentando');
+      setTentativa(attempt);
+
+      const ok = config.tipo_conexao === 'bluetooth'
+        ? await reconnectSavedDevice()
+        : await reconnectSerialFromGrantedPorts();
+
+      if (ok) {
+        setTentativa(0);
+        setStatus('conectada');
+        return true;
+      }
+
+      if (attempt < maxTentativas) await new Promise(r => setTimeout(r, 1200));
+    }
+
+    setTentativa(0);
+    setStatus('falha');
+    return false;
+  }, [verificarConexaoHeartbeat, config.tipo_conexao, reconnectSavedDevice, reconnectSerialFromGrantedPorts]);
 
   const buscarDispositivosSerial = useCallback(async (): Promise<string[]> => {
     try {
@@ -554,6 +685,8 @@ export function useBalanca() {
     conectarDispositivo,
     connectBluetoothWithRetries,
     isBtConnected,
+    verificarConexaoHeartbeat,
+    garantirConexaoComTentativas,
     // Android Bridge scale
     conectarBalancaAndroid,
     desconectarBalancaAndroid,
