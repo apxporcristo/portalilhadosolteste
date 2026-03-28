@@ -229,7 +229,7 @@ function BalancaConfigSection() {
   const {
     config, saveConfig, testarConexao, loading, status, tentativa,
     parearNovoDispositivo, listarDispositivosPareados, conectarDispositivo, disconnect,
-    serialConfig, updateSerialConfig
+    serialConfig, updateSerialConfig, verificarConexaoHeartbeat
   } = useBalanca();
 
   const [form, setForm] = useState({
@@ -253,6 +253,19 @@ function BalancaConfigSection() {
       valor_peso: config.valor_peso || 0,
     });
   }, [config]);
+
+  useEffect(() => {
+    verificarConexaoHeartbeat();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        verificarConexaoHeartbeat();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [verificarConexaoHeartbeat]);
 
   const handleSave = () => {
     // Save main config to DB

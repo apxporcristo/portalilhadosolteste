@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save, FileText, Settings2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -66,7 +66,7 @@ export default function FichasLista() {
   const { getFreVouchersBatch, markVouchersPreReservado, stats: voucherStats } = useVouchers();
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const balanca = useBalanca();
-  const { lerPeso } = balanca;
+  const { lerPeso, verificarConexaoHeartbeat, garantirConexaoComTentativas, parearNovoDispositivo } = balanca;
   const [search, setSearch] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -75,6 +75,8 @@ export default function FichasLista() {
   const [showPesoModal, setShowPesoModal] = useState(false);
   const [pesoManual, setPesoManual] = useState('');
   const [pendingPesoFicha, setPendingPesoFicha] = useState<{ ficha: FichaAtiva; selectedItems: SelectedItem[] } | null>(null);
+  const [autoConnectingBalanca, setAutoConnectingBalanca] = useState(false);
+  const [showManualConnectButton, setShowManualConnectButton] = useState(false);
 
   // Lançar na comanda
   const [showComandaModal, setShowComandaModal] = useState(false);
@@ -216,8 +218,39 @@ export default function FichasLista() {
   const handlePesoProduct = async (ficha: FichaAtiva, selectedItems: SelectedItem[]) => {
     setPendingPesoFicha({ ficha, selectedItems });
     setPesoManual('');
+    setShowManualConnectButton(false);
     setShowPesoModal(true);
   };
+
+  useEffect(() => {
+    if (!showPesoModal) return;
+
+    let active = true;
+    const autoConnectScale = async () => {
+      setAutoConnectingBalanca(true);
+      setShowManualConnectButton(false);
+
+      const heartbeatOk = await verificarConexaoHeartbeat();
+      if (!active) return;
+
+      if (heartbeatOk) {
+        setAutoConnectingBalanca(false);
+        return;
+      }
+
+      const connectedOk = await garantirConexaoComTentativas(3);
+      if (!active) return;
+
+      setAutoConnectingBalanca(false);
+      setShowManualConnectButton(!connectedOk);
+    };
+
+    autoConnectScale();
+
+    return () => {
+      active = false;
+    };
+  }, [showPesoModal, verificarConexaoHeartbeat, garantirConexaoComTentativas]);
 
   const handleConfirmPesoManual = () => {
     if (!pendingPesoFicha) return;
@@ -948,8 +981,20 @@ export default function FichasLista() {
           </DialogHeader>
           <div className="space-y-4">
             {/* Connect/Disconnect buttons */}
-            {!balanca.connected && (
-              <Button onClick={() => balanca.parearNovoDispositivo()} className="w-full" variant="outline">
+            {!balanca.connected && autoConnectingBalanca && (
+              <div className="w-full rounded-md border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Tentando conectar automaticamente...
+              </div>
+            )}
+
+            {!balanca.connected && !autoConnectingBalanca && showManualConnectButton && (
+              <Button onClick={async () => {
+                setAutoConnectingBalanca(true);
+                const ok = await parearNovoDispositivo();
+                setAutoConnectingBalanca(false);
+                setShowManualConnectButton(!ok);
+              }} className="w-full" variant="outline">
                 <Scale className="h-4 w-4 mr-2" />
                 Conectar balança
               </Button>
