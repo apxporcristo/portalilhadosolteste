@@ -248,11 +248,11 @@ export function PagamentoDialog({
         </div>
 
         {/* Pix Voucher Generation */}
-        {showVoucherButton && (
+        {showVoucherButton && !showTempoSelection && (
           <Button
             variant="outline"
             className="w-full border-primary/50 text-primary"
-            onClick={handleGenerateVoucher}
+            onClick={handleVoucherClick}
             disabled={generatingVoucher}
           >
             {generatingVoucher ? (
@@ -261,6 +261,36 @@ export function PagamentoDialog({
               <><Ticket className="h-4 w-4 mr-2" /> Gerar voucher{voucherPix?.voucherTempo ? ` (${voucherPix.voucherTempo})` : ''}</>
             )}
           </Button>
+        )}
+
+        {/* Tempo Selection */}
+        {showTempoSelection && voucherPix && (
+          <div className="border rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm">Selecione o tempo do voucher</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(voucherPix.availableTempos || []).filter(t => (voucherPix.availableByTempo[t] || 0) > 0).map(tempo => (
+                <Button
+                  key={tempo}
+                  variant="outline"
+                  className="flex flex-col h-auto py-3"
+                  onClick={() => handleGenerateVoucher(tempo)}
+                  disabled={generatingVoucher}
+                >
+                  <span className="font-semibold">{tempo}</span>
+                  <span className="text-xs text-muted-foreground">{voucherPix.availableByTempo[tempo] || 0} disponíveis</span>
+                </Button>
+              ))}
+            </div>
+            {(voucherPix.availableTempos || []).filter(t => (voucherPix.availableByTempo[t] || 0) > 0).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center">Nenhum voucher disponível no momento.</p>
+            )}
+            <Button variant="ghost" size="sm" className="w-full" onClick={() => setShowTempoSelection(false)}>
+              Cancelar
+            </Button>
+          </div>
         )}
 
         {/* Generated Voucher Display */}
