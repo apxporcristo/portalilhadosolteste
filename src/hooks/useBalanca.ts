@@ -312,7 +312,7 @@ export function useBalanca() {
       });
     }
     return false;
-  }, [config, saveConfig, listarDispositivosPareadosAndroid]);
+  }, [config, serialConfig, saveConfig, listarDispositivosPareadosAndroid]);
 
   // List previously paired BT devices (only via Android Bridge)
   const listarDispositivosPareados = useCallback(async (): Promise<Array<{ id: string; name: string; device: any }>> => {
