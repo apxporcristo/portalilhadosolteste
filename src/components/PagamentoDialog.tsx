@@ -55,6 +55,7 @@ export function PagamentoDialog({
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [generatingVoucher, setGeneratingVoucher] = useState(false);
   const [generatedVoucher, setGeneratedVoucher] = useState<{ voucher_id: string; tempo_validade: string } | null>(null);
+  const [showTempoSelection, setShowTempoSelection] = useState(false);
 
   const resetState = () => {
     setSelected({});
