@@ -1,82 +1,100 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  isWebSerialSupported,
-  connectScale,
-  disconnectScale,
-  isConnected,
-  readWeightOnce,
-  startWeightStream,
-  stopWeightStream,
-  loadSerialPrefs,
-  saveSerialPrefs,
-  type SerialConfig,
-  type ScaleStatus,
-  SERIAL_DEFAULTS,
+  scaleSerialService,
+  type ScaleSerialConfig,
+  type ScaleSerialStatus,
 } from '@/services/scaleSerial';
 
+const STORAGE_KEY = 'scale_serial_config';
+
+function loadConfig(): Partial<ScaleSerialConfig> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return {};
+}
+
+function saveConfig(config: ScaleSerialConfig): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  } catch { /* ignore */ }
+}
+
 export function useScaleSerial() {
-  const [supported] = useState(() => isWebSerialSupported());
-  const [connected, setConnected] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [reading, setReading] = useState(false);
+  const supported = useMemo(() => scaleSerialService.isSupported(), []);
+  const [status, setStatus] = useState<ScaleSerialStatus>('disconnected');
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
   const [rawData, setRawData] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [autoRead, setAutoRead] = useState(false);
-  const [serialConfig] = useState<SerialConfig>(() => loadSerialPrefs().config);
+  const [config, setConfigState] = useState<ScaleSerialConfig>(() => {
+    const saved = loadConfig();
+    const defaults = scaleSerialService.getDefaultConfig();
+    return { ...defaults, ...saved };
+  });
   const autoReadRef = useRef(false);
 
-  // Load saved auto-read preference
+  const connected = status === 'connected' || status === 'reading';
+  const connecting = status === 'connecting';
+  const reading = status === 'reading';
+
+  // Apply config to service on change
   useEffect(() => {
-    const prefs = loadSerialPrefs();
-    setAutoRead(prefs.autoRead);
-    autoReadRef.current = prefs.autoRead;
+    scaleSerialService.setConfig(config);
+  }, [config]);
+
+  const setConfig = useCallback((partial: Partial<ScaleSerialConfig>) => {
+    setConfigState(prev => {
+      const next = { ...prev, ...partial };
+      saveConfig(next);
+      return next;
+    });
   }, []);
 
   const connect = useCallback(async () => {
     setError(null);
-    setConnecting(true);
+    setStatus('connecting');
     try {
-      await connectScale(serialConfig);
-      setConnected(true);
-      setConnecting(false);
+      await scaleSerialService.connect(config);
+      setStatus('connected');
     } catch (err: any) {
       const msg = err?.message || 'Falha ao conectar';
       if (msg.includes('No port selected') || msg.includes('cancelled')) {
-        setError('Seleção de porta cancelada pelo usuário.');
+        setError('Usuário cancelou a seleção da porta.');
       } else if (msg.includes('suportado')) {
         setError(msg);
       } else {
-        setError(`Falha ao conectar: ${msg}`);
+        setError(`Falha ao abrir a porta serial: ${msg}`);
       }
-      setConnected(false);
-      setConnecting(false);
+      setStatus('disconnected');
     }
-  }, [serialConfig]);
+  }, [config]);
 
   const disconnect = useCallback(async () => {
-    stopWeightStream();
-    await disconnectScale();
-    setConnected(false);
-    setReading(false);
+    scaleSerialService.stopWeightStream();
+    await scaleSerialService.disconnect();
+    setStatus('disconnected');
+    setAutoRead(false);
+    autoReadRef.current = false;
     setCurrentWeight(null);
     setRawData('');
     setError(null);
   }, []);
 
   const refreshWeight = useCallback(async () => {
-    if (!isConnected()) {
+    if (!scaleSerialService.isConnected()) {
       setError('Balança não conectada.');
       return;
     }
     setError(null);
     try {
-      const result = await readWeightOnce();
+      const result = await scaleSerialService.readWeightOnce();
       if (result) {
-        setCurrentWeight(result.kg);
-        setRawData(result.raw);
+        setCurrentWeight(result.weightKg);
+        setRawData(result.rawData);
       } else {
-        setError('Nenhum peso válido recebido.');
+        setError('Conectado, mas sem dados válidos de peso.');
       }
     } catch (err: any) {
       setError(err?.message || 'Erro ao ler peso.');
@@ -84,41 +102,32 @@ export function useScaleSerial() {
   }, []);
 
   const startAutoRead = useCallback(() => {
-    if (!isConnected()) return;
+    if (!scaleSerialService.isConnected()) return;
     autoReadRef.current = true;
     setAutoRead(true);
-    setReading(true);
-    saveSerialPrefs(true, serialConfig);
 
-    startWeightStream(
-      (kg) => setCurrentWeight(kg),
-      (status: ScaleStatus) => {
-        if (status === 'error') {
-          setReading(false);
-          setError('Conexão com a balança perdida.');
-          setConnected(false);
-        } else if (status === 'connected') {
-          setReading(false);
-        } else if (status === 'reading') {
-          setReading(true);
+    scaleSerialService.startWeightStream({
+      onWeight: (kg) => setCurrentWeight(kg),
+      onStatus: (s: ScaleSerialStatus) => {
+        setStatus(s);
+        if (s === 'error') {
+          setError('Conexão perdida com a balança.');
         }
       },
-      (raw) => setRawData(raw),
-    );
-  }, [serialConfig]);
+      onRawData: (raw) => setRawData(raw),
+    });
+  }, []);
 
   const stopAutoRead = useCallback(() => {
     autoReadRef.current = false;
     setAutoRead(false);
-    setReading(false);
-    saveSerialPrefs(false, serialConfig);
-    stopWeightStream();
-  }, [serialConfig]);
+    scaleSerialService.stopWeightStream();
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopWeightStream();
+      scaleSerialService.stopWeightStream();
     };
   }, []);
 
@@ -127,10 +136,13 @@ export function useScaleSerial() {
     connected,
     connecting,
     reading,
+    status,
     currentWeight,
     rawData,
     error,
     autoRead,
+    config,
+    setConfig,
     connect,
     disconnect,
     refreshWeight,
