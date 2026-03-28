@@ -255,12 +255,14 @@ function BalancaConfigSection() {
   }, [config]);
 
   const handleSave = () => {
+    // Save main config to DB
+    // Save main config to DB
     saveConfig({
       ...config,
       tipo_conexao: form.tipo_conexao as BalancaConfig['tipo_conexao'],
       dispositivo_nome: form.dispositivo_nome || null,
       porta_serial: form.porta_serial || null,
-      baud_rate: form.baud_rate,
+      baud_rate: serialConfig.baudRate,
       valor_peso: form.valor_peso,
     });
   };
@@ -318,13 +320,11 @@ function BalancaConfigSection() {
           <Scale className="h-4 w-4 text-primary" />
           Configuração da Balança (Toledo Prix 3)
         </div>
-        {config.tipo_conexao === 'bluetooth' && (
-          <Badge variant={sl.variant}>{sl.text}</Badge>
-        )}
+        <Badge variant={sl.variant}>{sl.text}</Badge>
       </div>
 
       {/* Dispositivo salvo */}
-      {config.dispositivo_nome && config.tipo_conexao === 'bluetooth' && (
+      {config.dispositivo_nome && (
         <div className="p-2 border rounded-md bg-muted/50 text-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Bluetooth className="h-4 w-4 text-primary" />
@@ -437,7 +437,7 @@ function BalancaConfigSection() {
         )}
 
         {/* Botão parear novamente após falha */}
-        {status === 'falha' && form.tipo_conexao === 'bluetooth' && (
+        {status === 'falha' && (
           <div className="p-3 border border-destructive/30 rounded-md bg-destructive/5">
             <p className="text-sm text-destructive mb-2">Não foi possível conectar após 3 tentativas.</p>
             <Button variant="outline" onClick={handleParear} disabled={pairing}>
