@@ -204,6 +204,13 @@ export function useBalanca() {
     }
   }, [serialPort, serialConfig, config.tipo_conexao, config.dispositivo_nome, config.dispositivo_id, persistConnectedConfig]);
 
+  const canUseWebSerialForBluetooth = useCallback((): boolean => {
+    return config.tipo_conexao === 'bluetooth'
+      && !window.IS_ANDROID_APP
+      && typeof navigator !== 'undefined'
+      && 'serial' in navigator;
+  }, [config.tipo_conexao]);
+
   // ========== BLUETOOTH CONNECTION ==========
   // Web Bluetooth (BLE/GATT) does NOT work with classic serial scales (SPP/RFCOMM).
   // Scales like Toledo Prix 3 use Bluetooth Classic, which Chrome/Web Bluetooth cannot access.
@@ -220,6 +227,10 @@ export function useBalanca() {
 
   // Try to reconnect via Android Bridge
   const reconnectSavedDevice = useCallback(async (): Promise<boolean> => {
+    if (canUseWebSerialForBluetooth()) {
+      return reconnectSerialFromGrantedPorts();
+    }
+
     if (isBtConnected()) {
       setStatus('conectada');
       return true;
@@ -240,7 +251,7 @@ export function useBalanca() {
       return ok;
     }
     return false;
-  }, [isBtConnected, config.dispositivo_id, config.baud_rate, config.tipo_conexao, persistConnectedConfig]);
+  }, [canUseWebSerialForBluetooth, reconnectSerialFromGrantedPorts, isBtConnected, config.dispositivo_id, config.baud_rate, config.tipo_conexao, persistConnectedConfig]);
 
   // Auto-reconnect on mount using saved config
   useEffect(() => {
@@ -269,6 +280,22 @@ export function useBalanca() {
 
   // Reconnect with 3 retries, then fallback to new pairing
   const connectBluetoothWithRetries = useCallback(async (): Promise<boolean> => {
+    if (canUseWebSerialForBluetooth()) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        setStatus('tentando');
+        setTentativa(attempt);
+        const ok = await reconnectSerialFromGrantedPorts();
+        if (ok) {
+          setTentativa(0);
+          return true;
+        }
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1500));
+      }
+      setTentativa(0);
+      setStatus('falha');
+      return false;
+    }
+
     // Already connected?
     if (isBtConnected()) {
       setStatus('conectada');
@@ -290,7 +317,7 @@ export function useBalanca() {
     setTentativa(0);
     setStatus('falha');
     return false;
-  }, [isBtConnected, reconnectSavedDevice]);
+  }, [canUseWebSerialForBluetooth, reconnectSerialFromGrantedPorts, isBtConnected, reconnectSavedDevice]);
 
   const listarDispositivosPareadosAndroid = useCallback((): Array<{ name: string; address: string }> => {
     try {
@@ -565,8 +592,10 @@ export function useBalanca() {
           }
           const pesoBt = await lerPesoBluetooth();
           if (pesoBt !== null && pesoBt > 0) return pesoBt;
+        } else if (canUseWebSerialForBluetooth()) {
+          const pesoSerial = await lerPesoSerial();
+          if (pesoSerial !== null && pesoSerial > 0) return pesoSerial;
         }
-        // In browser, skip Web Bluetooth entirely - it won't work for scales
       }
 
       if (attempt < retries) await new Promise(r => setTimeout(r, 1000));
@@ -585,12 +614,14 @@ export function useBalanca() {
     }
 
     return null;
-  }, [config.tipo_conexao, lerPesoSerial, lerPesoAndroid, lerPesoBluetooth, isBtConnected, reconnectSavedDevice]);
+  }, [config.tipo_conexao, canUseWebSerialForBluetooth, lerPesoSerial, lerPesoAndroid, lerPesoBluetooth, isBtConnected, reconnectSavedDevice]);
 
   const testarConexao = useCallback(async (): Promise<boolean> => {
     if (config.tipo_conexao === 'bluetooth' || config.tipo_conexao === 'serial' || config.tipo_conexao === 'usb_serial') {
+      const bluetoothViaWebSerial = config.tipo_conexao === 'bluetooth' && canUseWebSerialForBluetooth();
+
       const ok = config.tipo_conexao === 'bluetooth'
-        ? await connectBluetoothWithRetries()
+        ? (bluetoothViaWebSerial ? await reconnectSerialFromGrantedPorts() : await connectBluetoothWithRetries())
         : await reconnectSerialFromGrantedPorts();
 
       if (!ok) {
@@ -598,7 +629,9 @@ export function useBalanca() {
         return false;
       }
 
-      const peso = config.tipo_conexao === 'bluetooth' ? await lerPesoBluetooth() : await lerPesoSerial();
+      const peso = config.tipo_conexao === 'bluetooth'
+        ? (bluetoothViaWebSerial ? await lerPesoSerial() : await lerPesoBluetooth())
+        : await lerPesoSerial();
       if (peso !== null) {
         toast({ title: 'Conexão OK', description: `Peso lido: ${peso.toFixed(3)} kg` });
         return true;
@@ -617,11 +650,13 @@ export function useBalanca() {
     toast({ title: 'Falha na conexão', description: 'Não foi possível ler peso da balança.', variant: 'destructive' });
     setStatus('falha');
     return false;
-  }, [config.tipo_conexao, connectBluetoothWithRetries, reconnectSerialFromGrantedPorts, lerPesoBluetooth, lerPesoSerial, lerPeso]);
+  }, [config.tipo_conexao, canUseWebSerialForBluetooth, connectBluetoothWithRetries, reconnectSerialFromGrantedPorts, lerPesoBluetooth, lerPesoSerial, lerPeso]);
 
   const verificarConexaoHeartbeat = useCallback(async (): Promise<boolean> => {
     if (config.tipo_conexao === 'bluetooth') {
-      const ok = window.IS_ANDROID_APP ? isScaleConnectedAndroid() : isBtConnected();
+      const ok = window.IS_ANDROID_APP
+        ? isScaleConnectedAndroid()
+        : (canUseWebSerialForBluetooth() ? await reconnectSerialFromGrantedPorts() : isBtConnected());
       setStatus(ok ? 'conectada' : 'desconectada');
       return ok;
     }
@@ -633,7 +668,7 @@ export function useBalanca() {
     }
 
     return false;
-  }, [config.tipo_conexao, isScaleConnectedAndroid, isBtConnected, reconnectSerialFromGrantedPorts]);
+  }, [config.tipo_conexao, canUseWebSerialForBluetooth, isScaleConnectedAndroid, isBtConnected, reconnectSerialFromGrantedPorts]);
 
   const garantirConexaoComTentativas = useCallback(async (maxTentativas = 3): Promise<boolean> => {
     const conectado = await verificarConexaoHeartbeat();
@@ -644,7 +679,7 @@ export function useBalanca() {
       setTentativa(attempt);
 
       const ok = config.tipo_conexao === 'bluetooth'
-        ? await reconnectSavedDevice()
+        ? (canUseWebSerialForBluetooth() ? await reconnectSerialFromGrantedPorts() : await reconnectSavedDevice())
         : await reconnectSerialFromGrantedPorts();
 
       if (ok) {
@@ -659,7 +694,7 @@ export function useBalanca() {
     setTentativa(0);
     setStatus('falha');
     return false;
-  }, [verificarConexaoHeartbeat, config.tipo_conexao, reconnectSavedDevice, reconnectSerialFromGrantedPorts]);
+  }, [verificarConexaoHeartbeat, config.tipo_conexao, canUseWebSerialForBluetooth, reconnectSavedDevice, reconnectSerialFromGrantedPorts]);
 
   const buscarDispositivosSerial = useCallback(async (): Promise<string[]> => {
     try {
