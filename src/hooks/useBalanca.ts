@@ -332,24 +332,31 @@ export function useBalanca() {
     // Try Web Serial API (Chrome Android 89+)
     const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
     if (hasWebSerial) {
+      let port: any = null;
       try {
-        // Close any previously opened granted ports before selecting a new one
-        const grantedPorts = await (navigator as any).serial.getPorts();
-        for (const grantedPort of grantedPorts) {
-          if (grantedPort?.readable) {
-            try { await grantedPort.close(); } catch { /* ignore */ }
+        // Close ALL previously opened ports (granted + state) before selecting a new one
+        try {
+          const grantedPorts = await (navigator as any).serial.getPorts();
+          for (const gp of grantedPorts) {
+            try {
+              if (gp?.readable) {
+                const reader = gp.readable.getReader();
+                await reader.cancel().catch(() => {});
+                reader.releaseLock();
+              }
+              if (gp?.writable) {
+                const writer = gp.writable.getWriter();
+                await writer.close().catch(() => {});
+                writer.releaseLock();
+              }
+              await gp.close();
+            } catch { /* ignore individual port close errors */ }
           }
-        }
-
-        // Close existing port before opening a new one
-        if (serialPort) {
-          console.log('[Balança] Fechando porta serial anterior...');
-          try { await serialPort.close(); } catch { /* ignore */ }
-          setSerialPort(null);
-        }
+        } catch { /* ignore */ }
+        if (serialPort) setSerialPort(null);
 
         console.log('[Balança] Solicitando porta serial...');
-        const port = await (navigator as any).serial.requestPort();
+        port = await (navigator as any).serial.requestPort();
         console.log('[Balança] Porta selecionada, info:', port.getInfo?.() || 'N/A');
 
         const openOpts = {
@@ -362,7 +369,16 @@ export function useBalanca() {
 
         await port.open(openOpts);
         console.log('[Balança] Porta aberta com sucesso');
+      } catch (openErr: any) {
+        // If port is already open (e.g. reselected same port), try using it directly
+        if (port && (openErr?.message?.includes('already open') || port?.readable)) {
+          console.log('[Balança] Porta já estava aberta, reutilizando...');
+        } else {
+          throw openErr;
+        }
+      }
 
+      try {
         setSerialPort(port);
         setStatus('conectada');
 
@@ -385,10 +401,16 @@ export function useBalanca() {
         console.error('[Balança] Web Serial erro name:', err?.name, 'message:', err?.message);
         if (err?.name === 'NotFoundError') {
           toast({ title: 'Nenhuma porta selecionada', description: 'Usuário cancelou a seleção da porta.', variant: 'destructive' });
+        } else if (err?.message?.includes('already open')) {
+          toast({
+            title: 'Porta já em uso',
+            description: 'Feche outras abas que possam estar usando a balança e tente novamente.',
+            variant: 'destructive',
+          });
         } else {
           toast({
             title: 'Falha ao abrir a porta serial',
-            description: 'Verifique se a balança está livre, pareada e com configuração serial correta.',
+            description: `${err?.message || 'Verifique se a balança está livre, pareada e com configuração serial correta.'}`,
             variant: 'destructive',
           });
         }
