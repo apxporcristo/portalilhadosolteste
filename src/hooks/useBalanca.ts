@@ -264,8 +264,21 @@ export function useBalanca() {
     const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
     if (hasWebSerial) {
       try {
+        console.log('[Balança] Solicitando porta serial...');
         const port = await (navigator as any).serial.requestPort();
-        await port.open({ baudRate: config.baud_rate || 9600 });
+        console.log('[Balança] Porta selecionada, info:', port.getInfo?.() || 'N/A');
+
+        const openOpts = {
+          baudRate: serialConfig.baudRate,
+          dataBits: serialConfig.dataBits,
+          stopBits: serialConfig.stopBits,
+          parity: serialConfig.parity,
+        };
+        console.log('[Balança] Abrindo porta com config:', JSON.stringify(openOpts));
+
+        await port.open(openOpts);
+        console.log('[Balança] Porta aberta com sucesso');
+
         setSerialPort(port);
         setStatus('conectada');
         const newConfig: BalancaConfig = {
@@ -277,11 +290,16 @@ export function useBalanca() {
         toast({ title: 'Balança conectada', description: 'Conectado via Web Serial.' });
         return true;
       } catch (err: any) {
-        console.error('[Balança] Web Serial pairing error:', err);
+        console.error('[Balança] Web Serial erro bruto:', err);
+        console.error('[Balança] Web Serial erro name:', err?.name, 'message:', err?.message);
         if (err?.name === 'NotFoundError') {
           toast({ title: 'Nenhuma porta selecionada', description: 'Usuário cancelou a seleção da porta.', variant: 'destructive' });
         } else {
-          toast({ title: 'Falha ao conectar', description: err?.message || 'Falha ao abrir a porta serial.', variant: 'destructive' });
+          toast({
+            title: 'Falha ao abrir a porta serial',
+            description: 'Verifique se a balança está livre, pareada e com configuração serial correta.',
+            variant: 'destructive',
+          });
         }
         setStatus('falha');
         return false;
