@@ -357,17 +357,6 @@ function BalancaConfigSection() {
           <Label className="text-sm">Baud Rate</Label>
           <Input type="number" value={form.baud_rate} onChange={e => setForm(f => ({ ...f, baud_rate: parseInt(e.target.value) || 9600 }))} />
         </div>
-        <div>
-          <Label className="text-sm">Valor por peso (R$)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            value={form.valor_peso}
-            onChange={e => setForm(f => ({ ...f, valor_peso: parseFloat(e.target.value) || 0 }))}
-            placeholder="Ex: 89.90"
-          />
-          <p className="text-xs text-muted-foreground mt-1">Valor cobrado por kg no Serve Service</p>
-        </div>
         <div className="flex gap-2 flex-wrap">
           <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Salvar</Button>
           <Button variant="outline" onClick={handleTest} disabled={testing}>
