@@ -1000,16 +1000,6 @@ export default function FichasLista() {
               </Button>
             )}
 
-            {balanca.connected && (
-              <div className="flex gap-2">
-                <Button onClick={async () => {
-                  await balanca.disconnect();
-                  toast({ title: 'Balança desconectada' });
-                }} variant="outline" size="sm">
-                  Desconectar
-                </Button>
-              </div>
-            )}
 
             {balanca.connected && (
               <Button onClick={async () => {
