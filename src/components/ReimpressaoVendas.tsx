@@ -238,7 +238,7 @@ export function ReimpressaoVendas() {
       </Card>
 
       {/* Detalhes da venda para reimpressão */}
-      <Dialog open={!!selectedVenda} onOpenChange={(open) => { if (!open) setSelectedVenda(null); }}>
+      <Dialog open={!!selectedVenda} onOpenChange={(open) => { if (!open) { setSelectedVenda(null); setSelectedItemIds(new Set()); } }}>
         <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -259,8 +259,20 @@ export function ReimpressaoVendas() {
                 {selectedVenda.items.map(item => {
                   const produto = produtos.find(p => p.id === item.produto_id);
                   const isPrintable = (produto as any)?.imprimir_ficha !== false;
+                  const isSelected = selectedItemIds.has(item.id);
                   return (
-                    <div key={item.id} className="flex items-center justify-between p-3">
+                    <label key={item.id} className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          setSelectedItemIds(prev => {
+                            const next = new Set(prev);
+                            if (checked) next.add(item.id);
+                            else next.delete(item.id);
+                            return next;
+                          });
+                        }}
+                      />
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium">{item.produto_nome}</span>
                         <div className="flex items-center gap-2 mt-0.5">
@@ -269,7 +281,7 @@ export function ReimpressaoVendas() {
                         </div>
                       </div>
                       <span className="text-sm font-bold text-primary">R$ {Number(item.valor_total).toFixed(2).replace('.', ',')}</span>
-                    </div>
+                    </label>
                   );
                 })}
               </div>
@@ -285,20 +297,22 @@ export function ReimpressaoVendas() {
             <Button
               variant="outline"
               className="w-full sm:w-auto"
-              onClick={() => selectedVenda && handleReprint(selectedVenda, false)}
+              onClick={() => selectedVenda && handleReprint(selectedVenda, 'all')}
               disabled={printing}
             >
               <FileText className="h-4 w-4 mr-2" />
               {printing ? 'Imprimindo...' : 'Reimprimir tudo (conferência)'}
             </Button>
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => selectedVenda && handleReprint(selectedVenda, true)}
-              disabled={printing}
-            >
-              <Printer className="h-4 w-4 mr-2" />
-              {printing ? 'Imprimindo...' : 'Reimprimir fichas'}
-            </Button>
+            {selectedItemIds.size > 0 && (
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => selectedVenda && handleReprint(selectedVenda, 'selected')}
+                disabled={printing}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                {printing ? 'Imprimindo...' : `Reimprimir fichas (${selectedItemIds.size})`}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
