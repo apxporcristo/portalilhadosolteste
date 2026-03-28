@@ -255,12 +255,15 @@ function BalancaConfigSection() {
   }, [config]);
 
   const handleSave = () => {
+    // Save serial config to localStorage
+    saveSerialConfig(serialConfig);
+    // Save main config to DB
     saveConfig({
       ...config,
       tipo_conexao: form.tipo_conexao as BalancaConfig['tipo_conexao'],
       dispositivo_nome: form.dispositivo_nome || null,
       porta_serial: form.porta_serial || null,
-      baud_rate: form.baud_rate,
+      baud_rate: serialConfig.baudRate,
       valor_peso: form.valor_peso,
     });
   };
