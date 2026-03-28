@@ -862,11 +862,14 @@ export function useBalanca() {
 
   return {
     config,
+    allConfigs,
     loading,
     connected,
     status,
     tentativa,
     saveConfig,
+    deleteBalancaConfig,
+    activateConfig,
     lerPeso,
     testarConexao,
     buscarDispositivosSerial,
