@@ -62,7 +62,7 @@ export default function FichasLista() {
   const userSession = useOptionalUserSession();
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
-  const { getFreVouchersBatch, markVouchersPreReservado } = useVouchers();
+  const { getFreVouchersBatch, markVouchersPreReservado, stats: voucherStats } = useVouchers();
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const balanca = useBalanca();
   const { lerPeso } = balanca;
@@ -111,25 +111,20 @@ export default function FichasLista() {
   const voucherTempo = userAccess?.voucher_tempo_acesso || null;
 
   const handleGeneratePixVoucher = async (tempo: string | null): Promise<{ voucher_id: string; tempo_validade: string } | null> => {
-    // Get a free voucher matching the user's allowed tempo
-    const tempoToUse = tempo || null;
-    const items = tempoToUse ? [{ tempo: tempoToUse, quantity: 1 }] : [];
-    
-    if (tempoToUse) {
-      const batch = getFreVouchersBatch(items);
-      if (batch.length === 0) {
-        toast({ title: 'Sem voucher disponível', description: `Não há voucher de ${tempoToUse} disponível no momento.`, variant: 'destructive' });
-        return null;
-      }
-      const voucher = batch[0];
-      const success = await markVouchersPreReservado([voucher.voucher_id]);
-      if (!success) return null;
-      return { voucher_id: voucher.voucher_id, tempo_validade: voucher.tempo_validade };
-    } else {
-      // User has access to all tempos - shouldn't happen without specific tempo, show error
-      toast({ title: 'Tempo não definido', description: 'Configure o tempo de voucher para este usuário.', variant: 'destructive' });
+    const tempoToUse = tempo;
+    if (!tempoToUse) {
+      toast({ title: 'Tempo não definido', description: 'Selecione um tempo de voucher.', variant: 'destructive' });
       return null;
     }
+    const batch = getFreVouchersBatch([{ tempo: tempoToUse, quantity: 1 }]);
+    if (batch.length === 0) {
+      toast({ title: 'Sem voucher disponível', description: `Não há voucher de ${tempoToUse} disponível no momento.`, variant: 'destructive' });
+      return null;
+    }
+    const voucher = batch[0];
+    const success = await markVouchersPreReservado([voucher.voucher_id]);
+    if (!success) return null;
+    return { voucher_id: voucher.voucher_id, tempo_validade: voucher.tempo_validade };
   };
 
   // Dynamic fields dialog
@@ -919,16 +914,14 @@ export default function FichasLista() {
           setShowPagamentoModal(false);
           handleSaveOnly();
         }}
-        voucherPix={canGenerateVoucher && voucherTempo ? {
+        voucherPix={canGenerateVoucher ? {
           canGenerateVoucher: true,
           voucherTempo,
+          availableTempos: voucherStats.temposDisponiveis,
+          availableByTempo: voucherStats.livresPorTempo,
           onGenerateVoucher: handleGeneratePixVoucher,
         } : undefined}
       >
-        <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); handleInitConferencePrint(); }} disabled={totalItems === 0 || printing}>
-          <FileText className="h-5 w-5 mr-2" />
-          Imprimir tudo para conferência
-        </Button>
         {comandasAbertas.length > 0 && (
           <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setComandaSearch(''); setShowComandaModal(true); }} disabled={totalItems === 0}>
             <ClipboardList className="h-5 w-5 mr-2" />
