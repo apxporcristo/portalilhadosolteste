@@ -2,22 +2,43 @@
  * Web Serial API service for reading weight from Bluetooth serial scales.
  * Works on Chrome Android 89+ with Web Serial support.
  *
- * To change baudRate or parser behavior, edit SERIAL_DEFAULTS or parseWeightFromLine().
+ * To change baudRate or parser behavior, edit DEFAULT_CONFIG or parseWeightFromRaw().
  */
 
-export interface SerialConfig {
+// ─── Types ──────────────────────────────────────────────────────────
+
+export type SerialParity = 'none' | 'even' | 'odd';
+
+export interface ScaleSerialConfig {
   baudRate: number;
   dataBits: 7 | 8;
   stopBits: 1 | 2;
-  parity: 'none' | 'even' | 'odd';
+  parity: SerialParity;
   bufferSize: number;
 }
 
-export type ScaleStatus = 'disconnected' | 'connecting' | 'connected' | 'reading' | 'error';
+export interface ParsedWeightResult {
+  weightKg: number;
+  rawData: string;
+  normalized: string;
+}
 
-const STORAGE_KEY = 'scaleSerial_prefs';
+export interface StartWeightStreamHandlers {
+  onWeight: (kg: number) => void;
+  onStatus: (status: ScaleSerialStatus) => void;
+  onRawData?: (raw: string) => void;
+}
 
-export const SERIAL_DEFAULTS: SerialConfig = {
+export type ScaleSerialStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'reading'
+  | 'error';
+
+// ─── Defaults ───────────────────────────────────────────────────────
+
+const DEFAULT_CONFIG: ScaleSerialConfig = {
   baudRate: 115200,
   dataBits: 8,
   stopBits: 1,
@@ -25,213 +46,240 @@ export const SERIAL_DEFAULTS: SerialConfig = {
   bufferSize: 4096,
 };
 
-// ─── Persistence ────────────────────────────────────────────────────
-export function loadSerialPrefs(): { autoRead: boolean; config: SerialConfig } {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        autoRead: !!parsed.autoRead,
-        config: { ...SERIAL_DEFAULTS, ...parsed.config },
-      };
-    }
-  } catch { /* ignore */ }
-  return { autoRead: false, config: { ...SERIAL_DEFAULTS } };
-}
-
-export function saveSerialPrefs(autoRead: boolean, config: SerialConfig) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ autoRead, config }));
-  } catch { /* ignore */ }
-}
-
-// ─── Support check ──────────────────────────────────────────────────
-export function isWebSerialSupported(): boolean {
-  return typeof navigator !== 'undefined' && 'serial' in navigator;
-}
-
 // ─── Weight Parser ──────────────────────────────────────────────────
 
 /**
  * Tolerant weight parser.
- * Accepts formats: 0.850, 0,850, 000850, with prefixes/suffixes.
+ * Accepts: 0.850, 0,850, 000850, ST,GS,+000850kg, etc.
  * Returns weight in kg or null.
  */
-export function parseWeightFromLine(line: string): { kg: number; raw: string } | null {
-  const trimmed = line.trim();
-  if (!trimmed) return null;
+export function parseWeightFromRaw(raw: string): ParsedWeightResult | null {
+  if (!raw || typeof raw !== 'string') return null;
+
+  // Strip control chars except STX/ETX
+  const cleaned = raw.replace(/[^\x02\x03\x20-\x7E]/g, '').trim();
+  if (!cleaned) return null;
 
   // Toledo protocol STX/ETX
-  const stxIdx = trimmed.indexOf('\x02');
-  const etxIdx = trimmed.indexOf('\x03', stxIdx >= 0 ? stxIdx : 0);
+  const stxIdx = cleaned.indexOf('\x02');
+  const etxIdx = cleaned.indexOf('\x03', stxIdx >= 0 ? stxIdx : 0);
   if (stxIdx >= 0 && etxIdx > stxIdx) {
-    const payload = trimmed.substring(stxIdx + 1, etxIdx).trim();
+    const payload = cleaned.substring(stxIdx + 1, etxIdx).trim();
     const m = payload.match(/(\d+\.?\d*)/);
     if (m) {
       const v = parseFloat(m[1]);
       const kg = v > 100 ? v / 1000 : v;
-      if (kg > 0 && kg < 999) return { kg, raw: trimmed };
-    }
-  }
-
-  // Generic: find a number in the line
-  const match = trimmed.match(/(\d{1,6}[.,]?\d{0,4})/);
-  if (!match) return null;
-
-  const numStr = match[1].replace(',', '.');
-  const value = parseFloat(numStr);
-  if (isNaN(value) || value <= 0 || value >= 999) return null;
-
-  // If it looks like grams (integer > 10 with no decimal), convert
-  const kg = (!numStr.includes('.') && value > 10) ? value / 1000 : value;
-  if (kg <= 0 || kg >= 999) return null;
-
-  return { kg: Math.round(kg * 1000) / 1000, raw: trimmed };
-}
-
-// ─── Serial connection singleton ────────────────────────────────────
-let _port: any = null;
-let _reader: any = null;
-let _keepReading = false;
-
-export async function connectScale(config?: Partial<SerialConfig>): Promise<void> {
-  if (!isWebSerialSupported()) throw new Error('Web Serial não suportado neste navegador.');
-
-  const cfg = { ...SERIAL_DEFAULTS, ...config };
-
-  // Request port (user gesture required)
-  _port = await (navigator as any).serial.requestPort();
-  await _port.open({
-    baudRate: cfg.baudRate,
-    dataBits: cfg.dataBits,
-    stopBits: cfg.stopBits,
-    parity: cfg.parity,
-    bufferSize: cfg.bufferSize,
-  });
-}
-
-export async function disconnectScale(): Promise<void> {
-  _keepReading = false;
-  try { _reader?.cancel(); } catch { /* ignore */ }
-  _reader = null;
-  try { await _port?.close(); } catch { /* ignore */ }
-  _port = null;
-}
-
-export function isConnected(): boolean {
-  return _port !== null && _port.readable !== null;
-}
-
-/**
- * Read a single weight from the scale.
- * Sends ENQ (0x05), waits up to timeoutMs for a valid weight line.
- */
-export async function readWeightOnce(timeoutMs = 3000): Promise<{ kg: number; raw: string } | null> {
-  if (!_port || !_port.readable) throw new Error('Balança não conectada.');
-
-  // Send ENQ
-  if (_port.writable) {
-    const writer = _port.writable.getWriter();
-    try {
-      await writer.write(new Uint8Array([0x05]));
-    } finally {
-      writer.releaseLock();
-    }
-  }
-
-  const reader = _port.readable.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  const timer = setTimeout(() => { try { reader.cancel(); } catch { /* */ } }, timeoutMs);
-
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Try each complete line
-      const lines = buffer.split(/[\r\n]+/);
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        const result = parseWeightFromLine(line);
-        if (result) {
-          clearTimeout(timer);
-          reader.releaseLock();
-          return result;
-        }
+      if (kg > 0 && kg < 999) {
+        return { weightKg: Math.round(kg * 1000) / 1000, rawData: raw, normalized: m[1] };
       }
     }
-  } catch { /* cancelled or error */ } finally {
-    clearTimeout(timer);
-    try { reader.releaseLock(); } catch { /* */ }
   }
+
+  // Normalize: replace comma with dot
+  const normalized = cleaned.replace(/,/g, '.');
+
+  // Find all potential number matches (take the last valid one)
+  const matches = [...normalized.matchAll(/[+-]?\d{1,6}\.?\d{0,4}/g)];
+  if (matches.length === 0) return null;
+
+  // Try from last match backwards (most scales send weight at the end)
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const numStr = matches[i][0];
+    const value = parseFloat(numStr);
+    if (isNaN(value) || value < 0 || value >= 999) continue;
+
+    // Integer with 4-6 digits and no decimal → treat as grams, divide by 1000
+    const hasDecimal = numStr.includes('.');
+    let kg: number;
+    if (!hasDecimal && numStr.replace(/^[+-]/, '').length >= 4) {
+      kg = value / 1000;
+    } else if (!hasDecimal && value > 10) {
+      kg = value / 1000;
+    } else {
+      kg = value;
+    }
+
+    if (kg <= 0 || kg >= 999) continue;
+
+    return {
+      weightKg: Math.round(kg * 1000) / 1000,
+      rawData: raw,
+      normalized: numStr,
+    };
+  }
+
   return null;
 }
 
-/**
- * Start continuous weight stream.
- * Calls onWeight whenever a valid weight is parsed.
- */
-export async function startWeightStream(
-  onWeight: (kg: number) => void,
-  onStatus: (status: ScaleStatus) => void,
-  onRawData?: (raw: string) => void,
-): Promise<void> {
-  if (!_port || !_port.readable) {
-    onStatus('error');
-    return;
+// ─── Service Class ──────────────────────────────────────────────────
+
+export class ScaleSerialService {
+  private port: any = null;
+  private reader: any = null;
+  private keepReading = false;
+  private config: ScaleSerialConfig = { ...DEFAULT_CONFIG };
+
+  /** Check if Web Serial API is available */
+  isSupported(): boolean {
+    return typeof navigator !== 'undefined' && 'serial' in navigator;
   }
 
-  _keepReading = true;
-  onStatus('reading');
-  const decoder = new TextDecoder();
-  let buffer = '';
+  getDefaultConfig(): ScaleSerialConfig {
+    return { ...DEFAULT_CONFIG };
+  }
 
-  while (_keepReading && _port?.readable) {
+  getConfig(): ScaleSerialConfig {
+    return { ...this.config };
+  }
+
+  setConfig(config: Partial<ScaleSerialConfig>): void {
+    this.config = { ...this.config, ...config };
+  }
+
+  isConnected(): boolean {
+    return this.port !== null && this.port.readable !== null;
+  }
+
+  /** Request port + open connection (requires user gesture) */
+  async connect(config?: Partial<ScaleSerialConfig>): Promise<void> {
+    if (!this.isSupported()) throw new Error('Web Serial não suportado neste navegador.');
+
+    const cfg = { ...this.config, ...config };
+    this.config = cfg;
+
+    console.log('[ScaleSerial] requestPort iniciado');
+    this.port = await (navigator as any).serial.requestPort();
+    console.log('[ScaleSerial] porta selecionada');
+
+    await this.port.open({
+      baudRate: cfg.baudRate,
+      dataBits: cfg.dataBits,
+      stopBits: cfg.stopBits,
+      parity: cfg.parity,
+      bufferSize: cfg.bufferSize,
+    });
+    console.log('[ScaleSerial] porta aberta, baudRate:', cfg.baudRate);
+  }
+
+  /** Close port and clean up */
+  async disconnect(): Promise<void> {
+    this.keepReading = false;
+    try { this.reader?.cancel(); } catch { /* ignore */ }
+    this.reader = null;
+    try { await this.port?.close(); } catch { /* ignore */ }
+    this.port = null;
+    console.log('[ScaleSerial] desconectado');
+  }
+
+  /** Read a single weight. Sends ENQ (0x05), waits up to timeoutMs. */
+  async readWeightOnce(timeoutMs = 3000): Promise<ParsedWeightResult | null> {
+    if (!this.port || !this.port.readable) throw new Error('Balança não conectada.');
+
+    // Send ENQ
+    if (this.port.writable) {
+      const writer = this.port.writable.getWriter();
+      try {
+        await writer.write(new Uint8Array([0x05]));
+      } finally {
+        writer.releaseLock();
+      }
+    }
+
+    const reader = this.port.readable.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const timer = setTimeout(() => { try { reader.cancel(); } catch { /* */ } }, timeoutMs);
+
     try {
-      _reader = _port.readable.getReader();
-
-      while (_keepReading) {
-        const { value, done } = await _reader.read();
+      while (true) {
+        const { value, done } = await reader.read();
         if (done) break;
-
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
+        console.log('[ScaleSerial] dados brutos:', chunk);
 
         const lines = buffer.split(/[\r\n]+/);
         buffer = lines.pop() || '';
-
         for (const line of lines) {
-          if (line.trim()) {
-            onRawData?.(line.trim());
-            const result = parseWeightFromLine(line);
-            if (result) onWeight(result.kg);
+          const result = parseWeightFromRaw(line);
+          if (result) {
+            console.log('[ScaleSerial] peso parseado:', result.weightKg, 'kg');
+            clearTimeout(timer);
+            reader.releaseLock();
+            return result;
           }
         }
-
-        if (buffer.length > 2048) buffer = buffer.slice(-256);
       }
-    } catch (err) {
-      if (_keepReading) {
-        console.error('[ScaleSerial] stream error:', err);
-        onStatus('error');
-      }
-    } finally {
-      try { _reader?.releaseLock(); } catch { /* */ }
-      _reader = null;
+    } catch { /* cancelled or error */ } finally {
+      clearTimeout(timer);
+      try { reader.releaseLock(); } catch { /* */ }
     }
-
-    // Small delay before retry if still reading
-    if (_keepReading) await new Promise(r => setTimeout(r, 500));
+    return null;
   }
 
-  if (!_keepReading) onStatus('connected');
+  /** Start continuous weight stream */
+  async startWeightStream(handlers: StartWeightStreamHandlers): Promise<void> {
+    if (!this.port || !this.port.readable) {
+      handlers.onStatus('error');
+      return;
+    }
+
+    this.keepReading = true;
+    handlers.onStatus('reading');
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (this.keepReading && this.port?.readable) {
+      try {
+        this.reader = this.port.readable.getReader();
+
+        while (this.keepReading) {
+          const { value, done } = await this.reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          const lines = buffer.split(/[\r\n]+/);
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.trim()) {
+              handlers.onRawData?.(line.trim());
+              const result = parseWeightFromRaw(line);
+              if (result) {
+                console.log('[ScaleSerial] peso stream:', result.weightKg, 'kg');
+                handlers.onWeight(result.weightKg);
+              }
+            }
+          }
+
+          if (buffer.length > 2048) buffer = buffer.slice(-256);
+        }
+      } catch (err) {
+        if (this.keepReading) {
+          console.error('[ScaleSerial] erro no stream:', err);
+          handlers.onStatus('error');
+        }
+      } finally {
+        try { this.reader?.releaseLock(); } catch { /* */ }
+        this.reader = null;
+      }
+
+      if (this.keepReading) await new Promise(r => setTimeout(r, 500));
+    }
+
+    if (!this.keepReading) handlers.onStatus('connected');
+  }
+
+  /** Stop continuous reading */
+  stopWeightStream(): void {
+    this.keepReading = false;
+    try { this.reader?.cancel(); } catch { /* */ }
+  }
 }
 
-export function stopWeightStream(): void {
-  _keepReading = false;
-  try { _reader?.cancel(); } catch { /* */ }
-}
+// ─── Singleton ──────────────────────────────────────────────────────
+
+export const scaleSerialService = new ScaleSerialService();
