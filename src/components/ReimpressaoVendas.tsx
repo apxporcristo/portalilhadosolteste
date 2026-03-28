@@ -40,6 +40,7 @@ export function ReimpressaoVendas() {
   const [vendas, setVendas] = useState<VendaGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVenda, setSelectedVenda] = useState<VendaGroup | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [printing, setPrinting] = useState(false);
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const { produtos } = useFichasConsumo();
