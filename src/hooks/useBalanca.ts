@@ -264,6 +264,13 @@ export function useBalanca() {
     const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
     if (hasWebSerial) {
       try {
+        // Close existing port before opening a new one
+        if (serialPort) {
+          console.log('[Balança] Fechando porta serial anterior...');
+          try { await serialPort.close(); } catch { /* ignore */ }
+          setSerialPort(null);
+        }
+
         console.log('[Balança] Solicitando porta serial...');
         const port = await (navigator as any).serial.requestPort();
         console.log('[Balança] Porta selecionada, info:', port.getInfo?.() || 'N/A');
@@ -371,33 +378,39 @@ export function useBalanca() {
     try {
       if (!('serial' in navigator)) return null;
       let port = serialPort;
-      if (!port) {
-        port = await (navigator as any).serial.requestPort();
-        await port.open({ baudRate: config.baud_rate });
-        setSerialPort(port);
-        setStatus('conectada');
+      if (!port || !port.readable) {
+        console.log('[Balança] Nenhuma porta serial aberta para leitura.');
+        return null;
       }
-      const writer = port.writable.getWriter();
-      await writer.write(new Uint8Array([0x05])); // ENQ
-      writer.releaseLock();
+
+      // Send ENQ (0x05) if writable
+      if (port.writable) {
+        try {
+          const writer = port.writable.getWriter();
+          await writer.write(new Uint8Array([0x05]));
+          writer.releaseLock();
+        } catch (writeErr) {
+          console.warn('[Balança] Falha ao enviar ENQ:', writeErr);
+        }
+      }
 
       const reader = port.readable.getReader();
-      const timeout = setTimeout(() => reader.cancel(), 3000);
+      const timeout = setTimeout(() => { try { reader.cancel(); } catch {} }, 3000);
       try {
-        const { value } = await reader.read();
+        const { value, done } = await reader.read();
         clearTimeout(timeout);
         reader.releaseLock();
-        if (value) return parseToledoWeightBytes(value);
+        if (value && !done) return parseToledoWeightBytes(value);
       } catch {
         clearTimeout(timeout);
-        reader.releaseLock();
+        try { reader.releaseLock(); } catch {}
       }
       return null;
     } catch (err) {
-      console.error('Erro serial:', err);
+      console.error('[Balança] Erro serial:', err);
       return null;
     }
-  }, [serialPort, config.baud_rate]);
+  }, [serialPort]);
   const conectarBalancaAndroid = useCallback((): boolean => {
     const bridge = window.AndroidBridge;
     if (!bridge?.connectScale) return false;
