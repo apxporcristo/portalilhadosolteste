@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Save, CheckCircle2, Wifi, ImagePlus, Trash2, RefreshCw, Lock, Download, Smartphone, Scale, Bluetooth, BluetoothSearching } from 'lucide-react';
+import { Settings, Save, CheckCircle2, Wifi, ImagePlus, Trash2, RefreshCw, Lock, Download, Smartphone, Scale, Bluetooth, BluetoothSearching, Settings2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { getSupabaseClient } from '@/lib/supabase-external';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
