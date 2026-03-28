@@ -917,8 +917,8 @@ export default function FichasLista() {
         voucherPix={canGenerateVoucher ? {
           canGenerateVoucher: true,
           voucherTempo,
-          availableTempos: stats.temposDisponiveis,
-          availableByTempo: stats.livresPorTempo,
+          availableTempos: voucherStats.temposDisponiveis,
+          availableByTempo: voucherStats.livresPorTempo,
           onGenerateVoucher: handleGeneratePixVoucher,
         } : undefined}
       >
