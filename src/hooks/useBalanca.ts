@@ -16,9 +16,15 @@ export interface BalancaConfig {
   tipo_conexao: 'bluetooth' | 'serial' | 'usb_serial';
   dispositivo_nome: string | null;
   dispositivo_id: string | null;
+  endereco_dispositivo?: string | null;
   porta_serial: string | null;
   baud_rate: number;
+  data_bits?: number;
+  stop_bits?: number;
+  parity?: string;
   valor_peso: number;
+  ativo?: boolean;
+  user_id?: string | null;
 }
 
 export type BalancaStatus = 'desconectada' | 'conectando' | 'conectada' | 'falha' | 'tentando';
@@ -27,9 +33,11 @@ const DEFAULT_CONFIG: BalancaConfig = {
   tipo_conexao: 'serial',
   dispositivo_nome: null,
   dispositivo_id: null,
+  endereco_dispositivo: null,
   porta_serial: null,
   baud_rate: 9600,
   valor_peso: 0,
+  ativo: true,
 };
 
 // Toledo Prix 3 protocol: STX (0x02) + weight digits + ETX (0x03)
