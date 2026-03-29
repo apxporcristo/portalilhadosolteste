@@ -149,15 +149,89 @@ export function usePulseiras() {
     }
   }, []);
 
+  const carregarSaldosFallback = useCallback(async (db: any, pulseiraId: string): Promise<any[]> => {
+    try {
+      // Fallback: compute saldos from pulseira_itens directly
+      const { data: itensData, error: itensError } = await db
+        .from('pulseira_itens' as any)
+        .select('*')
+        .eq('pulseira_id', pulseiraId);
+      if (itensError) throw itensError;
+
+      // Try to get baixas from pulseira_baixas or pulseira_consumos
+      let baixasData: any[] = [];
+      const { data: b1, error: e1 } = await db
+        .from('pulseira_baixas' as any)
+        .select('*')
+        .eq('pulseira_id', pulseiraId);
+      if (!e1 && b1) {
+        baixasData = b1;
+      } else {
+        const { data: b2 } = await db
+          .from('pulseira_consumos' as any)
+          .select('*')
+          .eq('pulseira_id', pulseiraId);
+        if (b2) baixasData = b2;
+      }
+
+      // Group itens by produto_id
+      const produtoMap: Record<string, any> = {};
+      for (const item of (itensData || [])) {
+        const pid = item.produto_id;
+        if (!produtoMap[pid]) {
+          produtoMap[pid] = {
+            produto_id: pid,
+            nome_produto: item.nome_produto || item.produto_nome || 'Produto sem nome',
+            total_carregado: 0,
+            total_baixado: 0,
+            valor_unitario: Number(item.valor_unitario ?? 0),
+          };
+        }
+        produtoMap[pid].total_carregado += Number(item.quantidade ?? 0);
+      }
+
+      // Subtract baixas
+      for (const baixa of baixasData) {
+        const pid = baixa.produto_id;
+        if (produtoMap[pid]) {
+          produtoMap[pid].total_baixado += Number(baixa.quantidade ?? 0);
+        }
+      }
+
+      return Object.values(produtoMap).map((p: any) => ({
+        ...p,
+        saldo_disponivel: p.total_carregado - p.total_baixado,
+      }));
+    } catch (fallbackErr: any) {
+      console.warn('[Pulseiras] Fallback saldos também falhou:', fallbackErr.message);
+      return [];
+    }
+  }, []);
+
   const carregarDetalhes = useCallback(async (pulseiraId: string) => {
     const db = await getSupabaseClient();
+
+    // Try view first, fallback to raw tables if view has errors
+    let saldosData: any[] = [];
+    let historicoData: any[] = [];
+
     const [saldosRes, historicoRes] = await Promise.all([
       db.from('vw_pulseira_saldos' as any).select('*').eq('pulseira_id', pulseiraId),
       db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', pulseiraId).order('data', { ascending: false }),
     ]);
 
-    const saldosData = (saldosRes.data || []) as any[];
-    const historicoData = (historicoRes.data || []) as any[];
+    if (saldosRes.error) {
+      console.warn('[Pulseiras] View vw_pulseira_saldos falhou, usando fallback:', saldosRes.error.message);
+      saldosData = await carregarSaldosFallback(db, pulseiraId);
+    } else {
+      saldosData = (saldosRes.data || []) as any[];
+    }
+
+    if (historicoRes.error) {
+      console.warn('[Pulseiras] View vw_pulseira_historico falhou:', historicoRes.error.message);
+    } else {
+      historicoData = (historicoRes.data || []) as any[];
+    }
 
     const resumo: PulseiraProdutoResumo[] = saldosData.map((s: any) => ({
       produto_id: s.produto_id,
@@ -173,7 +247,7 @@ export function usePulseiras() {
 
     const hist: PulseiraHistorico[] = historicoData.map((h: any) => ({
       tipo: h.tipo,
-      produto_nome: h.produto_nome,
+      produto_nome: h.produto_nome || h.nome_produto || 'Produto sem nome',
       quantidade: Number(h.quantidade),
       atendente_nome: h.atendente_nome ?? null,
       observacao: h.observacao ?? null,
@@ -185,7 +259,7 @@ export function usePulseiras() {
       id: h.id || h.data,
       pulseira_id: pulseiraId,
       produto_id: h.produto_id || '',
-      produto_nome: h.produto_nome,
+      produto_nome: h.produto_nome || h.nome_produto || 'Produto sem nome',
       quantidade: Number(h.quantidade),
       valor_unitario: 0,
       valor_total: 0,
@@ -199,14 +273,14 @@ export function usePulseiras() {
       pulseira_id: pulseiraId,
       pulseira_item_id: null,
       produto_id: h.produto_id || '',
-      produto_nome: h.produto_nome,
+      produto_nome: h.produto_nome || h.nome_produto || 'Produto sem nome',
       quantidade: Number(h.quantidade),
       atendente_user_id: null,
       atendente_nome: h.atendente_nome ?? null,
       observacao: h.observacao ?? null,
       created_at: h.data,
     })));
-  }, []);
+  }, [carregarSaldosFallback]);
 
   const abrirPulseira = useCallback(async (data: { numero: string; nome_cliente: string; telefone_cliente: string; cpf?: string; aberta_por?: string }) => {
     setLoading(true);
@@ -294,12 +368,22 @@ export function usePulseiras() {
         p_atendente_nome: atendente_nome || null,
         p_observacao: observacao || null,
       });
-      if (error) throw error;
+      if (error) {
+        // Friendly error for PostgreSQL column/constraint errors
+        const msg = error.message || '';
+        if (msg.includes('does not exist') || msg.includes('column') || msg.includes('relation')) {
+          throw new Error('Não foi possível atualizar o saldo do produto. Verifique a configuração da consulta.');
+        }
+        throw error;
+      }
       toast({ title: 'Baixa registrada!' });
       await carregarDetalhes(pulseiraId);
       return true;
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+      const friendlyMsg = err.message?.includes('Não foi possível') 
+        ? err.message 
+        : 'Não foi possível registrar a baixa. Tente novamente.';
+      toast({ title: 'Erro', description: friendlyMsg, variant: 'destructive' });
       return false;
     }
   }, [resumoProdutos, carregarDetalhes]);
