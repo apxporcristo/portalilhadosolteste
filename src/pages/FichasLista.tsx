@@ -18,6 +18,7 @@ import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useFormasPagamento, FormaPagamento } from '@/hooks/useFormasPagamento';
 import { useComandas } from '@/hooks/useComandas';
+import { usePulseiras, Pulseira } from '@/hooks/usePulseiras';
 import { PagamentoDialog, PagamentoSelecionado } from '@/components/PagamentoDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PrintSelectionDialog, PrintSelectableItem } from '@/components/PrintSelectionDialog';
