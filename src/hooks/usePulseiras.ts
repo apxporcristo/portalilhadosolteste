@@ -211,22 +211,29 @@ export function usePulseiras() {
   const carregarDetalhes = useCallback(async (pulseiraId: string) => {
     const db = await getSupabaseClient();
 
-    // Try view first, fallback to raw tables if view has errors
-    let saldosData: any[] = [];
-    let historicoData: any[] = [];
-
+    // Use the standardized view for saldos and the historico view
     const [saldosRes, historicoRes] = await Promise.all([
-      db.from('vw_pulseira_saldos' as any).select('*').eq('pulseira_id', pulseiraId),
+      db.from('vw_pulseira_saldo_produto' as any).select('*').eq('pulseira_id', pulseiraId),
       db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', pulseiraId).order('data', { ascending: false }),
     ]);
 
+    let saldosData: any[] = [];
     if (saldosRes.error) {
-      console.warn('[Pulseiras] View vw_pulseira_saldos falhou, usando fallback:', saldosRes.error.message);
-      saldosData = await carregarSaldosFallback(db, pulseiraId);
+      console.warn('[Pulseiras] View vw_pulseira_saldo_produto falhou, tentando vw_pulseira_saldos:', saldosRes.error.message);
+      // Fallback to vw_pulseira_saldos
+      const { data: fallbackData, error: fallbackErr } = await db
+        .from('vw_pulseira_saldos' as any).select('*').eq('pulseira_id', pulseiraId);
+      if (fallbackErr) {
+        console.warn('[Pulseiras] vw_pulseira_saldos also failed, using manual fallback:', fallbackErr.message);
+        saldosData = await carregarSaldosFallback(db, pulseiraId);
+      } else {
+        saldosData = (fallbackData || []) as any[];
+      }
     } else {
       saldosData = (saldosRes.data || []) as any[];
     }
 
+    let historicoData: any[] = [];
     if (historicoRes.error) {
       console.warn('[Pulseiras] View vw_pulseira_historico falhou:', historicoRes.error.message);
     } else {
@@ -235,10 +242,10 @@ export function usePulseiras() {
 
     const resumo: PulseiraProdutoResumo[] = saldosData.map((s: any) => ({
       produto_id: s.produto_id,
-      produto_nome: s.nome_produto || s.produto_nome || 'Produto sem nome',
-      comprado: Number(s.total_comprado ?? s.total_carregado ?? s.comprado ?? 0),
-      consumido: Number(s.total_baixado ?? s.consumido ?? 0),
-      disponivel: Number(s.saldo_disponivel ?? s.disponivel ?? 0),
+      produto_nome: s.produto_nome || s.nome_produto || 'Produto sem nome',
+      comprado: Number(s.comprado ?? s.total_comprado ?? s.total_carregado ?? 0),
+      consumido: Number(s.consumido ?? s.total_baixado ?? 0),
+      disponivel: Number(s.disponivel ?? s.saldo_disponivel ?? s.saldo_quantidade ?? 0),
       valor_unitario: Number(s.valor_unitario ?? 0),
       ultima_retirada: s.ultima_baixa_em ?? s.ultima_baixa ?? s.ultima_retirada ?? null,
       ultimo_atendente: s.ultimo_atendente_nome ?? s.ultimo_atendente ?? null,
@@ -355,43 +362,25 @@ export function usePulseiras() {
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
     if (!prod || prod.disponivel < quantidade) {
-      toast({ title: 'Saldo insuficiente', description: `Este produto não possui saldo disponível para baixa. Disponível: ${prod?.disponivel || 0}`, variant: 'destructive' });
+      toast({ title: 'Saldo insuficiente', description: 'Este produto não possui saldo disponível para baixa.', variant: 'destructive' });
       return false;
     }
     try {
       const db = await getSupabaseClient();
 
-      // Try primary column layout first
-      const { error } = await db
-        .from('pulseira_baixas' as any)
-        .insert({
-          pulseira_id: pulseiraId,
-          produto_id: produto_id,
-          nome_produto: produto_nome,
-          quantidade: quantidade,
-          atendente_id: atendente_user_id || null,
-          atendente_nome: atendente_nome || null,
-          observacao: observacao || null,
-        });
+      // Use the dedicated RPC for baixa
+      const { error } = await db.rpc('rpc_pulseira_baixar_item', {
+        p_pulseira_id: pulseiraId,
+        p_produto_id: produto_id,
+        p_quantidade: quantidade,
+        p_atendente_id: atendente_user_id || null,
+        p_atendente_nome: atendente_nome || null,
+        p_observacao: observacao || null,
+      });
 
       if (error) {
-        console.warn('[Pulseiras] Insert attempt 1 failed:', error.message);
-        // Try alternative column names (produto_nome, atendente_user_id)
-        const { error: error2 } = await db
-          .from('pulseira_baixas' as any)
-          .insert({
-            pulseira_id: pulseiraId,
-            produto_id: produto_id,
-            produto_nome: produto_nome,
-            quantidade: quantidade,
-            atendente_user_id: atendente_user_id || null,
-            atendente_nome: atendente_nome || null,
-            observacao: observacao || null,
-          });
-        if (error2) {
-          console.error('[Pulseiras] Insert attempt 2 also failed:', error2.message);
-          throw error2;
-        }
+        console.error('[Pulseiras] RPC rpc_pulseira_baixar_item failed:', error.message);
+        throw error;
       }
 
       toast({ title: 'Produto baixado com sucesso.' });
