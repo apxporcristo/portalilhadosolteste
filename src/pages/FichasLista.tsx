@@ -234,22 +234,27 @@ export default function FichasLista() {
 
     let active = true;
     const autoConnectScale = async () => {
-      setAutoConnectingBalanca(true);
-      setShowManualConnectButton(false);
-
+      // Check if already connected — skip reconnection
       const heartbeatOk = await verificarConexaoHeartbeat();
       if (!active) return;
 
       if (heartbeatOk) {
+        console.log('[Balança] Já conectada, reutilizando conexão existente');
         setAutoConnectingBalanca(false);
+        setShowManualConnectButton(false);
         return;
       }
+
+      console.log('[Balança] Não conectada, tentando conexão automática...');
+      setAutoConnectingBalanca(true);
+      setShowManualConnectButton(false);
 
       const connectedOk = await garantirConexaoComTentativas(3);
       if (!active) return;
 
       setAutoConnectingBalanca(false);
       setShowManualConnectButton(!connectedOk);
+      console.log('[Balança] Resultado conexão automática:', connectedOk ? 'OK' : 'Falha');
     };
 
     autoConnectScale();
