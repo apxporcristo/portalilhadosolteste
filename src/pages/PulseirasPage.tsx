@@ -714,43 +714,65 @@ export default function PulseirasPage() {
       </Dialog>
 
       {/* Modal: Histórico */}
-      <Dialog open={historicoModal} onOpenChange={setHistoricoModal}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={historicoModal} onOpenChange={(open) => { setHistoricoModal(open); if (!open) setHistoricoDetalhe(null); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Histórico da Pulseira #{pulseira?.numero}</DialogTitle>
           </DialogHeader>
           {historico.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>
           ) : (
-            <div className="rounded-md border overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Produto</TableHead>
-                    <TableHead className="text-center">Qtd</TableHead>
-                     <TableHead>Usuário</TableHead>
-                    <TableHead>Obs</TableHead>
-                    <TableHead>Data</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {historico.map((h, idx) => (
-                    <TableRow key={idx}>
-                       <TableCell>
-                         <Badge variant={tipoBadge(h.tipo).variant} className="text-xs">
-                           {tipoBadge(h.tipo).label}
-                         </Badge>
-                       </TableCell>
-                      <TableCell className="text-sm">{h.produto_nome}</TableCell>
-                      <TableCell className="text-center">{h.quantidade}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || 'Usuário não identificado'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{h.observacao || '—'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{formatDate(h.data)}</TableCell>
+            <div className="space-y-1">
+              <div className="rounded-md border overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Produto</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-center">Qtd</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {historico.map((h, idx) => {
+                      const badge = tipoBadge(h.tipo);
+                      return (
+                        <TableRow
+                          key={idx}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setHistoricoDetalhe(h)}
+                        >
+                          <TableCell>
+                            <Badge variant={badge.variant} className="text-xs">
+                              {badge.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">{h.produto_nome}</TableCell>
+                          <TableCell className="text-sm">
+                            {h.tipo === 'inclusao' ? 'Inclusão' : h.tipo === 'baixa' ? 'Baixa' : '—'}
+                          </TableCell>
+                          <TableCell className="text-center">{h.quantidade}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Detalhe do registro selecionado */}
+              {historicoDetalhe && (
+                <div className="mt-3 p-3 rounded-lg border bg-muted/30 space-y-1 animate-in fade-in-50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground">Detalhes da movimentação</span>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setHistoricoDetalhe(null)}>✕</Button>
+                  </div>
+                  <div className="text-sm"><strong>Usuário:</strong> {historicoDetalhe.atendente_nome || 'Usuário não identificado'}</div>
+                  <div className="text-sm"><strong>Data:</strong> {formatDate(historicoDetalhe.data)}</div>
+                  {historicoDetalhe.observacao && (
+                    <div className="text-sm"><strong>Obs:</strong> {historicoDetalhe.observacao}</div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
