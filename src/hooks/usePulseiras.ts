@@ -362,43 +362,25 @@ export function usePulseiras() {
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
     if (!prod || prod.disponivel < quantidade) {
-      toast({ title: 'Saldo insuficiente', description: `Este produto não possui saldo disponível para baixa. Disponível: ${prod?.disponivel || 0}`, variant: 'destructive' });
+      toast({ title: 'Saldo insuficiente', description: 'Este produto não possui saldo disponível para baixa.', variant: 'destructive' });
       return false;
     }
     try {
       const db = await getSupabaseClient();
 
-      // Try primary column layout first
-      const { error } = await db
-        .from('pulseira_baixas' as any)
-        .insert({
-          pulseira_id: pulseiraId,
-          produto_id: produto_id,
-          nome_produto: produto_nome,
-          quantidade: quantidade,
-          atendente_id: atendente_user_id || null,
-          atendente_nome: atendente_nome || null,
-          observacao: observacao || null,
-        });
+      // Use the dedicated RPC for baixa
+      const { error } = await db.rpc('rpc_pulseira_baixar_item', {
+        p_pulseira_id: pulseiraId,
+        p_produto_id: produto_id,
+        p_quantidade: quantidade,
+        p_atendente_id: atendente_user_id || null,
+        p_atendente_nome: atendente_nome || null,
+        p_observacao: observacao || null,
+      });
 
       if (error) {
-        console.warn('[Pulseiras] Insert attempt 1 failed:', error.message);
-        // Try alternative column names (produto_nome, atendente_user_id)
-        const { error: error2 } = await db
-          .from('pulseira_baixas' as any)
-          .insert({
-            pulseira_id: pulseiraId,
-            produto_id: produto_id,
-            produto_nome: produto_nome,
-            quantidade: quantidade,
-            atendente_user_id: atendente_user_id || null,
-            atendente_nome: atendente_nome || null,
-            observacao: observacao || null,
-          });
-        if (error2) {
-          console.error('[Pulseiras] Insert attempt 2 also failed:', error2.message);
-          throw error2;
-        }
+        console.error('[Pulseiras] RPC rpc_pulseira_baixar_item failed:', error.message);
+        throw error;
       }
 
       toast({ title: 'Produto baixado com sucesso.' });
