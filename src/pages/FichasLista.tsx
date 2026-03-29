@@ -1118,13 +1118,19 @@ export default function FichasLista() {
           onGenerateVoucher: handleGeneratePixVoucher,
         } : undefined}
       >
-        {comandasAbertas.length > 0 && (
+        {hasPulseiraContext && (
+          <div className="w-full flex items-center gap-2 p-3 rounded-lg border border-primary/30 bg-primary/5 text-sm">
+            <Watch className="h-4 w-4 text-primary" />
+            <span>Itens serão lançados na <strong>Pulseira #{pulseiraContextNumero}</strong> ({pulseiraContextNome}) após confirmar o pagamento.</span>
+          </div>
+        )}
+        {comandasAbertas.length > 0 && !hasPulseiraContext && (
           <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setComandaSearch(''); setShowComandaModal(true); }} disabled={totalItems === 0}>
             <ClipboardList className="h-5 w-5 mr-2" />
             Lançar na comanda
           </Button>
         )}
-        {pulseirasAtivas.length > 0 && (
+        {pulseirasAtivas.length > 0 && !hasPulseiraContext && (
           <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setPulseiraSearch(''); setShowPulseiraModal(true); }} disabled={totalItems === 0}>
             <Watch className="h-5 w-5 mr-2" />
             Adicionar à pulseira
