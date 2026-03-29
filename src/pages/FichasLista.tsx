@@ -1334,7 +1334,7 @@ export default function FichasLista() {
               complementos: ci.selectedItems.length > 0 ? ci.selectedItems.map(si => ({ categoria: si.categoria, nome: si.item.nome, valor: Number(si.item.valor) })) : null,
               printer_id: (ci.ficha as any).printer_id || null,
             }));
-            await lancarItens(confirmComanda.id, itemsToLaunch);
+            await lancarItens(confirmComanda.id, itemsToLaunch, userName || undefined);
             toast({ title: `${totalItems} item(ns) lançados na comanda #${confirmComanda.numero}` });
             clearCart();
             setConfirmComanda(null);
