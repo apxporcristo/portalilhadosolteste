@@ -234,8 +234,6 @@ export function usePulseiras() {
         valor_unitario: i.valor_unitario,
         valor_total: i.quantidade * i.valor_unitario,
         atendente_user_id: i.atendente_user_id || null,
-        atendente_nome: i.atendente_nome || null,
-        codigo_venda: i.codigo_venda || null,
       }));
       const { error } = await db.from('pulseira_itens').insert(rows as any);
       if (error) throw error;
