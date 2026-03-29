@@ -57,6 +57,9 @@ export default function PulseirasPage() {
   const [abatimentoProdutoId, setAbatimentoProdutoId] = useState('');
   const [abatimentoQtd, setAbatimentoQtd] = useState(1);
   const [confirmExcluirModal, setConfirmExcluirModal] = useState(false);
+  const [viewFechadaModal, setViewFechadaModal] = useState<Pulseira | null>(null);
+  const [viewFechadaHistorico, setViewFechadaHistorico] = useState<any[]>([]);
+  const [viewFechadaSaldos, setViewFechadaSaldos] = useState<PulseiraProdutoResumo[]>([]);
 
   const creditoTotal = useMemo(() => {
     return resumoProdutos
@@ -515,7 +518,33 @@ export default function PulseirasPage() {
                   return (
                     <Card key={p.id} className="hover:border-primary cursor-pointer transition-colors">
                       <CardContent className="py-3 flex items-center justify-between">
-                        <div className="flex items-center gap-3" onClick={() => handleSelectPulseira(p)}>
+                        <div className="flex items-center gap-3" onClick={async () => {
+                          setViewFechadaModal(p);
+                          // Load details for this closed pulseira
+                          const db = await (await import('@/lib/supabase-external')).getSupabaseClient();
+                          const [saldosRes, historicoRes] = await Promise.all([
+                            db.from('vw_pulseira_saldos' as any).select('*').eq('pulseira_id', p.id),
+                            db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', p.id).order('data', { ascending: false }),
+                          ]);
+                          setViewFechadaSaldos((saldosRes.data || []).map((s: any) => ({
+                            produto_id: s.produto_id,
+                            produto_nome: s.produto_nome || s.nome_produto || 'Produto sem nome',
+                            comprado: Number(s.total_carregado ?? s.comprado ?? 0),
+                            consumido: Number(s.total_baixado ?? s.consumido ?? 0),
+                            disponivel: Number(s.saldo_disponivel ?? s.disponivel ?? 0),
+                            valor_unitario: Number(s.valor_unitario ?? 0),
+                            ultima_retirada: s.ultima_baixa ?? s.ultima_retirada ?? null,
+                            ultimo_atendente: s.ultimo_atendente ?? null,
+                          })));
+                          setViewFechadaHistorico((historicoRes.data || []).map((h: any) => ({
+                            tipo: h.tipo,
+                            produto_nome: h.produto_nome,
+                            quantidade: Number(h.quantidade),
+                            atendente_nome: h.atendente_nome ?? null,
+                            observacao: h.observacao ?? null,
+                            data: h.data,
+                          })));
+                        }}>
                           <div className="bg-primary/10 rounded-full p-2">
                             <Watch className="h-4 w-4 text-primary" />
                           </div>
