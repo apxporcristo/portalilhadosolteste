@@ -24,7 +24,7 @@ export default function PulseirasPage() {
   const userSession = useOptionalUserSession();
   const {
     loading, pulseira, resumoProdutos, itens, consumos, historico, pulseirasAtivas, pulseirasFechadas,
-    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, fecharComAbatimento, reabrirPulseira, listarAtivas, listarFechadas, limpar, carregarDetalhes,
+    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, fecharComAbatimento, reabrirPulseira, excluirPulseira, listarAtivas, listarFechadas, limpar, carregarDetalhes,
   } = usePulseiras();
   const { fichasAtivas, produtos } = useFichasConsumo();
 
@@ -55,6 +55,7 @@ export default function PulseirasPage() {
   const [abatimentoProdutos, setAbatimentoProdutos] = useState<{ produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number }[]>([]);
   const [abatimentoProdutoId, setAbatimentoProdutoId] = useState('');
   const [abatimentoQtd, setAbatimentoQtd] = useState(1);
+  const [confirmExcluirModal, setConfirmExcluirModal] = useState(false);
 
   const creditoTotal = useMemo(() => {
     return resumoProdutos
@@ -76,6 +77,10 @@ export default function PulseirasPage() {
   }, [pulseira]);
 
   const temSaldo = useMemo(() => resumoProdutos.some(p => p.disponivel > 0), [resumoProdutos]);
+  const totalItensLancados = useMemo(() => resumoProdutos.reduce((sum, p) => sum + p.comprado, 0), [resumoProdutos]);
+  const hasMovimentacao = useMemo(() => totalItensLancados > 0 || historico.length > 0, [totalItensLancados, historico]);
+  const canClosePulseira = pulseira?.status === 'ativa' && hasMovimentacao && !temSaldo;
+  const canDeletePulseira = pulseira?.status === 'ativa' && !hasMovimentacao;
 
   useEffect(() => {
     listarAtivas();
