@@ -13,13 +13,8 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-async function hashPassword(password: string, salt: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(salt + ':' + password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+function bool(v: unknown): boolean {
+  return v === true;
 }
 
 Deno.serve(async (req) => {
@@ -28,7 +23,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Try external config first, fall back to Lovable Cloud's auto-set vars
     const externalUrl = Deno.env.get("EXTERNAL_SUPABASE_URL") || Deno.env.get("SUPABASE_URL");
     const externalServiceKey = Deno.env.get("EXTERNAL_SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -37,7 +31,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { caller_user_id, nome, email, password, cpf, acesso_voucher, tempo_voucher, cadastrar_produto, ficha_consumo, acesso_comanda, acesso_kds, reimpressao_venda, pulseira, administrador } = body;
+    const { caller_user_id, nome, email, password, cpf, ativo } = body;
 
     if (!caller_user_id) {
       return jsonResponse({ error: "Sessão inválida." }, 401);
@@ -76,9 +70,26 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "CPF já cadastrado." }, 400);
     }
 
-    // Hash password
-    const senhaHash = await hashPassword(String(password), cpfClean);
-    const userId = crypto.randomUUID();
+    // Check email uniqueness
+    const { data: existingEmail } = await admin
+      .from("user_profiles").select("id").eq("email", emailNormalized).maybeSingle();
+    if (existingEmail) {
+      return jsonResponse({ error: "Email já cadastrado." }, 400);
+    }
+
+    // Create auth user
+    const { data: createdAuth, error: authErr } = await admin.auth.admin.createUser({
+      email: emailNormalized,
+      password: String(password),
+      email_confirm: true,
+      user_metadata: { nome: String(nome).trim(), cpf: cpfClean },
+    });
+
+    if (authErr || !createdAuth?.user?.id) {
+      return jsonResponse({ error: authErr?.message || "Não foi possível criar usuário." }, 400);
+    }
+
+    const userId = createdAuth.user.id;
 
     // Insert profile
     const { error: profErr } = await admin.from("user_profiles").insert({
@@ -86,35 +97,35 @@ Deno.serve(async (req) => {
       nome: String(nome).trim(),
       email: emailNormalized,
       cpf: cpfClean,
-      senha_hash: senhaHash,
-      ativo: true,
+      ativo: ativo !== false,
     });
 
     if (profErr) {
+      await admin.auth.admin.deleteUser(userId);
       return jsonResponse({ error: `Erro perfil: ${profErr.message}` }, 400);
     }
 
-    const voucherAccess = !!acesso_voucher;
-    const tempoVoucher = voucherAccess
-      ? (tempo_voucher && String(tempo_voucher) !== "Todos" ? String(tempo_voucher) : null)
-      : null;
-
-    // Insert permissions
-    const { error: permErr } = await admin.from("user_permissions").insert({
+    // Insert permissions with standardized field names
+    const permissions: Record<string, unknown> = {
       user_id: userId,
-      acesso_voucher: voucherAccess,
-      acesso_cadastrar_produto: !!cadastrar_produto,
-      acesso_ficha_consumo: !!ficha_consumo,
-      acesso_comanda: !!acesso_comanda,
-      acesso_kds: !!acesso_kds,
-      reimpressao_venda: !!reimpressao_venda,
-      pulseira: !!pulseira,
-      is_admin: !!administrador,
-      voucher_tempo_acesso: tempoVoucher,
-    });
+      is_admin: bool(body.is_admin),
+      acesso_voucher: bool(body.acesso_voucher),
+      acesso_cadastrar_produto: bool(body.acesso_cadastrar_produto),
+      acesso_ficha_consumo: bool(body.acesso_ficha_consumo),
+      acesso_comanda: bool(body.acesso_comanda),
+      acesso_kds: bool(body.acesso_kds),
+      reimpressao_venda: bool(body.reimpressao_venda),
+      acesso_pulseira: bool(body.acesso_pulseira),
+      voucher_todos: bool(body.voucher_todos),
+      voucher_tempo_id: typeof body.voucher_tempo_id === "string" ? body.voucher_tempo_id || null : null,
+      voucher_tempo_acesso: typeof body.voucher_tempo_acesso === "string" ? body.voucher_tempo_acesso || null : null,
+    };
+
+    const { error: permErr } = await admin.from("user_permissions").insert(permissions);
 
     if (permErr) {
       await admin.from("user_profiles").delete().eq("id", userId);
+      await admin.auth.admin.deleteUser(userId);
       return jsonResponse({ error: `Erro permissões: ${permErr.message}` }, 400);
     }
 

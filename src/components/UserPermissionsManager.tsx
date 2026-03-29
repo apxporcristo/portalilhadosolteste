@@ -246,13 +246,31 @@ export function UserPermissionsManager() {
           setSaving(false); return;
         }
 
-        await invokeEdgeFunction('manage-users', {
-          action: 'create-user',
+        const perms = buildPermissions();
+        const createPayload: Record<string, unknown> = {
+          nome: fNome,
           email: fEmail,
           password: fSenha,
-          profile: { nome: fNome, cpf: cpfClean, ativo: fAtivo },
-          permissions: buildPermissions(),
-        });
+          cpf: cpfClean,
+          ativo: fAtivo,
+          is_admin: perms.is_admin,
+          acesso_voucher: perms.acesso_voucher,
+          acesso_cadastrar_produto: perms.acesso_cadastrar_produto,
+          acesso_ficha_consumo: perms.acesso_ficha_consumo,
+          acesso_comanda: perms.acesso_comanda,
+          acesso_kds: perms.acesso_kds,
+          reimpressao_venda: perms.reimpressao_venda,
+          acesso_pulseira: perms.acesso_pulseira,
+        };
+        if (perms.acesso_voucher) {
+          createPayload.voucher_todos = perms.voucher_todos;
+          createPayload.voucher_tempo_id = perms.voucher_tempo_id;
+          createPayload.voucher_tempo_acesso = perms.voucher_tempo_acesso;
+        } else {
+          createPayload.voucher_todos = false;
+        }
+        console.log('[createUser] payload:', createPayload);
+        await invokeEdgeFunction('create-user-admin', createPayload);
         toast({ title: 'Usuário criado com sucesso!' });
 
       } else if (modalMode === 'edit' && selectedUser) {
