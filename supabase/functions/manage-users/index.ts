@@ -37,17 +37,34 @@ function normalizeString(v: unknown): string | null {
   return s || null;
 }
 
+function normalizeCpf(v: unknown): string | null {
+  const raw = normalizeString(v);
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  return digits || null;
+}
+
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-async function hashPassword(password: string, salt: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(salt + ':' + password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+function bool(v: unknown): boolean {
+  return v === true;
+}
+
+function parsePermissions(input: unknown): Record<string, boolean> {
+  const p = isObject(input) ? input : {};
+
+  return {
+    is_admin: bool(p.is_admin),
+    acesso_voucher: bool(p.acesso_voucher),
+    cadastrar_produto: bool(p.cadastrar_produto) || bool(p.acesso_cadastrar_produto),
+    ficha_consumo: bool(p.ficha_consumo) || bool(p.acesso_ficha_consumo),
+    acesso_comanda: bool(p.acesso_comanda),
+    acesso_kds: bool(p.acesso_kds),
+    reimpressao_venda: bool(p.reimpressao_venda),
+    pulseira: bool(p.pulseira) || bool(p.acesso_pulseira),
+  };
 }
 
 Deno.serve(async (req) => {
@@ -69,161 +86,199 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Check caller is admin
-    const { data: callerPerm } = await admin
+    const { data: callerPerm, error: callerPermErr } = await admin
       .from("user_permissions")
       .select("is_admin")
       .eq("user_id", callerUserId)
       .maybeSingle();
 
+    if (callerPermErr) return json({ error: callerPermErr.message }, 400);
     if (!callerPerm?.is_admin) {
       return json({ error: "Acesso negado: apenas administradores." }, 403);
     }
 
     const { action } = body;
 
-    // ==================== CREATE USER ====================
     if (action === "create-user") {
-      const email = normalizeEmail(body.email);
-      const password = normalizeString(body.password);
       const profile = isObject(body.profile) ? body.profile : {};
-      const permissions = isObject(body.permissions) ? body.permissions : {};
+      const permissions = parsePermissions(body.permissions);
+
+      const nome = normalizeString(profile.nome) || "";
+      const email = normalizeEmail(profile.email ?? body.email);
+      const password = normalizeString(body.password);
+      const cpf = normalizeCpf(profile.cpf ?? body.cpf);
+      const ativo = profile.ativo !== false;
 
       if (!email || !password) return json({ error: "Email e senha são obrigatórios." }, 400);
       if (password.length < 6) return json({ error: "Senha deve ter pelo menos 6 caracteres." }, 400);
-
-      const nome = normalizeString(profile.nome) || "";
-      const cpf = normalizeString(profile.cpf);
-      const ativo = profile.ativo !== false;
-
       if (!cpf) return json({ error: "CPF é obrigatório." }, 400);
 
-      const { data: existingCpf } = await admin
-        .from("user_profiles").select("id").eq("cpf", cpf).maybeSingle();
+      const { data: existingCpf, error: existingCpfErr } = await admin
+        .from("user_profiles")
+        .select("id")
+        .eq("cpf", cpf)
+        .maybeSingle();
+      if (existingCpfErr) return json({ error: existingCpfErr.message }, 400);
       if (existingCpf) return json({ error: "CPF já cadastrado." }, 400);
 
-      const senhaHash = await hashPassword(password, cpf);
-      const userId = crypto.randomUUID();
+      const { data: existingEmail, error: existingEmailErr } = await admin
+        .from("user_profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      if (existingEmailErr) return json({ error: existingEmailErr.message }, 400);
+      if (existingEmail) return json({ error: "Email já cadastrado." }, 400);
+
+      const { data: createdAuth, error: authCreateErr } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { nome, cpf },
+      });
+
+      if (authCreateErr || !createdAuth?.user?.id) {
+        return json({ error: authCreateErr?.message || "Não foi possível criar usuário de autenticação." }, 400);
+      }
+
+      const userId = createdAuth.user.id;
 
       const { error: profErr } = await admin.from("user_profiles").insert({
         id: userId,
         nome,
         email,
         cpf,
-        senha_hash: senhaHash,
         ativo,
       });
 
       if (profErr) {
+        await admin.auth.admin.deleteUser(userId);
         return json({ error: `Erro perfil: ${profErr.message}` }, 400);
       }
 
-      const permData: Record<string, unknown> = {
+      const { error: permErr } = await admin.from("user_permissions").insert({
         user_id: userId,
-        acesso_voucher: !!permissions.acesso_voucher,
-        acesso_cadastrar_produto: !!permissions.acesso_cadastrar_produto,
-        acesso_ficha_consumo: !!permissions.acesso_ficha_consumo,
-        acesso_comanda: !!permissions.acesso_comanda,
-        acesso_kds: !!permissions.acesso_kds,
-        reimpressao_venda: !!permissions.reimpressao_venda,
-        pulseira: !!permissions.pulseira,
-        is_admin: !!permissions.is_admin,
-        voucher_tempo_acesso: normalizeString(permissions.voucher_tempo_acesso),
-      };
+        ...permissions,
+      });
 
-      const { error: permErr } = await admin.from("user_permissions").insert(permData);
       if (permErr) {
         await admin.from("user_profiles").delete().eq("id", userId);
+        await admin.auth.admin.deleteUser(userId);
         return json({ error: `Erro permissões: ${permErr.message}` }, 400);
       }
 
       return json({ success: true, user_id: userId });
     }
 
-    // ==================== UPDATE USER ====================
     if (action === "update-user") {
       const userId = normalizeString(body.user_id);
       if (!userId) return json({ error: "user_id é obrigatório." }, 400);
 
       const profile = isObject(body.profile) ? body.profile : {};
-      const permissions = isObject(body.permissions) ? body.permissions : {};
-
       const profileUpdate: Record<string, unknown> = {};
+
       if (profile.nome !== undefined) profileUpdate.nome = normalizeString(profile.nome) || "";
       if (profile.email !== undefined) profileUpdate.email = normalizeEmail(profile.email);
-      if (profile.cpf !== undefined) profileUpdate.cpf = normalizeString(profile.cpf);
-      if (profile.ativo !== undefined) profileUpdate.ativo = profile.ativo;
+      if (profile.cpf !== undefined) profileUpdate.cpf = normalizeCpf(profile.cpf);
+      if (profile.ativo !== undefined) profileUpdate.ativo = !!profile.ativo;
 
-      if (Object.keys(profileUpdate).length > 0) {
-        const { error } = await admin.from("user_profiles")
-          .update(profileUpdate)
-          .eq("id", userId);
-        if (error) return json({ error: `Erro perfil: ${error.message}` }, 400);
+      if (typeof profileUpdate.cpf === "string") {
+        const { data: existingCpf, error: existingCpfErr } = await admin
+          .from("user_profiles")
+          .select("id")
+          .eq("cpf", profileUpdate.cpf)
+          .neq("id", userId)
+          .maybeSingle();
+        if (existingCpfErr) return json({ error: existingCpfErr.message }, 400);
+        if (existingCpf) return json({ error: "CPF já cadastrado para outro usuário." }, 400);
       }
 
-      if (Object.keys(permissions).length > 0) {
-        const permUpdate: Record<string, unknown> = {};
-        if (permissions.acesso_voucher !== undefined) permUpdate.acesso_voucher = !!permissions.acesso_voucher;
-        if (permissions.acesso_cadastrar_produto !== undefined) permUpdate.acesso_cadastrar_produto = !!permissions.acesso_cadastrar_produto;
-        if (permissions.acesso_ficha_consumo !== undefined) permUpdate.acesso_ficha_consumo = !!permissions.acesso_ficha_consumo;
-        if (permissions.acesso_comanda !== undefined) permUpdate.acesso_comanda = !!permissions.acesso_comanda;
-        if (permissions.acesso_kds !== undefined) permUpdate.acesso_kds = !!permissions.acesso_kds;
-        if (permissions.reimpressao_venda !== undefined) permUpdate.reimpressao_venda = !!permissions.reimpressao_venda;
-        if (permissions.pulseira !== undefined) permUpdate.pulseira = !!permissions.pulseira;
-        if (permissions.is_admin !== undefined) permUpdate.is_admin = !!permissions.is_admin;
-        if (permissions.voucher_tempo_acesso !== undefined) permUpdate.voucher_tempo_acesso = normalizeString(permissions.voucher_tempo_acesso);
+      if (typeof profileUpdate.email === "string") {
+        const { data: existingEmail, error: existingEmailErr } = await admin
+          .from("user_profiles")
+          .select("id")
+          .eq("email", profileUpdate.email)
+          .neq("id", userId)
+          .maybeSingle();
+        if (existingEmailErr) return json({ error: existingEmailErr.message }, 400);
+        if (existingEmail) return json({ error: "Email já cadastrado para outro usuário." }, 400);
+      }
 
-        const { error } = await admin.from("user_permissions")
-          .upsert({ user_id: userId, ...permUpdate }, { onConflict: "user_id" });
-        if (error) return json({ error: `Erro permissões: ${error.message}` }, 400);
+      if (Object.keys(profileUpdate).length > 0) {
+        const { error: profileErr } = await admin.from("user_profiles").update(profileUpdate).eq("id", userId);
+        if (profileErr) return json({ error: `Erro perfil: ${profileErr.message}` }, 400);
+
+        if (typeof profileUpdate.email === "string" && profileUpdate.email) {
+          const { error: authUpdateErr } = await admin.auth.admin.updateUserById(userId, {
+            email: profileUpdate.email,
+          });
+          if (authUpdateErr) return json({ error: `Erro auth: ${authUpdateErr.message}` }, 400);
+        }
+      }
+
+      if (isObject(body.permissions)) {
+        const permissions = parsePermissions(body.permissions);
+
+        const { data: existingPerm, error: existingPermErr } = await admin
+          .from("user_permissions")
+          .select("user_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (existingPermErr) return json({ error: `Erro permissões: ${existingPermErr.message}` }, 400);
+
+        if (existingPerm?.user_id) {
+          const { error: updatePermErr } = await admin
+            .from("user_permissions")
+            .update(permissions)
+            .eq("user_id", userId);
+          if (updatePermErr) return json({ error: `Erro permissões: ${updatePermErr.message}` }, 400);
+        } else {
+          const { error: insertPermErr } = await admin
+            .from("user_permissions")
+            .insert({ user_id: userId, ...permissions });
+          if (insertPermErr) return json({ error: `Erro permissões: ${insertPermErr.message}` }, 400);
+        }
       }
 
       return json({ success: true });
     }
 
-    // ==================== DELETE USER ====================
     if (action === "delete-user") {
       const userId = normalizeString(body.user_id);
       if (!userId) return json({ error: "user_id é obrigatório." }, 400);
 
-      await admin.from("user_permissions").delete().eq("user_id", userId);
-      await admin.from("user_profiles").delete().eq("id", userId);
+      const [permRes, profileRes, authRes] = await Promise.all([
+        admin.from("user_permissions").delete().eq("user_id", userId),
+        admin.from("user_profiles").delete().eq("id", userId),
+        admin.auth.admin.deleteUser(userId),
+      ]);
+
+      if (permRes.error) return json({ error: permRes.error.message }, 400);
+      if (profileRes.error) return json({ error: profileRes.error.message }, 400);
+      if (authRes.error) return json({ error: authRes.error.message }, 400);
 
       return json({ success: true });
     }
 
-    // ==================== RESET PASSWORD ====================
     if (action === "reset-password") {
       const userId = normalizeString(body.user_id);
       const newPassword = normalizeString(body.new_password);
       if (!userId || !newPassword) return json({ error: "user_id e new_password obrigatórios." }, 400);
       if (newPassword.length < 6) return json({ error: "Senha deve ter pelo menos 6 caracteres." }, 400);
 
-      // Get user CPF for salt
-      const { data: userProfile } = await admin.from("user_profiles")
-        .select("cpf")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (!userProfile?.cpf) return json({ error: "Usuário sem CPF cadastrado." }, 400);
-
-      const senhaHash = await hashPassword(newPassword, userProfile.cpf);
-      const { error } = await admin.from("user_profiles")
-        .update({ senha_hash: senhaHash })
-        .eq("id", userId);
+      const { error } = await admin.auth.admin.updateUserById(userId, {
+        password: newPassword,
+      });
 
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
     }
 
-    // ==================== TOGGLE ATIVO ====================
     if (action === "toggle-ativo") {
       const userId = normalizeString(body.user_id);
       if (!userId) return json({ error: "user_id é obrigatório." }, 400);
 
-      const { error } = await admin.from("user_profiles")
-        .update({ ativo: !!body.ativo })
-        .eq("id", userId);
+      const { error } = await admin.from("user_profiles").update({ ativo: !!body.ativo }).eq("id", userId);
       if (error) return json({ error: error.message }, 400);
 
       return json({ success: true });
