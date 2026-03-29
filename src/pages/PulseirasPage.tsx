@@ -305,30 +305,53 @@ export default function PulseirasPage() {
                     <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
                       <History className="h-3.5 w-3.5 mr-1" /> Histórico
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={temSaldo && !is24hPassadas}
-                      title={temSaldo && !is24hPassadas ? 'Não é possível fechar com crédito/saldo disponível' : undefined}
-                      onClick={async () => {
-                        const result = await fecharPulseira(pulseira.id);
-                        if (result === 'abatimento') {
+                    {canClosePulseira && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={async () => {
+                          const result = await fecharPulseira(pulseira.id);
+                          if (result === 'abatimento') {
+                            setAbatimentoProdutos([]);
+                            setAbatimentoProdutoId('');
+                            setAbatimentoQtd(1);
+                            setAbatimentoModal(true);
+                          } else if (result === true) {
+                            limpar();
+                            listarAtivas();
+                            listarFechadas();
+                          }
+                        }}
+                      >
+                        Fechar Pulseira
+                      </Button>
+                    )}
+                    {is24hPassadas && temSaldo && hasMovimentacao && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
                           setAbatimentoProdutos([]);
                           setAbatimentoProdutoId('');
                           setAbatimentoQtd(1);
                           setAbatimentoModal(true);
-                        } else if (result === true) {
-                          limpar();
-                          listarAtivas();
-                          listarFechadas();
-                        }
-                      }}
-                    >
-                      Fechar Pulseira
-                    </Button>
+                        }}
+                      >
+                        Fechar com Abatimento
+                      </Button>
+                    )}
+                    {canDeletePulseira && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setConfirmExcluirModal(true)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir Pulseira
+                      </Button>
+                    )}
                   </div>
                 )}
-                {temSaldo && !is24hPassadas && pulseira.status === 'ativa' && (
+                {temSaldo && !is24hPassadas && pulseira.status === 'ativa' && hasMovimentacao && (
                   <p className="text-xs text-muted-foreground mt-1">
                     ⚠ A pulseira não pode ser finalizada manualmente enquanto existir crédito ou produtos disponíveis para retirada.
                   </p>
