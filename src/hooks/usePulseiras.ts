@@ -345,7 +345,7 @@ export function usePulseiras() {
     setResumoProdutos(resumo);
     setHistorico(hist);
 
-    setItens(hist.filter((h) => h.tipo === 'carga').map((h: any) => ({
+    setItens(hist.filter((h) => h.tipo === 'inclusao').map((h: any) => ({
       id: `${h.tipo}-${h.data}-${h.produto_nome}`,
       pulseira_id: pulseiraId,
       produto_id: '',
