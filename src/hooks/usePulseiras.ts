@@ -50,6 +50,16 @@ export interface PulseiraProdutoResumo {
   consumido: number;
   disponivel: number;
   ultima_retirada: string | null;
+  ultimo_atendente: string | null;
+}
+
+export interface PulseiraHistorico {
+  tipo: string;
+  produto_nome: string;
+  quantidade: number;
+  atendente_nome: string | null;
+  observacao: string | null;
+  data: string;
 }
 
 export function usePulseiras() {
@@ -58,15 +68,16 @@ export function usePulseiras() {
   const [itens, setItens] = useState<PulseiraItem[]>([]);
   const [consumos, setConsumos] = useState<PulseiraConsumo[]>([]);
   const [resumoProdutos, setResumoProdutos] = useState<PulseiraProdutoResumo[]>([]);
+  const [historico, setHistorico] = useState<PulseiraHistorico[]>([]);
   const [pulseirasAtivas, setPulseirasAtivas] = useState<Pulseira[]>([]);
 
+  // Uses vw_pulseiras_ativas view
   const listarAtivas = useCallback(async () => {
     try {
       const db = await getSupabaseClient();
       const { data, error } = await db
-        .from('pulseiras')
+        .from('vw_pulseiras_ativas' as any)
         .select('*')
-        .eq('status', 'ativa')
         .order('created_at', { ascending: false });
       if (error) throw error;
       setPulseirasAtivas((data || []) as any[]);
@@ -82,10 +93,9 @@ export function usePulseiras() {
     try {
       const db = await getSupabaseClient();
       const { data, error } = await db
-        .from('pulseiras')
+        .from('vw_pulseiras_ativas' as any)
         .select('*')
         .eq('numero', numero.trim())
-        .eq('status', 'ativa')
         .maybeSingle();
       if (error) throw error;
       if (!data) {
@@ -93,6 +103,7 @@ export function usePulseiras() {
         setItens([]);
         setConsumos([]);
         setResumoProdutos([]);
+        setHistorico([]);
         setLoading(false);
         return null;
       }
@@ -107,47 +118,72 @@ export function usePulseiras() {
     }
   }, []);
 
+  // Uses vw_pulseira_saldos + vw_pulseira_historico
   const carregarDetalhes = useCallback(async (pulseiraId: string) => {
     const db = await getSupabaseClient();
-    const [itensRes, consumosRes] = await Promise.all([
-      db.from('pulseira_itens').select('*').eq('pulseira_id', pulseiraId).order('created_at', { ascending: false }),
-      db.from('pulseira_consumos').select('*').eq('pulseira_id', pulseiraId).order('created_at', { ascending: false }),
+    const [saldosRes, historicoRes] = await Promise.all([
+      db.from('vw_pulseira_saldos' as any).select('*').eq('pulseira_id', pulseiraId),
+      db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', pulseiraId).order('data', { ascending: false }),
     ]);
-    const itensData = (itensRes.data || []) as any[];
-    const consumosData = (consumosRes.data || []) as any[];
-    setItens(itensData);
-    setConsumos(consumosData);
 
-    // Build product summary
-    const prodMap: Record<string, PulseiraProdutoResumo> = {};
-    for (const item of itensData) {
-      const key = item.produto_id;
-      if (!prodMap[key]) {
-        prodMap[key] = { produto_id: key, produto_nome: item.produto_nome, comprado: 0, consumido: 0, disponivel: 0, ultima_retirada: null };
-      }
-      prodMap[key].comprado += item.quantidade;
-    }
-    for (const consumo of consumosData) {
-      const key = consumo.produto_id;
-      if (!prodMap[key]) {
-        prodMap[key] = { produto_id: key, produto_nome: consumo.produto_nome, comprado: 0, consumido: 0, disponivel: 0, ultima_retirada: null };
-      }
-      prodMap[key].consumido += consumo.quantidade;
-      if (!prodMap[key].ultima_retirada || consumo.created_at > prodMap[key].ultima_retirada!) {
-        prodMap[key].ultima_retirada = consumo.created_at;
-      }
-    }
-    for (const key of Object.keys(prodMap)) {
-      prodMap[key].disponivel = Math.max(0, prodMap[key].comprado - prodMap[key].consumido);
-    }
-    setResumoProdutos(Object.values(prodMap));
+    const saldosData = (saldosRes.data || []) as any[];
+    const historicoData = (historicoRes.data || []) as any[];
+
+    // Map saldos to resumoProdutos
+    const resumo: PulseiraProdutoResumo[] = saldosData.map((s: any) => ({
+      produto_id: s.produto_id,
+      produto_nome: s.produto_nome,
+      comprado: Number(s.total_carregado ?? s.comprado ?? 0),
+      consumido: Number(s.total_baixado ?? s.consumido ?? 0),
+      disponivel: Number(s.saldo_disponivel ?? s.disponivel ?? 0),
+      ultima_retirada: s.ultima_baixa ?? s.ultima_retirada ?? null,
+      ultimo_atendente: s.ultimo_atendente ?? null,
+    }));
+    setResumoProdutos(resumo);
+
+    // Map historico
+    const hist: PulseiraHistorico[] = historicoData.map((h: any) => ({
+      tipo: h.tipo,
+      produto_nome: h.produto_nome,
+      quantidade: Number(h.quantidade),
+      atendente_nome: h.atendente_nome ?? null,
+      observacao: h.observacao ?? null,
+      data: h.data,
+    }));
+    setHistorico(hist);
+
+    // Keep itens/consumos from historico for backward compat
+    setItens(historicoData.filter((h: any) => h.tipo === 'carga').map((h: any) => ({
+      id: h.id || h.data,
+      pulseira_id: pulseiraId,
+      produto_id: h.produto_id || '',
+      produto_nome: h.produto_nome,
+      quantidade: Number(h.quantidade),
+      valor_unitario: 0,
+      valor_total: 0,
+      atendente_user_id: null,
+      atendente_nome: h.atendente_nome ?? null,
+      codigo_venda: null,
+      created_at: h.data,
+    })));
+    setConsumos(historicoData.filter((h: any) => h.tipo === 'baixa').map((h: any) => ({
+      id: h.id || h.data,
+      pulseira_id: pulseiraId,
+      pulseira_item_id: null,
+      produto_id: h.produto_id || '',
+      produto_nome: h.produto_nome,
+      quantidade: Number(h.quantidade),
+      atendente_user_id: null,
+      atendente_nome: h.atendente_nome ?? null,
+      observacao: h.observacao ?? null,
+      created_at: h.data,
+    })));
   }, []);
 
   const abrirPulseira = useCallback(async (data: { numero: string; nome_cliente: string; telefone_cliente: string; cpf?: string; aberta_por?: string }) => {
     setLoading(true);
     try {
       const db = await getSupabaseClient();
-      // Check duplicate
       const { data: existing } = await db
         .from('pulseiras')
         .select('id')
@@ -177,6 +213,7 @@ export function usePulseiras() {
       setItens([]);
       setConsumos([]);
       setResumoProdutos([]);
+      setHistorico([]);
       setLoading(false);
       return created;
     } catch (err: any) {
@@ -211,8 +248,8 @@ export function usePulseiras() {
     }
   }, [carregarDetalhes]);
 
+  // Uses RPC registrar_baixa_pulseira
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
-    // Check available balance
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
     if (!prod || prod.disponivel < quantidade) {
       toast({ title: 'Saldo insuficiente', description: `Disponível: ${prod?.disponivel || 0}`, variant: 'destructive' });
@@ -220,15 +257,14 @@ export function usePulseiras() {
     }
     try {
       const db = await getSupabaseClient();
-      const { error } = await db.from('pulseira_consumos').insert({
-        pulseira_id: pulseiraId,
-        produto_id,
-        produto_nome,
-        quantidade,
-        atendente_user_id: atendente_user_id || null,
-        atendente_nome: atendente_nome || null,
-        observacao: observacao || null,
-      } as any);
+      const { error } = await db.rpc('registrar_baixa_pulseira', {
+        p_pulseira_id: pulseiraId,
+        p_produto_id: produto_id,
+        p_quantidade: quantidade,
+        p_atendente_user_id: atendente_user_id || null,
+        p_atendente_nome: atendente_nome || null,
+        p_observacao: observacao || null,
+      });
       if (error) throw error;
       toast({ title: 'Baixa registrada!' });
       await carregarDetalhes(pulseiraId);
@@ -261,6 +297,7 @@ export function usePulseiras() {
     setItens([]);
     setConsumos([]);
     setResumoProdutos([]);
+    setHistorico([]);
   }, []);
 
   return {
@@ -269,6 +306,7 @@ export function usePulseiras() {
     itens,
     consumos,
     resumoProdutos,
+    historico,
     pulseirasAtivas,
     buscarPulseira,
     abrirPulseira,

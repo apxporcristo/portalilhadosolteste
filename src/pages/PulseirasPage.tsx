@@ -22,7 +22,7 @@ export default function PulseirasPage() {
   const navigate = useNavigate();
   const userSession = useOptionalUserSession();
   const {
-    loading, pulseira, resumoProdutos, itens, consumos, pulseirasAtivas,
+    loading, pulseira, resumoProdutos, itens, consumos, historico, pulseirasAtivas,
     buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, listarAtivas, limpar, carregarDetalhes,
   } = usePulseiras();
   const { fichasAtivas } = useFichasConsumo();
@@ -269,6 +269,7 @@ export default function PulseirasPage() {
                           {p.ultima_retirada && (
                             <div className="text-xs text-muted-foreground mt-0.5">
                               Última retirada: {formatTime(p.ultima_retirada)}
+                              {p.ultimo_atendente && <span> · {p.ultimo_atendente}</span>}
                             </div>
                           )}
                         </div>
@@ -436,72 +437,40 @@ export default function PulseirasPage() {
           <DialogHeader>
             <DialogTitle>Histórico da Pulseira #{pulseira?.numero}</DialogTitle>
           </DialogHeader>
-          <Tabs defaultValue="compras">
-            <TabsList className="w-full">
-              <TabsTrigger value="compras" className="flex-1">Compras ({itens.length})</TabsTrigger>
-              <TabsTrigger value="consumos" className="flex-1">Consumos ({consumos.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="compras">
-              {itens.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Nenhuma compra registrada.</p>
-              ) : (
-                <div className="rounded-md border overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produto</TableHead>
-                        <TableHead className="text-center">Qtd</TableHead>
-                        <TableHead className="text-right">Valor</TableHead>
-                        <TableHead>Atendente</TableHead>
-                        <TableHead>Data</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {itens.map(item => (
-                        <TableRow key={item.id}>
-                          <TableCell className="text-sm">{item.produto_nome}</TableCell>
-                          <TableCell className="text-center">{item.quantidade}</TableCell>
-                          <TableCell className="text-right">R$ {Number(item.valor_total).toFixed(2)}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{item.atendente_nome || '—'}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{formatDate(item.created_at)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="consumos">
-              {consumos.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Nenhum consumo registrado.</p>
-              ) : (
-                <div className="rounded-md border overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produto</TableHead>
-                        <TableHead className="text-center">Qtd</TableHead>
-                        <TableHead>Atendente</TableHead>
-                        <TableHead>Obs</TableHead>
-                        <TableHead>Data</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {consumos.map(c => (
-                        <TableRow key={c.id}>
-                          <TableCell className="text-sm">{c.produto_nome}</TableCell>
-                          <TableCell className="text-center">{c.quantidade}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{c.atendente_nome || '—'}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{c.observacao || '—'}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{formatDate(c.created_at)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+          {historico.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>
+          ) : (
+            <div className="rounded-md border overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Produto</TableHead>
+                    <TableHead className="text-center">Qtd</TableHead>
+                    <TableHead>Atendente</TableHead>
+                    <TableHead>Obs</TableHead>
+                    <TableHead>Data</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historico.map((h, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>
+                        <Badge variant={h.tipo === 'carga' ? 'default' : 'secondary'} className="text-xs">
+                          {h.tipo === 'carga' ? 'Carga' : 'Baixa'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{h.produto_nome}</TableCell>
+                      <TableCell className="text-center">{h.quantidade}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{h.observacao || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatDate(h.data)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
