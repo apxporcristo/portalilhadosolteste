@@ -547,6 +547,20 @@ export default function FichasLista() {
     }
   };
 
+  // Direct pulseira flow — no payment, no print modal
+  const handleAddToPulseiraDirectly = async () => {
+    if (!hasPulseiraContext || !pulseiraContextId || cart.length === 0) return;
+    setPrinting(true);
+    try {
+      await addItemsToPulseiraContext();
+      clearCart();
+    } catch (err: any) {
+      console.error('[Pulseira] Erro ao adicionar diretamente:', err);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const proceedAfterClientData = async () => {
     setPrinting(true);
     try {
