@@ -220,35 +220,11 @@ export function usePulseiras() {
   }, []);
 
   const carregarSaldosPadronizados = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
-    const rpcTentativas: { nome: string; payload: Record<string, any> }[] = [
-      { nome: 'listar_saldo_pulseira_produto', payload: { pulseira_id: pulseiraId } },
-      { nome: 'listar_saldo_pulseira_produto', payload: { p_pulseira_id: pulseiraId } },
-    ];
-
-    for (const tentativa of rpcTentativas) {
-      const { data, error } = await db.rpc(tentativa.nome as any, tentativa.payload as any);
-      if (!error && Array.isArray(data)) {
-        return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
-      }
-      if (error) {
-        console.warn(`[Pulseiras] RPC ${tentativa.nome} falhou:`, error.message);
-      }
+    const { data, error } = await db.rpc('listar_saldo_pulseira_produto' as any, { p_pulseira_id: pulseiraId } as any);
+    if (!error && Array.isArray(data)) {
+      return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
     }
-
-    const views = ['vw_pulseira_saldo_produto', 'vw_pulseira_saldos'];
-    for (const viewName of views) {
-      const { data, error } = await db
-        .from(viewName as any)
-        .select('*')
-        .eq('pulseira_id', pulseiraId);
-
-      if (!error) {
-        return ((data || []) as any[]).map((row) => normalizeSaldoRow(row, pulseiraId));
-      }
-
-      console.warn(`[Pulseiras] View ${viewName} falhou:`, error.message);
-    }
-
+    if (error) console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto falhou:', error.message);
     return [];
   }, []);
 
