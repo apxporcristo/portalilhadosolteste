@@ -355,11 +355,13 @@ export function usePulseiras() {
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
     if (!prod || prod.disponivel < quantidade) {
-      toast({ title: 'Saldo insuficiente', description: `Disponível: ${prod?.disponivel || 0}`, variant: 'destructive' });
+      toast({ title: 'Saldo insuficiente', description: `Este produto não possui saldo disponível para baixa. Disponível: ${prod?.disponivel || 0}`, variant: 'destructive' });
       return false;
     }
     try {
       const db = await getSupabaseClient();
+
+      // Try primary column layout first
       const { error } = await db
         .from('pulseira_baixas' as any)
         .insert({
@@ -371,7 +373,27 @@ export function usePulseiras() {
           atendente_nome: atendente_nome || null,
           observacao: observacao || null,
         });
-      if (error) throw error;
+
+      if (error) {
+        console.warn('[Pulseiras] Insert attempt 1 failed:', error.message);
+        // Try alternative column names (produto_nome, atendente_user_id)
+        const { error: error2 } = await db
+          .from('pulseira_baixas' as any)
+          .insert({
+            pulseira_id: pulseiraId,
+            produto_id: produto_id,
+            produto_nome: produto_nome,
+            quantidade: quantidade,
+            atendente_user_id: atendente_user_id || null,
+            atendente_nome: atendente_nome || null,
+            observacao: observacao || null,
+          });
+        if (error2) {
+          console.error('[Pulseiras] Insert attempt 2 also failed:', error2.message);
+          throw error2;
+        }
+      }
+
       toast({ title: 'Produto baixado com sucesso.' });
       await carregarDetalhes(pulseiraId);
       return true;
