@@ -16,6 +16,7 @@ export interface UserAccess {
   reimpressao_venda: boolean;
   pulseira: boolean;
   is_admin: boolean;
+  voucher_tempo_acesso: string | null;
 }
 
 interface UserSessionContextType {
@@ -91,6 +92,7 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
           reimpressao_venda: perm?.reimpressao_venda ?? false,
           pulseira: perm?.pulseira ?? false,
           is_admin: perm?.is_admin ?? false,
+          voucher_tempo_acesso: null,
         });
       }
     } catch (err) {
