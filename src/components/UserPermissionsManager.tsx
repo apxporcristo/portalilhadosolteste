@@ -59,12 +59,31 @@ async function invokeEdgeFunction(functionName: string, body: Record<string, unk
   const callerUserId = getCallerUserId();
   const requestBody = { ...body, caller_user_id: callerUserId };
 
-  const { data, error } = await cloudSupabase.functions.invoke(functionName, {
-    body: requestBody,
+  // Use external Supabase config to call edge functions on the correct project
+  const config = await getSupabaseConfig();
+  const url = `${config.url}/functions/v1/${functionName}`;
+
+  console.log(`[invokeEdgeFunction] Calling: ${url}`, { payload: requestBody });
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.anonKey}`,
+      'apikey': config.anonKey,
+    },
+    body: JSON.stringify(requestBody),
   });
 
-  if (error) {
-    throw new Error(error.message || 'Falha ao chamar função de usuários.');
+  const text = await res.text();
+  console.log(`[invokeEdgeFunction] Status: ${res.status}, Body: ${text}`);
+
+  let data: any;
+  try { data = JSON.parse(text); } catch { data = { error: text }; }
+
+  if (!res.ok) {
+    const msg = data?.error || `Erro HTTP ${res.status}: ${text}`;
+    throw new Error(msg);
   }
 
   if (data?.error) {
