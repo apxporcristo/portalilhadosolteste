@@ -124,6 +124,24 @@ export function UserPermissionsManager() {
   const [fVoucherTemposSelecionados, setFVoucherTemposSelecionados] = useState<string[]>([]);
   const [fVoucherTempoAcesso, setFVoucherTempoAcesso] = useState('');
 
+  /* ── Fetch available voucher tempos ── */
+  const fetchAvailableTempos = useCallback(async () => {
+    try {
+      const db = await getSupabaseClient();
+      const { data, error } = await db
+        .from('vouchers')
+        .select('tempo_validade')
+        .eq('status', 'livre');
+      if (error) throw error;
+      const tempos = Array.from(new Set((data || []).map((v: any) => v.tempo_validade).filter(Boolean)));
+      tempos.sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+      console.log('[fetchAvailableTempos] tempos:', tempos);
+      setAvailableTempos(tempos);
+    } catch (err) {
+      console.error('[fetchAvailableTempos]', err);
+    }
+  }, []);
+
   /* ── Fetch users ── */
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -177,7 +195,7 @@ export function UserPermissionsManager() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { fetchUsers(); fetchAvailableTempos(); }, [fetchUsers, fetchAvailableTempos]);
 
   /* ── Form helpers ── */
   const resetForm = () => {
