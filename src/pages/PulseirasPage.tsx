@@ -269,6 +269,7 @@ export default function PulseirasPage() {
                           {p.ultima_retirada && (
                             <div className="text-xs text-muted-foreground mt-0.5">
                               Última retirada: {formatTime(p.ultima_retirada)}
+                              {p.ultimo_atendente && <span> · {p.ultimo_atendente}</span>}
                             </div>
                           )}
                         </div>
