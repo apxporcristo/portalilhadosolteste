@@ -830,10 +830,12 @@ export default function FichasLista() {
       <header className="bg-card border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-full mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+            <Button variant="ghost" size="icon" onClick={() => navigate(hasPulseiraContext ? '/pulseiras' : '/')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-lg sm:text-xl font-bold text-foreground">Lista de Fichas</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-foreground">
+              {hasPulseiraContext ? `Fichas — Pulseira #${pulseiraContextNumero}` : 'Lista de Fichas'}
+            </h1>
           </div>
         </div>
       </header>
