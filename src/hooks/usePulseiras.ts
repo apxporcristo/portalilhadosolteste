@@ -374,80 +374,25 @@ export function usePulseiras() {
   const adicionarItens = useCallback(async (pulseiraId: string, items: { produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number; atendente_user_id?: string; atendente_nome?: string; codigo_venda?: string }[]) => {
     try {
       const db = await getSupabaseClient();
-      const rows = items.map(i => ({
-        pulseira_id: pulseiraId,
-        produto_id: i.produto_id,
-        nome_produto: i.produto_nome,
-        quantidade: i.quantidade,
-        valor_unitario: i.valor_unitario,
-        valor_total: i.quantidade * i.valor_unitario,
-        atendente_user_id: i.atendente_user_id || null,
-      }));
-      const { error } = await db.from('pulseira_itens').insert(rows as any);
-      if (error) throw error;
+      for (const item of items) {
+        const { error } = await db.rpc('incluir_produto_pulseira' as any, {
+          p_pulseira_id: pulseiraId,
+          p_produto_id: item.produto_id,
+          p_quantidade: item.quantidade,
+          p_usuario_id: item.atendente_user_id || null,
+          p_observacao: null,
+        } as any);
+        if (error) throw error;
+      }
       toast({ title: 'Itens adicionados à pulseira!' });
       await carregarDetalhes(pulseiraId);
       return true;
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+      console.error('[Pulseiras] Erro ao incluir produto:', err);
+      toast({ title: 'Erro', description: 'Não foi possível adicionar o produto à pulseira.', variant: 'destructive' });
       return false;
     }
   }, [carregarDetalhes]);
-
-  const executarBaixaRpc = useCallback(async (
-    db: any,
-    params: {
-      pulseiraId: string;
-      produtoId: string;
-      quantidade: number;
-      usuarioIdLogado: string;
-      atendenteNome?: string;
-      observacao?: string;
-    }
-  ) => {
-    const tentativas: { nome: string; payload: Record<string, any> }[] = [
-      {
-        nome: 'baixar_produto_pulseira',
-        payload: {
-          pulseira_id: params.pulseiraId,
-          produto_id: params.produtoId,
-          quantidade: params.quantidade,
-          usuario_id_logado: params.usuarioIdLogado,
-        },
-      },
-      {
-        nome: 'rpc_pulseira_baixar_item',
-        payload: {
-          p_pulseira_id: params.pulseiraId,
-          p_produto_id: params.produtoId,
-          p_quantidade: params.quantidade,
-          p_atendente_id: params.usuarioIdLogado,
-          p_atendente_nome: params.atendenteNome || null,
-          p_observacao: params.observacao || null,
-        },
-      },
-      {
-        nome: 'rpc_pulseira_baixar_item',
-        payload: {
-          pulseira_id: params.pulseiraId,
-          produto_id: params.produtoId,
-          quantidade: params.quantidade,
-          usuario_id_logado: params.usuarioIdLogado,
-          observacao: params.observacao || null,
-        },
-      },
-    ];
-
-    let lastError: any = null;
-    for (const tentativa of tentativas) {
-      const { error } = await db.rpc(tentativa.nome as any, tentativa.payload as any);
-      if (!error) return;
-      lastError = error;
-      console.warn(`[Pulseiras] RPC ${tentativa.nome} falhou na baixa:`, error.message);
-    }
-
-    throw lastError || new Error('Falha ao executar baixa da pulseira');
-  }, []);
 
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
@@ -457,21 +402,20 @@ export function usePulseiras() {
     }
 
     if (!atendente_user_id) {
-      console.warn('[Pulseiras] Baixa bloqueada por falta de usuário logado:', { pulseiraId, produto_id, produto_nome });
       toast({ title: 'Erro', description: 'Não foi possível concluir a baixa do produto.', variant: 'destructive' });
       return false;
     }
 
     try {
       const db = await getSupabaseClient();
-      await executarBaixaRpc(db, {
-        pulseiraId,
-        produtoId: produto_id,
-        quantidade,
-        usuarioIdLogado: atendente_user_id,
-        atendenteNome: atendente_nome,
-        observacao,
-      });
+      const { error } = await db.rpc('baixar_produto_pulseira' as any, {
+        p_pulseira_id: pulseiraId,
+        p_produto_id: produto_id,
+        p_quantidade: quantidade,
+        p_usuario_id: atendente_user_id,
+        p_observacao: observacao || null,
+      } as any);
+      if (error) throw error;
 
       toast({ title: 'Produto baixado com sucesso.' });
       await carregarDetalhes(pulseiraId);
@@ -481,7 +425,7 @@ export function usePulseiras() {
       toast({ title: 'Erro', description: 'Não foi possível concluir a baixa do produto.', variant: 'destructive' });
       return false;
     }
-  }, [resumoProdutos, carregarDetalhes, executarBaixaRpc]);
+  }, [resumoProdutos, carregarDetalhes]);
 
   // Manual close: ONLY allowed when saldo = 0
   // 24h rule triggers abatement flow instead
