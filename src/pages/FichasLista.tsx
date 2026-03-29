@@ -626,7 +626,11 @@ export default function FichasLista() {
     setPrinting(true);
     try {
       const codigoVenda = await saveAllToDB();
-      toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
+      // If pulseira context, add items to pulseira after save
+      if (hasPulseiraContext) {
+        await addItemsToPulseiraContext();
+      }
+      toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s).${hasPulseiraContext ? ` Itens lançados na pulseira #${pulseiraContextNumero}.` : ''} Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
       toast({ title: 'Erro', description: `Falha ao salvar: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
