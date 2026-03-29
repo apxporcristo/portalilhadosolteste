@@ -269,12 +269,14 @@ export function usePulseiras() {
     itens,
     consumos,
     resumoProdutos,
+    pulseirasAtivas,
     buscarPulseira,
     abrirPulseira,
     adicionarItens,
     consumirProduto,
     fecharPulseira,
     carregarDetalhes,
+    listarAtivas,
     limpar,
   };
 }
