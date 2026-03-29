@@ -49,76 +49,98 @@ const DEFAULT_CONFIG: ScaleSerialConfig = {
 // ─── Weight Parser ──────────────────────────────────────────────────
 
 /**
- * Tolerant weight parser.
- * Accepts: 0.850, 0,850, 000850, ST,GS,+000850kg, etc.
- * Returns weight in kg or null.
+ * Extract the numeric weight portion from raw scale data.
+ * Strips known prefixes (ST,GS, WT:, signs, units) to isolate the number.
+ */
+function extractNumericPart(raw: string): string | null {
+  // Remove control chars
+  let s = raw.replace(/[\x00-\x1F\x7F]/g, '').trim();
+  if (!s) return null;
+
+  // Remove known scale prefixes/suffixes: ST,GS, WT:, kg, g, lb, etc.
+  s = s.replace(/^(ST|GS|WT|NET|GROSS)[,:\s]*/gi, '');
+  s = s.replace(/^(ST|GS|WT|NET|GROSS)[,:\s]*/gi, ''); // second pass for chained prefixes
+  s = s.replace(/\s*(kg|g|lb|oz)\s*$/gi, '');
+  s = s.replace(/^[+\s]+/, ''); // leading + and spaces
+  s = s.trim();
+
+  if (!s) return null;
+  return s;
+}
+
+/**
+ * Tolerant weight parser for serial scale data.
+ *
+ * Rules (in priority order):
+ * 1. If the number has an explicit decimal (. or ,), interpret directly as kg.
+ * 2. If the number is a pure integer, interpret as milligrams → divide by 1000 for kg.
+ * 3. Reject negative values.
+ * 4. Reject absurd values (>= 999 kg).
+ *
+ * Examples:
+ *   "0,032"            → 0.032 kg
+ *   "0.032"            → 0.032 kg
+ *   "32"               → 0.032 kg
+ *   "00032"            → 0.032 kg
+ *   "00320"            → 0.320 kg
+ *   "03200"            → 3.200 kg
+ *   "ST,GS,+00032kg"   → 0.032 kg
  */
 export function parseWeightFromRaw(raw: string): ParsedWeightResult | null {
   if (!raw || typeof raw !== 'string') return null;
 
-  // Strip control chars except STX/ETX
-  const cleaned = raw.replace(/[^\x02\x03\x20-\x7E]/g, '').trim();
-  if (!cleaned) return null;
-
   console.log('[ScaleParser] rawData recebido:', JSON.stringify(raw));
 
-  // Toledo protocol STX/ETX
+  // --- Toledo STX/ETX protocol ---
+  const cleaned = raw.replace(/[^\x02\x03\x20-\x7E]/g, '').trim();
   const stxIdx = cleaned.indexOf('\x02');
   const etxIdx = cleaned.indexOf('\x03', stxIdx >= 0 ? stxIdx : 0);
   if (stxIdx >= 0 && etxIdx > stxIdx) {
     const payload = cleaned.substring(stxIdx + 1, etxIdx).trim();
-    const m = payload.match(/(\d+[.,]?\d*)/);
-    if (m) {
-      const numStr = m[1].replace(',', '.');
-      const v = parseFloat(numStr);
-      const hasDecimal = numStr.includes('.');
-      const kg = hasDecimal ? v : v / 1000;
-      console.log('[ScaleParser] Toledo: bruto=', m[1], 'hasDecimal=', hasDecimal, 'kg=', kg);
-      if (kg > 0 && kg < 999) {
-        return { weightKg: Math.round(kg * 1000) / 1000, rawData: raw, normalized: m[1] };
-      }
+    const result = parseNumericWeight(payload, raw);
+    if (result) {
+      console.log('[ScaleParser] Toledo protocol → ', result.weightKg.toFixed(3), 'kg');
+      return result;
     }
   }
 
-  // Normalize: replace comma with dot
-  const normalized = cleaned.replace(/,/g, '.');
+  // --- Generic format: extract numeric part ---
+  const numPart = extractNumericPart(cleaned);
+  if (!numPart) return null;
 
-  // Find all potential number matches (take the last valid one)
-  const matches = [...normalized.matchAll(/[+-]?\d{1,6}\.?\d{0,4}/g)];
-  if (matches.length === 0) return null;
+  return parseNumericWeight(numPart, raw);
+}
 
-  // Try from last match backwards (most scales send weight at the end)
-  for (let i = matches.length - 1; i >= 0; i--) {
-    const numStr = matches[i][0];
+/**
+ * Core numeric conversion: takes a cleaned numeric string and converts to kg.
+ */
+function parseNumericWeight(input: string, rawData: string): ParsedWeightResult | null {
+  // Try to find a number with explicit decimal separator (, or .)
+  const decimalMatch = input.match(/(\d+[.,]\d+)/);
+  if (decimalMatch) {
+    const numStr = decimalMatch[1].replace(',', '.');
     const value = parseFloat(numStr);
-    if (isNaN(value) || value < 0 || value >= 999) continue;
-
-    const hasDecimal = numStr.includes('.');
-    let kg: number;
-    let rule: string;
-
-    if (hasDecimal) {
-      // Explicit decimal: use as-is (already in kg)
-      kg = value;
-      rule = 'decimal explícito, valor em kg';
-    } else {
-      // No decimal separator: treat as grams, divide by 1000
-      kg = value / 1000;
-      rule = 'sem decimal, dividido por 1000 (gramas → kg)';
-    }
-
-    console.log('[ScaleParser] bruto extraído:', numStr, '| regra:', rule, '| peso final:', kg.toFixed(3), 'kg');
-
-    if (kg <= 0 || kg >= 999) continue;
-
-    return {
-      weightKg: Math.round(kg * 1000) / 1000,
-      rawData: raw,
-      normalized: numStr,
-    };
+    if (isNaN(value) || value < 0 || value >= 999) return null;
+    const kg = Math.round(value * 1000) / 1000;
+    console.log('[ScaleParser] decimal explícito:', decimalMatch[1], '→', kg.toFixed(3), 'kg');
+    return { weightKg: kg, rawData, normalized: decimalMatch[1] };
   }
 
-  return null;
+  // No decimal: extract pure integer digits
+  const intMatch = input.match(/(\d+)/);
+  if (!intMatch) return null;
+
+  const intStr = intMatch[1];
+  const intValue = parseInt(intStr, 10);
+  if (isNaN(intValue) || intValue < 0) return null;
+
+  // Divide by 1000 (interpret as grams → kg)
+  const kg = intValue / 1000;
+  if (kg <= 0 || kg >= 999) return null;
+
+  const rounded = Math.round(kg * 1000) / 1000;
+  console.log('[ScaleParser] inteiro bruto:', intStr, '→ /1000 →', rounded.toFixed(3), 'kg');
+  return { weightKg: rounded, rawData, normalized: intStr };
 }
 
 // ─── Service Class ──────────────────────────────────────────────────
