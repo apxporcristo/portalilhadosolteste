@@ -229,7 +229,7 @@ export default function PulseirasPage() {
                   <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
                     <History className="h-3.5 w-3.5 mr-1" /> Histórico
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={async () => { await fecharPulseira(pulseira.id); limpar(); listarAtivas(); }}>
+                  <Button size="sm" variant="destructive" onClick={async () => { const closed = await fecharPulseira(pulseira.id); if (closed) { limpar(); listarAtivas(); } }}>
                     Fechar Pulseira
                   </Button>
                 </div>
