@@ -29,9 +29,7 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
   const [lendo, setLendo] = useState(false);
   const [tentouConectar, setTentouConectar] = useState(false);
 
-  const valorPeso = config.valor_peso || 0;
-  const pesoFinal = peso ?? (parseFloat(pesoManual) || 0);
-  const valorTotal = pesoFinal * valorPeso;
+  const pesoFinal = peso ?? (parseFloat(pesoManual.replace(',', '.')) || 0);
 
   const conectada = status === 'conectada';
   const falha = status === 'falha';
@@ -81,27 +79,23 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
       toast({ title: 'Peso inválido', description: 'Informe ou leia o peso antes de adicionar.', variant: 'destructive' });
       return;
     }
-    if (valorPeso <= 0) {
-      toast({ title: 'Valor não configurado', description: 'Configure o valor por peso nas configurações da balança.', variant: 'destructive' });
-      return;
-    }
 
     if (onAddToCart) {
       onAddToCart({
         tempo: `Self Service ${pesoFinal.toFixed(3)}kg`,
-        fichaTexto: `Self Service ${pesoFinal.toFixed(3)}kg × R$ ${valorPeso.toFixed(2)}`,
-        fichaValor: parseFloat(valorTotal.toFixed(2)),
+        fichaTexto: `Self Service ${pesoFinal.toFixed(3)}kg`,
+        fichaValor: 0, // valor será calculado pelo produto
       });
     }
 
     toast({
-      title: 'Adicionado ao carrinho',
-      description: `${pesoFinal.toFixed(3)} kg × R$ ${valorPeso.toFixed(2)} = R$ ${valorTotal.toFixed(2)}`,
+      title: 'Peso adicionado ao carrinho',
+      description: `${pesoFinal.toFixed(3)} kg`,
     });
 
     setPeso(null);
     setPesoManual('');
-  }, [pesoFinal, valorPeso, valorTotal, onAddToCart]);
+  }, [pesoFinal, onAddToCart]);
 
   const handleReset = () => {
     setPeso(null);
@@ -175,14 +169,7 @@ export function ServeServiceDialog({ open, onOpenChange, onAddToCart }: ServeSer
               <span className="text-muted-foreground">Peso:</span>
               <span className="font-medium">{pesoFinal.toFixed(3)} kg</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Valor/kg:</span>
-              <span className="font-medium">R$ {valorPeso.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-base font-bold border-t pt-1 mt-1">
-              <span>Total:</span>
-              <span className="text-primary">R$ {valorTotal.toFixed(2)}</span>
-            </div>
+            <p className="text-xs text-muted-foreground pt-1">O valor total será calculado pelo preço do produto.</p>
           </div>
 
           <div className="flex gap-2">

@@ -60,15 +60,20 @@ export function parseWeightFromRaw(raw: string): ParsedWeightResult | null {
   const cleaned = raw.replace(/[^\x02\x03\x20-\x7E]/g, '').trim();
   if (!cleaned) return null;
 
+  console.log('[ScaleParser] rawData recebido:', JSON.stringify(raw));
+
   // Toledo protocol STX/ETX
   const stxIdx = cleaned.indexOf('\x02');
   const etxIdx = cleaned.indexOf('\x03', stxIdx >= 0 ? stxIdx : 0);
   if (stxIdx >= 0 && etxIdx > stxIdx) {
     const payload = cleaned.substring(stxIdx + 1, etxIdx).trim();
-    const m = payload.match(/(\d+\.?\d*)/);
+    const m = payload.match(/(\d+[.,]?\d*)/);
     if (m) {
-      const v = parseFloat(m[1]);
-      const kg = v > 100 ? v / 1000 : v;
+      const numStr = m[1].replace(',', '.');
+      const v = parseFloat(numStr);
+      const hasDecimal = numStr.includes('.');
+      const kg = hasDecimal ? v : v / 1000;
+      console.log('[ScaleParser] Toledo: bruto=', m[1], 'hasDecimal=', hasDecimal, 'kg=', kg);
       if (kg > 0 && kg < 999) {
         return { weightKg: Math.round(kg * 1000) / 1000, rawData: raw, normalized: m[1] };
       }
@@ -88,16 +93,21 @@ export function parseWeightFromRaw(raw: string): ParsedWeightResult | null {
     const value = parseFloat(numStr);
     if (isNaN(value) || value < 0 || value >= 999) continue;
 
-    // Integer with 4-6 digits and no decimal → treat as grams, divide by 1000
     const hasDecimal = numStr.includes('.');
     let kg: number;
-    if (!hasDecimal && numStr.replace(/^[+-]/, '').length >= 4) {
-      kg = value / 1000;
-    } else if (!hasDecimal && value > 10) {
-      kg = value / 1000;
-    } else {
+    let rule: string;
+
+    if (hasDecimal) {
+      // Explicit decimal: use as-is (already in kg)
       kg = value;
+      rule = 'decimal explícito, valor em kg';
+    } else {
+      // No decimal separator: treat as grams, divide by 1000
+      kg = value / 1000;
+      rule = 'sem decimal, dividido por 1000 (gramas → kg)';
     }
+
+    console.log('[ScaleParser] bruto extraído:', numStr, '| regra:', rule, '| peso final:', kg.toFixed(3), 'kg');
 
     if (kg <= 0 || kg >= 999) continue;
 
