@@ -455,7 +455,7 @@ export default function PulseirasPage() {
                 Pulseiras Abertas ({pulseirasAtivas.length})
               </TabsTrigger>
               <TabsTrigger value="fechadas" className="flex-1">
-                Pulseiras Fechadas ({pulseirasFechadas.length})
+                Pulseiras Fechadas ({filteredFechadas.length})
               </TabsTrigger>
             </TabsList>
 
