@@ -235,13 +235,13 @@ export function usePulseiras() {
 
     const resumo: PulseiraProdutoResumo[] = saldosData.map((s: any) => ({
       produto_id: s.produto_id,
-      produto_nome: s.produto_nome || s.nome_produto || 'Produto sem nome',
-      comprado: Number(s.total_carregado ?? s.comprado ?? 0),
+      produto_nome: s.nome_produto || s.produto_nome || 'Produto sem nome',
+      comprado: Number(s.total_comprado ?? s.total_carregado ?? s.comprado ?? 0),
       consumido: Number(s.total_baixado ?? s.consumido ?? 0),
       disponivel: Number(s.saldo_disponivel ?? s.disponivel ?? 0),
       valor_unitario: Number(s.valor_unitario ?? 0),
-      ultima_retirada: s.ultima_baixa ?? s.ultima_retirada ?? null,
-      ultimo_atendente: s.ultimo_atendente ?? null,
+      ultima_retirada: s.ultima_baixa_em ?? s.ultima_baixa ?? s.ultima_retirada ?? null,
+      ultimo_atendente: s.ultimo_atendente_nome ?? s.ultimo_atendente ?? null,
     }));
     setResumoProdutos(resumo);
 
