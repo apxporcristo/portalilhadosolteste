@@ -46,6 +46,53 @@ function getCallerUserId(): string {
   throw new Error('Sessão expirada. Faça login novamente.');
 }
 
+async function createUserDirect(body: Record<string, unknown>) {
+  const db = await getSupabaseClient();
+  const nome = String(body.nome ?? '').trim();
+  const email = String(body.email ?? '').trim().toLowerCase();
+  const password = String(body.password ?? '');
+  const cpfRaw = String(body.cpf ?? '');
+  const cpfClean = cleanCPF(cpfRaw);
+
+  if (!nome || !email || !password || !cpfClean) throw new Error('Campos obrigatórios: nome, email, senha e cpf.');
+  if (password.length < 6) throw new Error('Senha deve ter pelo menos 6 caracteres.');
+
+  const { data: existingCpf } = await db.from('user_profiles').select('id').eq('cpf', cpfClean).maybeSingle();
+  if (existingCpf) throw new Error('CPF já cadastrado.');
+
+  const senhaHash = await hashPassword(password, cpfClean);
+  const userId = crypto.randomUUID();
+
+  const { error: profErr } = await db.from('user_profiles').insert({
+    id: userId,
+    nome,
+    email,
+    cpf: cpfClean,
+    senha_hash: senhaHash,
+    ativo: true,
+  } as any);
+  if (profErr) throw new Error(`Erro perfil: ${profErr.message}`);
+
+  const { error: permErr } = await db.from('user_permissions').insert({
+    user_id: userId,
+    acesso_voucher: !!body.acesso_voucher,
+    acesso_cadastrar_produto: !!body.cadastrar_produto,
+    acesso_ficha_consumo: !!body.ficha_consumo,
+    acesso_comanda: !!body.acesso_comanda,
+    acesso_kds: !!body.acesso_kds,
+    reimpressao_venda: !!body.reimpressao_venda,
+    pulseira: !!body.pulseira,
+    is_admin: !!body.administrador,
+    voucher_tempo_acesso: body.tempo_voucher && String(body.tempo_voucher) !== 'Todos' ? String(body.tempo_voucher) : null,
+  } as any);
+  if (permErr) {
+    await db.from('user_profiles').delete().eq('id', userId);
+    throw new Error(`Erro permissões: ${permErr.message}`);
+  }
+
+  return { success: true, user_id: userId };
+}
+
 async function invokeManageUsersDirect(body: Record<string, unknown>) {
   const db = await getSupabaseClient();
   const action = typeof body.action === 'string' ? body.action : null;
@@ -165,8 +212,9 @@ async function invokeEdgeFunction(functionName: string, body: Record<string, unk
     }
 
     if (!res.ok) {
-      if (functionName === 'manage-users' && (res.status === 404 || data?.code === 'NOT_FOUND')) {
-        return invokeManageUsersDirect(requestBody);
+      if (res.status === 404 || data?.code === 'NOT_FOUND') {
+        if (functionName === 'manage-users') return invokeManageUsersDirect(requestBody);
+        if (functionName === 'create-user-admin') return createUserDirect(requestBody);
       }
       throw new Error(data?.error || data?.message || `Erro ${res.status}`);
     }
@@ -176,13 +224,15 @@ async function invokeEdgeFunction(functionName: string, body: Record<string, unk
     }
 
     if (functionName === 'create-user-admin' && data?.success !== true) {
-      throw new Error(data?.error || 'Falha ao criar usuário.');
+      return createUserDirect(requestBody);
     }
 
     return data;
   } catch (err: any) {
-    if (functionName === 'manage-users' && String(err?.message || '').toLowerCase().includes('failed to fetch')) {
-      return invokeManageUsersDirect(requestBody);
+    const msg = String(err?.message || '').toLowerCase();
+    if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed')) {
+      if (functionName === 'manage-users') return invokeManageUsersDirect(requestBody);
+      if (functionName === 'create-user-admin') return createUserDirect(requestBody);
     }
     throw err;
   }
@@ -334,7 +384,7 @@ export function UserPermissionsManager() {
           administrador: formAdmin,
           pulseira: formPulseira,
         });
-        toast({ title: 'Usuário criado com sucesso!' });
+        toast({ title: 'Usuário salvo com sucesso.' });
 
       } else if (modalMode === 'edit' && selectedUser) {
         const cpfClean = cleanCPF(formCpf);
@@ -356,7 +406,7 @@ export function UserPermissionsManager() {
           },
           new_email: formEmail !== selectedUser.email ? formEmail : undefined,
         });
-        toast({ title: 'Usuário atualizado!' });
+        toast({ title: 'Usuário salvo com sucesso.' });
 
       } else if (modalMode === 'reset-password' && selectedUser) {
         if (!formSenha || formSenha.length < 6) {
@@ -374,7 +424,8 @@ export function UserPermissionsManager() {
       setModalMode(null);
       await fetchUsers();
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message || 'Falha na operação.', variant: 'destructive' });
+      console.error('Erro ao salvar usuário:', err);
+      toast({ title: 'Erro', description: 'Não foi possível salvar o usuário.', variant: 'destructive' });
     }
     setSaving(false);
   };
