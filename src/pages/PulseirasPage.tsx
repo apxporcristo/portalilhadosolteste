@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Plus, Minus, Watch, User, Phone, CreditCard, Clock, Package, History, AlertTriangle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Watch, User, Phone, CreditCard, Clock, Package, History, AlertTriangle, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -16,14 +16,15 @@ import { useFichasConsumo } from '@/hooks/useFichasConsumo';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function PulseirasPage() {
   const navigate = useNavigate();
   const userSession = useOptionalUserSession();
   const {
-    loading, pulseira, resumoProdutos, itens, consumos, historico, pulseirasAtivas,
-    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, fecharComAbatimento, listarAtivas, limpar, carregarDetalhes,
+    loading, pulseira, resumoProdutos, itens, consumos, historico, pulseirasAtivas, pulseirasFechadas,
+    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, fecharComAbatimento, reabrirPulseira, listarAtivas, listarFechadas, limpar, carregarDetalhes,
   } = usePulseiras();
   const { fichasAtivas, produtos } = useFichasConsumo();
 
@@ -32,6 +33,7 @@ export default function PulseirasPage() {
   const [addModal, setAddModal] = useState(false);
   const [consumoModal, setConsumoModal] = useState<PulseiraProdutoResumo | null>(null);
   const [historicoModal, setHistoricoModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('abertas');
 
   // Form: abrir pulseira
   const [formNumero, setFormNumero] = useState('');
@@ -72,10 +74,13 @@ export default function PulseirasPage() {
     const agora = new Date();
     return (agora.getTime() - abertaEm.getTime()) / (1000 * 60 * 60) >= 24;
   }, [pulseira]);
-  // Load active pulseiras on mount
+
+  const temSaldo = useMemo(() => resumoProdutos.some(p => p.disponivel > 0), [resumoProdutos]);
+
   useEffect(() => {
     listarAtivas();
-  }, [listarAtivas]);
+    listarFechadas();
+  }, [listarAtivas, listarFechadas]);
 
   const filteredAtivas = useMemo(() => {
     if (!numeroBusca.trim()) return pulseirasAtivas;
@@ -86,6 +91,26 @@ export default function PulseirasPage() {
       (p.telefone_cliente || '').toLowerCase().includes(q)
     );
   }, [pulseirasAtivas, numeroBusca]);
+
+  const filteredFechadas = useMemo(() => {
+    let list = pulseirasFechadas;
+    if (numeroBusca.trim()) {
+      const q = numeroBusca.toLowerCase();
+      list = list.filter(p =>
+        p.numero.toLowerCase().includes(q) ||
+        p.nome_cliente.toLowerCase().includes(q) ||
+        (p.telefone_cliente || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [pulseirasFechadas, numeroBusca]);
+
+  const canReopen = (p: Pulseira) => {
+    if (!p.fechada_em) return false;
+    const fechadaDate = new Date(p.fechada_em);
+    const agora = new Date();
+    return (agora.getTime() - fechadaDate.getTime()) / (1000 * 60 * 60) < 24;
+  };
 
   const handleBuscar = async () => {
     if (!numeroBusca.trim()) return;
@@ -154,6 +179,15 @@ export default function PulseirasPage() {
     setConsumoObs('');
   };
 
+  const handleReabrir = async (p: Pulseira) => {
+    const result = await reabrirPulseira(p.id, p.fechada_em);
+    if (result) {
+      listarAtivas();
+      listarFechadas();
+      setActiveTab('abertas');
+    }
+  };
+
   const formatDate = (d: string | null) => {
     if (!d) return '—';
     try { return format(new Date(d), 'dd/MM/yyyy HH:mm'); } catch { return d; }
@@ -162,6 +196,11 @@ export default function PulseirasPage() {
   const formatTime = (d: string | null) => {
     if (!d) return '—';
     try { return format(new Date(d), 'HH:mm'); } catch { return d; }
+  };
+
+  const formatTimeAgo = (d: string | null) => {
+    if (!d) return '';
+    try { return formatDistanceToNow(new Date(d), { addSuffix: true, locale: ptBR }); } catch { return ''; }
   };
 
   return (
@@ -247,142 +286,231 @@ export default function PulseirasPage() {
                     <span>Aberta em {formatDate(pulseira.aberta_em)}</span>
                   </div>
                 </div>
-                {is24hPassadas && resumoProdutos.some(p => p.disponivel > 0) && (
+                {is24hPassadas && temSaldo && (
                   <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 border border-destructive/30 text-sm text-destructive">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Pulseira com mais de 24h — fechamento obrigatório.</span>
+                    <span>Pulseira com mais de 24h — fechamento obrigatório com abatimento.</span>
                   </div>
                 )}
-                <div className="flex gap-2 pt-2">
-                  <Button size="sm" variant="outline" onClick={() => navigate(`/fichas?pulseira_id=${pulseira.id}&pulseira_numero=${encodeURIComponent(pulseira.numero)}&pulseira_nome=${encodeURIComponent(pulseira.nome_cliente)}`)}>
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Fichas
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
-                    <History className="h-3.5 w-3.5 mr-1" /> Histórico
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={async () => {
-                    const result = await fecharPulseira(pulseira.id);
-                    if (result === 'abatimento') {
-                      setAbatimentoProdutos([]);
-                      setAbatimentoProdutoId('');
-                      setAbatimentoQtd(1);
-                      setAbatimentoModal(true);
-                    } else if (result === true) {
-                      limpar();
-                      listarAtivas();
-                    }
-                  }}>
-                    Fechar Pulseira
-                  </Button>
-                </div>
+                {pulseira.status === 'ativa' && (
+                  <div className="flex gap-2 pt-2 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/fichas?pulseira_id=${pulseira.id}&pulseira_numero=${encodeURIComponent(pulseira.numero)}&pulseira_nome=${encodeURIComponent(pulseira.nome_cliente)}`)}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Fichas
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
+                      <History className="h-3.5 w-3.5 mr-1" /> Histórico
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={temSaldo && !is24hPassadas}
+                      title={temSaldo && !is24hPassadas ? 'Não é possível fechar com crédito/saldo disponível' : undefined}
+                      onClick={async () => {
+                        const result = await fecharPulseira(pulseira.id);
+                        if (result === 'abatimento') {
+                          setAbatimentoProdutos([]);
+                          setAbatimentoProdutoId('');
+                          setAbatimentoQtd(1);
+                          setAbatimentoModal(true);
+                        } else if (result === true) {
+                          limpar();
+                          listarAtivas();
+                          listarFechadas();
+                        }
+                      }}
+                    >
+                      Fechar Pulseira
+                    </Button>
+                  </div>
+                )}
+                {temSaldo && !is24hPassadas && pulseira.status === 'ativa' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ⚠ A pulseira não pode ser finalizada manualmente enquanto existir crédito ou produtos disponíveis para retirada.
+                  </p>
+                )}
+                {pulseira.status === 'encerrada' && (
+                  <div className="flex gap-2 pt-2 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
+                      <History className="h-3.5 w-3.5 mr-1" /> Histórico
+                    </Button>
+                    {canReopen(pulseira) && (
+                      <Button size="sm" variant="default" onClick={() => handleReabrir(pulseira)}>
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir Pulseira
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             {/* Product balances */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Package className="h-4 w-4 text-primary" />
-                  Saldo por Produto
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Input
-                  placeholder="Buscar produto..."
-                  value={buscaSaldo}
-                  onChange={e => setBuscaSaldo(e.target.value)}
-                  className="mb-1"
-                />
-                {resumoProdutos.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">Nenhum produto adicionado ainda.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {resumoProdutos
-                      .filter(p => !buscaSaldo.trim() || (p.produto_nome || '').toLowerCase().includes(buscaSaldo.toLowerCase()))
-                      .length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Nenhum produto encontrado para "{buscaSaldo}".</p>
-                    ) : resumoProdutos
-                      .filter(p => !buscaSaldo.trim() || (p.produto_nome || '').toLowerCase().includes(buscaSaldo.toLowerCase()))
-                      .map(p => (
-                      <div
-                        key={p.produto_id}
-                        className={cn(
-                          'flex items-center justify-between p-3 rounded-lg border',
-                          p.disponivel === 0 ? 'bg-destructive/10 border-destructive/30' : 'bg-card'
-                        )}
-                      >
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{p.produto_nome}</div>
-                          <div className="flex gap-3 text-xs text-muted-foreground mt-1">
-                            <span>Comprado: <strong>{p.comprado}</strong></span>
-                            <span>Consumido: <strong>{p.consumido}</strong></span>
-                            <span className={cn(p.disponivel === 0 ? 'text-destructive font-bold' : 'text-primary font-bold')}>
-                              Disponível: {p.disponivel}
-                            </span>
-                          </div>
-                          {p.ultima_retirada && (
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              Última retirada: {formatTime(p.ultima_retirada)}
-                              {p.ultimo_atendente && <span> · {p.ultimo_atendente}</span>}
+            {pulseira.status === 'ativa' && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Package className="h-4 w-4 text-primary" />
+                    Saldo por Produto
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Input
+                    placeholder="Buscar produto..."
+                    value={buscaSaldo}
+                    onChange={e => setBuscaSaldo(e.target.value)}
+                    className="mb-1"
+                  />
+                  {resumoProdutos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhum produto adicionado ainda.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {resumoProdutos
+                        .filter(p => !buscaSaldo.trim() || (p.produto_nome || '').toLowerCase().includes(buscaSaldo.toLowerCase()))
+                        .length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">Nenhum produto encontrado para "{buscaSaldo}".</p>
+                      ) : resumoProdutos
+                        .filter(p => !buscaSaldo.trim() || (p.produto_nome || '').toLowerCase().includes(buscaSaldo.toLowerCase()))
+                        .map(p => (
+                        <div
+                          key={p.produto_id}
+                          className={cn(
+                            'flex items-center justify-between p-3 rounded-lg border',
+                            p.disponivel === 0 ? 'bg-destructive/10 border-destructive/30' : 'bg-card'
+                          )}
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{p.produto_nome}</div>
+                            <div className="flex gap-3 text-xs text-muted-foreground mt-1">
+                              <span>Comprado: <strong>{p.comprado}</strong></span>
+                              <span>Consumido: <strong>{p.consumido}</strong></span>
+                              <span className={cn(p.disponivel === 0 ? 'text-destructive font-bold' : 'text-primary font-bold')}>
+                                Disponível: {p.disponivel}
+                              </span>
                             </div>
+                            {p.ultima_retirada && (
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                Última retirada: {formatTime(p.ultima_retirada)}
+                                {p.ultimo_atendente && <span> · {p.ultimo_atendente}</span>}
+                              </div>
+                            )}
+                          </div>
+                          {p.disponivel > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => { setConsumoModal(p); setConsumoQtd(1); setConsumoObs(''); }}
+                            >
+                              <Minus className="h-3.5 w-3.5 mr-1" /> Baixa
+                            </Button>
                           )}
                         </div>
-                        {p.disponivel > 0 && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => { setConsumoModal(p); setConsumoQtd(1); setConsumoObs(''); }}
-                          >
-                            <Minus className="h-3.5 w-3.5 mr-1" /> Baixa
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
 
-        {/* List of active pulseiras (when no specific pulseira is selected) */}
+        {/* Tabs: Abertas / Fechadas (when no specific pulseira is selected) */}
         {!pulseira && !loading && (
-          <div className="space-y-2">
-            {filteredAtivas.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
-                  {numeroBusca.trim()
-                    ? `Nenhuma pulseira ativa encontrada para "${numeroBusca}".`
-                    : 'Nenhuma pulseira ativa no momento.'}
-                </CardContent>
-              </Card>
-            ) : (
-              filteredAtivas.map(p => (
-                <Card key={p.id} className="cursor-pointer hover:border-primary transition-colors" onClick={() => handleSelectPulseira(p)}>
-                  <CardContent className="py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 rounded-full p-2">
-                        <Watch className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-sm">#{p.numero}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          <span>{p.nome_cliente}</span>
-                          {p.telefone_cliente && <span>· {p.telefone_cliente}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-xs text-muted-foreground text-right">
-                        {formatDate(p.aberta_em)}
-                      </div>
-                      <Badge variant="default" className="text-xs">Ativa</Badge>
-                    </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="w-full">
+              <TabsTrigger value="abertas" className="flex-1">
+                Pulseiras Abertas ({pulseirasAtivas.length})
+              </TabsTrigger>
+              <TabsTrigger value="fechadas" className="flex-1">
+                Pulseiras Fechadas ({pulseirasFechadas.length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="abertas" className="space-y-2 mt-3">
+              {filteredAtivas.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    {numeroBusca.trim()
+                      ? `Nenhuma pulseira ativa encontrada para "${numeroBusca}".`
+                      : 'Nenhuma pulseira ativa no momento.'}
                   </CardContent>
                 </Card>
-              ))
-            )}
-          </div>
+              ) : (
+                filteredAtivas.map(p => (
+                  <Card key={p.id} className="cursor-pointer hover:border-primary transition-colors" onClick={() => handleSelectPulseira(p)}>
+                    <CardContent className="py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 rounded-full p-2">
+                          <Watch className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm">#{p.numero}</div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <span>{p.nome_cliente}</span>
+                            {p.telefone_cliente && <span>· {p.telefone_cliente}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-xs text-muted-foreground text-right">
+                          {formatDate(p.aberta_em)}
+                        </div>
+                        <Badge variant="default" className="text-xs">Ativa</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="fechadas" className="space-y-2 mt-3">
+              {filteredFechadas.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    {numeroBusca.trim()
+                      ? `Nenhuma pulseira fechada encontrada para "${numeroBusca}".`
+                      : 'Nenhuma pulseira fechada.'}
+                  </CardContent>
+                </Card>
+              ) : (
+                filteredFechadas.map(p => {
+                  const reopenable = canReopen(p);
+                  return (
+                    <Card key={p.id} className={cn('transition-colors', reopenable ? 'hover:border-primary cursor-pointer' : 'opacity-75')}>
+                      <CardContent className="py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3" onClick={() => handleSelectPulseira(p)}>
+                          <div className={cn('rounded-full p-2', reopenable ? 'bg-primary/10' : 'bg-muted')}>
+                            <Watch className={cn('h-4 w-4', reopenable ? 'text-primary' : 'text-muted-foreground')} />
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm">#{p.numero}</div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-2">
+                              <span>{p.nome_cliente}</span>
+                              {p.telefone_cliente && <span>· {p.telefone_cliente}</span>}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              Fechada {formatTimeAgo(p.fechada_em)} · {formatDate(p.fechada_em)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {reopenable ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => { e.stopPropagation(); handleReabrir(p); }}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
+                            </Button>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs">Prazo expirado</Badge>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </TabsContent>
+          </Tabs>
         )}
       </main>
 
@@ -662,6 +790,7 @@ export default function PulseirasPage() {
                   setAbatimentoModal(false);
                   limpar();
                   listarAtivas();
+                  listarFechadas();
                 }
               }}
             >
@@ -680,6 +809,7 @@ export default function PulseirasPage() {
                   setAbatimentoModal(false);
                   limpar();
                   listarAtivas();
+                  listarFechadas();
                 }
               }}
               disabled={abatimentoProdutos.length === 0}
