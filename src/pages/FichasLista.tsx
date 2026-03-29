@@ -1062,7 +1062,7 @@ export default function FichasLista() {
       </PagamentoDialog>
 
       {/* Modal Peso - estilo ServeService */}
-      <Dialog open={showPesoModal} onOpenChange={(open) => { if (!open) { setShowPesoModal(false); setPendingPesoFicha(null); } }}>
+      <Dialog open={showPesoModal} onOpenChange={(open) => { if (!open) handleClosePesoModal(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1073,11 +1073,10 @@ export default function FichasLista() {
               </Badge>
             </DialogTitle>
             <DialogDescription>
-              Leia o peso da balança e calcule o valor.
+              Leia o peso da balança e adicione ao carrinho. O modal permanece aberto para leituras consecutivas.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Connect/Disconnect buttons */}
             {!balanca.connected && autoConnectingBalanca && (
               <div className="w-full rounded-md border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -1097,9 +1096,9 @@ export default function FichasLista() {
               </Button>
             )}
 
-
             {balanca.connected && (
               <Button onClick={async () => {
+                console.log('[Balança] Lendo peso, conexão reutilizada');
                 const resultado = await lerPeso(3);
                 if (resultado !== null && resultado > 0) {
                   setPesoManual(resultado.toFixed(3));
@@ -1151,8 +1150,11 @@ export default function FichasLista() {
               <Button onClick={handleConfirmPesoManual} className="flex-1" disabled={!(parseFloat(pesoManual.replace(',', '.')) > 0)}>
                 Adicionar
               </Button>
-              <Button variant="outline" onClick={() => { setShowPesoModal(false); setPendingPesoFicha(null); }}>
+              <Button variant="outline" onClick={() => setPesoManual('')}>
                 Limpar
+              </Button>
+              <Button variant="ghost" onClick={handleClosePesoModal}>
+                Fechar
               </Button>
             </div>
           </div>
