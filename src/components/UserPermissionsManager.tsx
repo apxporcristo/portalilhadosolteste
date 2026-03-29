@@ -14,6 +14,7 @@ import { Users, RefreshCw, Plus, Pencil, KeyRound, Trash2, Power, Search } from 
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { formatCPF, cleanCPF, isValidCPF } from '@/lib/cpf-utils';
+import { hashPassword } from '@/lib/password-utils';
 
 /* ── Types ── */
 
@@ -39,6 +40,25 @@ interface UserRow {
   voucher_tempo_acesso: string | null;
 }
 
+interface UserPermissionsPayload {
+  is_admin: boolean;
+  acesso_voucher: boolean;
+  acesso_cadastrar_produto: boolean;
+  acesso_ficha_consumo: boolean;
+  acesso_comanda: boolean;
+  acesso_kds: boolean;
+  reimpressao_venda: boolean;
+  acesso_pulseira: boolean;
+  voucher_todos: boolean;
+  voucher_tempo_id: string | null;
+  voucher_tempo_acesso: string | null;
+  voucher_tempo_permitido: string | null;
+  cadastrar_produto: boolean;
+  ficha_consumo: boolean;
+  pulseira: boolean;
+  ativo: boolean;
+}
+
 type ModalMode = 'create' | 'edit' | 'reset-password' | null;
 
 /* ── Helpers ── */
@@ -62,6 +82,11 @@ function extractError(err: unknown): string {
     if (typeof m.error === 'string') return m.error;
   }
   return 'Erro desconhecido.';
+}
+
+function shouldFallbackToDirectDb(err: unknown): boolean {
+  const msg = extractError(err).toLowerCase();
+  return msg.includes('failed to fetch') || msg.includes('network') || msg.includes('cors');
 }
 
 async function invokeEdgeFunction(functionName: string, body: Record<string, unknown>): Promise<any> {
@@ -155,7 +180,9 @@ export function UserPermissionsManager() {
             user_id, is_admin, acesso_voucher, acesso_cadastrar_produto,
             acesso_ficha_consumo, acesso_comanda, acesso_kds,
             reimpressao_venda, acesso_pulseira, voucher_todos,
-            voucher_tempo_id, voucher_tempo_acesso
+            voucher_tempo_id, voucher_tempo_acesso,
+            cadastrar_produto, ficha_consumo, pulseira,
+            voucher_tempo_permitido, ativo
           )
         `)
         .order('nome');
@@ -176,14 +203,14 @@ export function UserPermissionsManager() {
           last_login_at: p.last_login_at ?? null,
           is_admin: perm?.is_admin ?? false,
           acesso_voucher: perm?.acesso_voucher ?? false,
-          acesso_cadastrar_produto: perm?.acesso_cadastrar_produto ?? false,
-          acesso_ficha_consumo: perm?.acesso_ficha_consumo ?? false,
+          acesso_cadastrar_produto: perm?.acesso_cadastrar_produto ?? perm?.cadastrar_produto ?? false,
+          acesso_ficha_consumo: perm?.acesso_ficha_consumo ?? perm?.ficha_consumo ?? false,
           acesso_comanda: perm?.acesso_comanda ?? false,
           acesso_kds: perm?.acesso_kds ?? false,
           reimpressao_venda: perm?.reimpressao_venda ?? false,
-          acesso_pulseira: perm?.acesso_pulseira ?? false,
+          acesso_pulseira: perm?.acesso_pulseira ?? perm?.pulseira ?? false,
           voucher_todos: perm?.voucher_todos ?? false,
-          voucher_tempo_id: perm?.voucher_tempo_id ?? null,
+          voucher_tempo_id: perm?.voucher_tempo_id ?? perm?.voucher_tempo_permitido ?? null,
           voucher_tempo_acesso: perm?.voucher_tempo_acesso ?? null,
         };
       });
@@ -241,21 +268,152 @@ export function UserPermissionsManager() {
   };
 
   /* ── Build permissions payload ── */
-  const buildPermissions = () => ({
-    is_admin: fAdmin,
-    acesso_voucher: fVoucher,
-    acesso_cadastrar_produto: fCadProduto,
-    acesso_ficha_consumo: fFicha,
-    acesso_comanda: fComanda,
-    acesso_kds: fKds,
-    reimpressao_venda: fReimpressao,
-    acesso_pulseira: fPulseira,
-    voucher_todos: fVoucher ? fVoucherTodos : false,
-    voucher_tempo_id: fVoucher && !fVoucherTodos && fVoucherTemposSelecionados.length > 0
+  const buildPermissions = (): UserPermissionsPayload => {
+    const voucherTempoId = fVoucher && !fVoucherTodos && fVoucherTemposSelecionados.length > 0
       ? JSON.stringify(fVoucherTemposSelecionados)
-      : null,
-    voucher_tempo_acesso: fVoucher ? (fVoucherTempoAcesso || null) : null,
-  });
+      : null;
+    const voucherTempoPermitido = fVoucher && !fVoucherTodos && fVoucherTemposSelecionados.length > 0
+      ? fVoucherTemposSelecionados[0]
+      : null;
+
+    return {
+      is_admin: fAdmin,
+      acesso_voucher: fVoucher,
+      acesso_cadastrar_produto: fCadProduto,
+      acesso_ficha_consumo: fFicha,
+      acesso_comanda: fComanda,
+      acesso_kds: fKds,
+      reimpressao_venda: fReimpressao,
+      acesso_pulseira: fPulseira,
+      voucher_todos: fVoucher ? fVoucherTodos : false,
+      voucher_tempo_id: voucherTempoId,
+      voucher_tempo_acesso: fVoucher ? (fVoucherTempoAcesso || null) : null,
+      voucher_tempo_permitido: voucherTempoPermitido,
+      cadastrar_produto: fCadProduto,
+      ficha_consumo: fFicha,
+      pulseira: fPulseira,
+      ativo: fAtivo,
+    };
+  };
+
+  const upsertPermissionsDirect = useCallback(async (
+    db: Awaited<ReturnType<typeof getSupabaseClient>>,
+    userId: string,
+    permissions: UserPermissionsPayload,
+  ) => {
+    const row = { user_id: userId, ...permissions };
+
+    const upsertRes = await db.from('user_permissions').upsert(row as any, { onConflict: 'user_id' });
+    if (!upsertRes.error) return;
+
+    const errMessage = (upsertRes.error.message || '').toLowerCase();
+    const uniqueConflictMissing = errMessage.includes('on conflict') || errMessage.includes('constraint');
+    if (!uniqueConflictMissing) {
+      throw upsertRes.error;
+    }
+
+    const { data: existing, error: existingErr } = await db
+      .from('user_permissions')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingErr) throw existingErr;
+
+    if (existing?.user_id) {
+      const { error: updateErr } = await db
+        .from('user_permissions')
+        .update(permissions as any)
+        .eq('user_id', userId);
+      if (updateErr) throw updateErr;
+      return;
+    }
+
+    const { error: insertErr } = await db.from('user_permissions').insert(row as any);
+    if (insertErr) throw insertErr;
+  }, []);
+
+  const createUserDirect = useCallback(async (
+    cpfClean: string,
+    permissions: UserPermissionsPayload,
+  ) => {
+    const db = await getSupabaseClient();
+    const nome = fNome.trim();
+    const email = fEmail.trim().toLowerCase();
+
+    const [{ data: existingCpf, error: cpfErr }, { data: existingEmail, error: emailErr }] = await Promise.all([
+      db.from('user_profiles').select('id').eq('cpf', cpfClean).maybeSingle(),
+      db.from('user_profiles').select('id').eq('email', email).maybeSingle(),
+    ]);
+
+    if (cpfErr) throw cpfErr;
+    if (emailErr) throw emailErr;
+    if (existingCpf) throw new Error('CPF já cadastrado.');
+    if (existingEmail) throw new Error('Email já cadastrado.');
+
+    const userId = crypto.randomUUID();
+    const senhaHash = await hashPassword(fSenha, cpfClean);
+
+    const { error: profileErr } = await db.from('user_profiles').insert({
+      id: userId,
+      nome,
+      email,
+      cpf: cpfClean,
+      ativo: fAtivo,
+      senha_hash: senhaHash,
+    } as any);
+    if (profileErr) throw profileErr;
+
+    try {
+      await upsertPermissionsDirect(db, userId, permissions);
+    } catch (permErr) {
+      await db.from('user_profiles').delete().eq('id', userId);
+      throw permErr;
+    }
+  }, [fAtivo, fEmail, fNome, fSenha, upsertPermissionsDirect]);
+
+  const updateUserDirect = useCallback(async (
+    userId: string,
+    cpfClean: string,
+    permissions: UserPermissionsPayload,
+  ) => {
+    const db = await getSupabaseClient();
+    const nome = fNome.trim();
+    const email = fEmail.trim().toLowerCase();
+
+    const [{ data: existingCpf, error: cpfErr }, { data: existingEmail, error: emailErr }] = await Promise.all([
+      db.from('user_profiles').select('id').eq('cpf', cpfClean).neq('id', userId).maybeSingle(),
+      db.from('user_profiles').select('id').eq('email', email).neq('id', userId).maybeSingle(),
+    ]);
+
+    if (cpfErr) throw cpfErr;
+    if (emailErr) throw emailErr;
+    if (existingCpf) throw new Error('CPF já cadastrado para outro usuário.');
+    if (existingEmail) throw new Error('Email já cadastrado para outro usuário.');
+
+    const { error: profileErr } = await db
+      .from('user_profiles')
+      .update({
+        nome,
+        email,
+        cpf: cpfClean,
+        ativo: fAtivo,
+      } as any)
+      .eq('id', userId);
+    if (profileErr) throw profileErr;
+
+    await upsertPermissionsDirect(db, userId, permissions);
+  }, [fAtivo, fEmail, fNome, upsertPermissionsDirect]);
+
+  const resetPasswordDirect = useCallback(async (userId: string, cpf: string) => {
+    const db = await getSupabaseClient();
+    const cpfClean = cleanCPF(cpf);
+    if (!cpfClean) throw new Error('CPF do usuário não encontrado para redefinir senha.');
+
+    const senhaHash = await hashPassword(fSenha, cpfClean);
+    const { error } = await db.from('user_profiles').update({ senha_hash: senhaHash } as any).eq('id', userId);
+    if (error) throw error;
+  }, [fSenha]);
 
   /* ── Save ── */
   const handleSave = async () => {
@@ -300,7 +458,12 @@ export function UserPermissionsManager() {
           createPayload.voucher_todos = false;
         }
         console.log('[createUser] payload:', createPayload);
-        await invokeEdgeFunction('create-user-admin', createPayload);
+        try {
+          await invokeEdgeFunction('create-user-admin', createPayload);
+        } catch (err) {
+          if (!shouldFallbackToDirectDb(err)) throw err;
+          await createUserDirect(cpfClean, perms);
+        }
         toast({ title: 'Usuário criado com sucesso!' });
 
       } else if (modalMode === 'edit' && selectedUser) {
@@ -330,7 +493,12 @@ export function UserPermissionsManager() {
           },
         };
         console.log('[editUser] manage-users payload:', updatePayload);
-        await invokeEdgeFunction('manage-users', updatePayload);
+        try {
+          await invokeEdgeFunction('manage-users', updatePayload);
+        } catch (err) {
+          if (!shouldFallbackToDirectDb(err)) throw err;
+          await updateUserDirect(selectedUser.user_id, cpfClean, perms);
+        }
         toast({ title: 'Usuário atualizado com sucesso!' });
 
       } else if (modalMode === 'reset-password' && selectedUser) {
@@ -338,11 +506,16 @@ export function UserPermissionsManager() {
           toast({ title: 'Erro', description: 'Senha deve ter pelo menos 6 caracteres.', variant: 'destructive' });
           setSaving(false); return;
         }
-        await invokeEdgeFunction('manage-users', {
-          action: 'reset-password',
-          user_id: selectedUser.user_id,
-          new_password: fSenha,
-        });
+        try {
+          await invokeEdgeFunction('manage-users', {
+            action: 'reset-password',
+            user_id: selectedUser.user_id,
+            new_password: fSenha,
+          });
+        } catch (err) {
+          if (!shouldFallbackToDirectDb(err)) throw err;
+          await resetPasswordDirect(selectedUser.user_id, selectedUser.cpf);
+        }
         toast({ title: 'Senha redefinida com sucesso!' });
       }
 
@@ -360,7 +533,15 @@ export function UserPermissionsManager() {
     if (!deleteConfirm) return;
     setSaving(true);
     try {
-      await invokeEdgeFunction('manage-users', { action: 'delete-user', user_id: deleteConfirm });
+      try {
+        await invokeEdgeFunction('manage-users', { action: 'delete-user', user_id: deleteConfirm });
+      } catch (err) {
+        if (!shouldFallbackToDirectDb(err)) throw err;
+        const db = await getSupabaseClient();
+        await db.from('user_permissions').delete().eq('user_id', deleteConfirm);
+        const { error } = await db.from('user_profiles').delete().eq('id', deleteConfirm);
+        if (error) throw error;
+      }
       toast({ title: 'Usuário excluído!' });
       await fetchUsers();
     } catch (err) {
@@ -373,7 +554,20 @@ export function UserPermissionsManager() {
   /* ── Toggle ativo ── */
   const toggleAtivo = async (u: UserRow) => {
     try {
-      await invokeEdgeFunction('manage-users', { action: 'toggle-ativo', user_id: u.user_id, ativo: !u.ativo });
+      const nextAtivo = !u.ativo;
+      try {
+        await invokeEdgeFunction('manage-users', { action: 'toggle-ativo', user_id: u.user_id, ativo: nextAtivo });
+      } catch (err) {
+        if (!shouldFallbackToDirectDb(err)) throw err;
+        const db = await getSupabaseClient();
+        const { error: profileErr } = await db.from('user_profiles').update({ ativo: nextAtivo } as any).eq('id', u.user_id);
+        if (profileErr) throw profileErr;
+
+        const { error: permErr } = await db.from('user_permissions').update({ ativo: nextAtivo } as any).eq('user_id', u.user_id);
+        if (permErr && !permErr.message.toLowerCase().includes('column')) {
+          throw permErr;
+        }
+      }
       toast({ title: u.ativo ? 'Usuário desativado' : 'Usuário ativado' });
       await fetchUsers();
     } catch (err) {
