@@ -219,30 +219,6 @@ async function invokeEdgeFunction(functionName: string, body: Record<string, unk
 
     return data;
 
-    let data: any = null;
-    try {
-      data = await res.json();
-    } catch {
-      data = null;
-    }
-
-    if (!res.ok) {
-      if (res.status === 404 || data?.code === 'NOT_FOUND') {
-        if (functionName === 'manage-users') return invokeManageUsersDirect(requestBody);
-        if (functionName === 'create-user-admin') return createUserDirect(requestBody);
-      }
-      throw new Error(data?.error || data?.message || `Erro ${res.status}`);
-    }
-
-    if (functionName === 'manage-users' && data?.success !== true) {
-      return invokeManageUsersDirect(requestBody);
-    }
-
-    if (functionName === 'create-user-admin' && data?.success !== true) {
-      return createUserDirect(requestBody);
-    }
-
-    return data;
   } catch (err: any) {
     const msg = String(err?.message || '').toLowerCase();
     if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed')) {
