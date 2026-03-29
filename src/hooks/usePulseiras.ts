@@ -44,6 +44,7 @@ export interface PulseiraConsumo {
 }
 
 export interface PulseiraProdutoResumo {
+  pulseira_id: string;
   produto_id: string;
   produto_nome: string;
   comprado: number;
@@ -62,6 +63,75 @@ export interface PulseiraHistorico {
   observacao: string | null;
   data: string;
 }
+
+const getFirstDefined = (row: Record<string, any>, keys: string[]) => {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null) return value;
+  }
+  return null;
+};
+
+const getFirstNumber = (row: Record<string, any>, keys: string[]): number | null => {
+  const value = getFirstDefined(row, keys);
+  if (value === null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeTipoHistorico = (tipoRaw: any): string => {
+  const tipo = String(tipoRaw || '').toLowerCase();
+  if (tipo.includes('reab')) return 'reabertura';
+  if (tipo.includes('abert')) return 'abertura';
+  if (tipo.includes('fech')) return 'fechamento';
+  if (tipo.includes('baix') || tipo.includes('consum')) return 'baixa';
+  if (tipo.includes('carg') || tipo.includes('inclu') || tipo.includes('adicion') || tipo.includes('lanc')) return 'carga';
+  return tipo || 'movimentacao';
+};
+
+const normalizeSaldoRow = (row: Record<string, any>, pulseiraId: string): PulseiraProdutoResumo => {
+  const compradoRaw = getFirstNumber(row, ['comprado', 'total_comprado', 'total_carregado', 'quantidade_comprada', 'quantidade_total']);
+  const consumidoRaw = getFirstNumber(row, ['consumido', 'total_consumido', 'total_baixado', 'quantidade_baixada', 'baixado']);
+  const disponivelRaw = getFirstNumber(row, ['disponivel', 'saldo_disponivel', 'saldo_quantidade', 'saldo']);
+
+  let comprado = compradoRaw;
+  let consumido = consumidoRaw;
+  let disponivel = disponivelRaw;
+
+  if (comprado === null && consumido !== null && disponivel !== null) comprado = consumido + disponivel;
+  if (consumido === null && comprado !== null && disponivel !== null) consumido = Math.max(0, comprado - disponivel);
+  if (disponivel === null && comprado !== null && consumido !== null) disponivel = comprado - consumido;
+
+  comprado = comprado ?? 0;
+  consumido = consumido ?? 0;
+  disponivel = disponivel ?? (comprado - consumido);
+
+  return {
+    pulseira_id: String(getFirstDefined(row, ['pulseira_id']) || pulseiraId),
+    produto_id: String(getFirstDefined(row, ['produto_id']) || ''),
+    produto_nome: String(getFirstDefined(row, ['produto_nome', 'nome_produto']) || 'Produto sem nome'),
+    comprado,
+    consumido,
+    disponivel: Math.max(0, comprado - consumido),
+    valor_unitario: Number(getFirstDefined(row, ['valor_unitario', 'preco_unitario']) ?? 0),
+    ultima_retirada: getFirstDefined(row, ['ultima_retirada', 'ultima_baixa_em', 'ultima_baixa']) as string | null,
+    ultimo_atendente: (getFirstDefined(row, ['ultimo_atendente', 'ultimo_atendente_nome']) as string | null) ?? null,
+  };
+};
+
+const normalizeHistoricoRow = (row: Record<string, any>): PulseiraHistorico => {
+  const tipo = normalizeTipoHistorico(getFirstDefined(row, ['tipo', 'tipo_movimentacao', 'acao']));
+  const data = String(getFirstDefined(row, ['data', 'created_at', 'updated_at']) || new Date().toISOString());
+
+  return {
+    tipo,
+    produto_nome: String(getFirstDefined(row, ['produto_nome', 'nome_produto']) || '—'),
+    quantidade: Number(getFirstDefined(row, ['quantidade']) ?? 0),
+    atendente_nome: (getFirstDefined(row, ['atendente_nome', 'usuario_nome', 'responsavel_nome', 'aberta_por', 'fechada_por']) as string | null) ?? null,
+    observacao: (getFirstDefined(row, ['observacao', 'descricao']) as string | null) ?? null,
+    data,
+  };
+};
 
 export function usePulseiras() {
   const [loading, setLoading] = useState(false);
@@ -149,124 +219,113 @@ export function usePulseiras() {
     }
   }, []);
 
-  const carregarSaldosFallback = useCallback(async (db: any, pulseiraId: string): Promise<any[]> => {
-    try {
-      // Fallback: compute saldos from pulseira_itens directly
-      const { data: itensData, error: itensError } = await db
-        .from('pulseira_itens' as any)
-        .select('*')
-        .eq('pulseira_id', pulseiraId);
-      if (itensError) throw itensError;
+  const carregarSaldosPadronizados = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
+    const rpcTentativas: { nome: string; payload: Record<string, any> }[] = [
+      { nome: 'listar_saldo_pulseira_produto', payload: { pulseira_id: pulseiraId } },
+      { nome: 'listar_saldo_pulseira_produto', payload: { p_pulseira_id: pulseiraId } },
+    ];
 
-      // Try to get baixas from pulseira_baixas or pulseira_consumos
-      let baixasData: any[] = [];
-      const { data: b1, error: e1 } = await db
-        .from('pulseira_baixas' as any)
-        .select('*')
-        .eq('pulseira_id', pulseiraId);
-      if (!e1 && b1) {
-        baixasData = b1;
-      } else {
-        const { data: b2 } = await db
-          .from('pulseira_consumos' as any)
-          .select('*')
-          .eq('pulseira_id', pulseiraId);
-        if (b2) baixasData = b2;
+    for (const tentativa of rpcTentativas) {
+      const { data, error } = await db.rpc(tentativa.nome as any, tentativa.payload as any);
+      if (!error && Array.isArray(data)) {
+        return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
       }
-
-      // Group itens by produto_id
-      const produtoMap: Record<string, any> = {};
-      for (const item of (itensData || [])) {
-        const pid = item.produto_id;
-        if (!produtoMap[pid]) {
-          produtoMap[pid] = {
-            produto_id: pid,
-            nome_produto: item.nome_produto || item.produto_nome || 'Produto sem nome',
-            total_carregado: 0,
-            total_baixado: 0,
-            valor_unitario: Number(item.valor_unitario ?? 0),
-          };
-        }
-        produtoMap[pid].total_carregado += Number(item.quantidade ?? 0);
+      if (error) {
+        console.warn(`[Pulseiras] RPC ${tentativa.nome} falhou:`, error.message);
       }
-
-      // Subtract baixas
-      for (const baixa of baixasData) {
-        const pid = baixa.produto_id;
-        if (produtoMap[pid]) {
-          produtoMap[pid].total_baixado += Number(baixa.quantidade ?? 0);
-        }
-      }
-
-      return Object.values(produtoMap).map((p: any) => ({
-        ...p,
-        saldo_disponivel: p.total_carregado - p.total_baixado,
-      }));
-    } catch (fallbackErr: any) {
-      console.warn('[Pulseiras] Fallback saldos também falhou:', fallbackErr.message);
-      return [];
     }
+
+    const views = ['vw_pulseira_saldo_produto', 'vw_pulseira_saldos'];
+    for (const viewName of views) {
+      const { data, error } = await db
+        .from(viewName as any)
+        .select('*')
+        .eq('pulseira_id', pulseiraId);
+
+      if (!error) {
+        return ((data || []) as any[]).map((row) => normalizeSaldoRow(row, pulseiraId));
+      }
+
+      console.warn(`[Pulseiras] View ${viewName} falhou:`, error.message);
+    }
+
+    return [];
+  }, []);
+
+  const carregarHistoricoPadronizado = useCallback(async (db: any, pulseiraId: string, pulseiraData?: Partial<Pulseira> | null): Promise<PulseiraHistorico[]> => {
+    const { data, error } = await db
+      .from('vw_pulseira_historico' as any)
+      .select('*')
+      .eq('pulseira_id', pulseiraId)
+      .order('data', { ascending: false });
+
+    if (error) {
+      console.warn('[Pulseiras] View vw_pulseira_historico falhou:', error.message);
+    }
+
+    const historicoBase = ((data || []) as any[]).map((row) => normalizeHistoricoRow(row));
+    const eventosFixos: PulseiraHistorico[] = [];
+
+    if (pulseiraData?.aberta_em) {
+      eventosFixos.push({
+        tipo: 'abertura',
+        produto_nome: '—',
+        quantidade: 0,
+        atendente_nome: pulseiraData.aberta_por ?? null,
+        observacao: null,
+        data: pulseiraData.aberta_em,
+      });
+    }
+
+    if (pulseiraData?.fechada_em) {
+      eventosFixos.push({
+        tipo: 'fechamento',
+        produto_nome: '—',
+        quantidade: 0,
+        atendente_nome: null,
+        observacao: null,
+        data: pulseiraData.fechada_em,
+      });
+    }
+
+    const unique = new Map<string, PulseiraHistorico>();
+    for (const mov of [...historicoBase, ...eventosFixos]) {
+      const key = `${mov.tipo}|${mov.produto_nome}|${mov.quantidade}|${mov.data}|${mov.atendente_nome ?? ''}`;
+      if (!unique.has(key)) unique.set(key, mov);
+    }
+
+    return Array.from(unique.values()).sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
   }, []);
 
   const carregarDetalhes = useCallback(async (pulseiraId: string) => {
     const db = await getSupabaseClient();
 
-    // Use the standardized view for saldos and the historico view
-    const [saldosRes, historicoRes] = await Promise.all([
-      db.from('vw_pulseira_saldo_produto' as any).select('*').eq('pulseira_id', pulseiraId),
-      db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', pulseiraId).order('data', { ascending: false }),
+    const { data: pulseiraData } = await db
+      .from('pulseiras' as any)
+      .select('*')
+      .eq('id', pulseiraId)
+      .maybeSingle();
+
+    if (pulseiraData) {
+      setPulseira((prev) => {
+        if (prev && prev.id !== pulseiraId) return prev;
+        return { ...(prev || {}), ...(pulseiraData as any) } as Pulseira;
+      });
+    }
+
+    const [resumo, hist] = await Promise.all([
+      carregarSaldosPadronizados(db, pulseiraId),
+      carregarHistoricoPadronizado(db, pulseiraId, pulseiraData as any),
     ]);
 
-    let saldosData: any[] = [];
-    if (saldosRes.error) {
-      console.warn('[Pulseiras] View vw_pulseira_saldo_produto falhou, tentando vw_pulseira_saldos:', saldosRes.error.message);
-      // Fallback to vw_pulseira_saldos
-      const { data: fallbackData, error: fallbackErr } = await db
-        .from('vw_pulseira_saldos' as any).select('*').eq('pulseira_id', pulseiraId);
-      if (fallbackErr) {
-        console.warn('[Pulseiras] vw_pulseira_saldos also failed, using manual fallback:', fallbackErr.message);
-        saldosData = await carregarSaldosFallback(db, pulseiraId);
-      } else {
-        saldosData = (fallbackData || []) as any[];
-      }
-    } else {
-      saldosData = (saldosRes.data || []) as any[];
-    }
-
-    let historicoData: any[] = [];
-    if (historicoRes.error) {
-      console.warn('[Pulseiras] View vw_pulseira_historico falhou:', historicoRes.error.message);
-    } else {
-      historicoData = (historicoRes.data || []) as any[];
-    }
-
-    const resumo: PulseiraProdutoResumo[] = saldosData.map((s: any) => ({
-      produto_id: s.produto_id,
-      produto_nome: s.produto_nome || s.nome_produto || 'Produto sem nome',
-      comprado: Number(s.comprado ?? s.total_comprado ?? s.total_carregado ?? 0),
-      consumido: Number(s.consumido ?? s.total_baixado ?? 0),
-      disponivel: Number(s.disponivel ?? s.saldo_disponivel ?? s.saldo_quantidade ?? 0),
-      valor_unitario: Number(s.valor_unitario ?? 0),
-      ultima_retirada: s.ultima_baixa_em ?? s.ultima_baixa ?? s.ultima_retirada ?? null,
-      ultimo_atendente: s.ultimo_atendente_nome ?? s.ultimo_atendente ?? null,
-    }));
     setResumoProdutos(resumo);
-
-    const hist: PulseiraHistorico[] = historicoData.map((h: any) => ({
-      tipo: h.tipo,
-      produto_nome: h.produto_nome || h.nome_produto || 'Produto sem nome',
-      quantidade: Number(h.quantidade),
-      atendente_nome: h.atendente_nome ?? null,
-      observacao: h.observacao ?? null,
-      data: h.data,
-    }));
     setHistorico(hist);
 
-    setItens(historicoData.filter((h: any) => h.tipo === 'carga').map((h: any) => ({
-      id: h.id || h.data,
+    setItens(hist.filter((h) => h.tipo === 'carga').map((h: any) => ({
+      id: `${h.tipo}-${h.data}-${h.produto_nome}`,
       pulseira_id: pulseiraId,
-      produto_id: h.produto_id || '',
-      produto_nome: h.produto_nome || h.nome_produto || 'Produto sem nome',
+      produto_id: '',
+      produto_nome: h.produto_nome || 'Produto sem nome',
       quantidade: Number(h.quantidade),
       valor_unitario: 0,
       valor_total: 0,
@@ -275,19 +334,19 @@ export function usePulseiras() {
       codigo_venda: null,
       created_at: h.data,
     })));
-    setConsumos(historicoData.filter((h: any) => h.tipo === 'baixa').map((h: any) => ({
-      id: h.id || h.data,
+    setConsumos(hist.filter((h) => h.tipo === 'baixa').map((h: any) => ({
+      id: `${h.tipo}-${h.data}-${h.produto_nome}`,
       pulseira_id: pulseiraId,
       pulseira_item_id: null,
-      produto_id: h.produto_id || '',
-      produto_nome: h.produto_nome || h.nome_produto || 'Produto sem nome',
+      produto_id: '',
+      produto_nome: h.produto_nome || 'Produto sem nome',
       quantidade: Number(h.quantidade),
       atendente_user_id: null,
       atendente_nome: h.atendente_nome ?? null,
       observacao: h.observacao ?? null,
       created_at: h.data,
     })));
-  }, [carregarSaldosFallback]);
+  }, [carregarHistoricoPadronizado, carregarSaldosPadronizados]);
 
   const abrirPulseira = useCallback(async (data: { numero: string; nome_cliente: string; telefone_cliente: string; cpf?: string; aberta_por?: string }) => {
     setLoading(true);
@@ -359,29 +418,84 @@ export function usePulseiras() {
     }
   }, [carregarDetalhes]);
 
+  const executarBaixaRpc = useCallback(async (
+    db: any,
+    params: {
+      pulseiraId: string;
+      produtoId: string;
+      quantidade: number;
+      usuarioIdLogado: string;
+      atendenteNome?: string;
+      observacao?: string;
+    }
+  ) => {
+    const tentativas: { nome: string; payload: Record<string, any> }[] = [
+      {
+        nome: 'baixar_produto_pulseira',
+        payload: {
+          pulseira_id: params.pulseiraId,
+          produto_id: params.produtoId,
+          quantidade: params.quantidade,
+          usuario_id_logado: params.usuarioIdLogado,
+        },
+      },
+      {
+        nome: 'rpc_pulseira_baixar_item',
+        payload: {
+          p_pulseira_id: params.pulseiraId,
+          p_produto_id: params.produtoId,
+          p_quantidade: params.quantidade,
+          p_atendente_id: params.usuarioIdLogado,
+          p_atendente_nome: params.atendenteNome || null,
+          p_observacao: params.observacao || null,
+        },
+      },
+      {
+        nome: 'rpc_pulseira_baixar_item',
+        payload: {
+          pulseira_id: params.pulseiraId,
+          produto_id: params.produtoId,
+          quantidade: params.quantidade,
+          usuario_id_logado: params.usuarioIdLogado,
+          observacao: params.observacao || null,
+        },
+      },
+    ];
+
+    let lastError: any = null;
+    for (const tentativa of tentativas) {
+      const { error } = await db.rpc(tentativa.nome as any, tentativa.payload as any);
+      if (!error) return;
+      lastError = error;
+      console.warn(`[Pulseiras] RPC ${tentativa.nome} falhou na baixa:`, error.message);
+    }
+
+    throw lastError || new Error('Falha ao executar baixa da pulseira');
+  }, []);
+
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
     if (!prod || prod.disponivel < quantidade) {
       toast({ title: 'Saldo insuficiente', description: 'Este produto não possui saldo disponível para baixa.', variant: 'destructive' });
       return false;
     }
+
+    if (!atendente_user_id) {
+      console.warn('[Pulseiras] Baixa bloqueada por falta de usuário logado:', { pulseiraId, produto_id, produto_nome });
+      toast({ title: 'Erro', description: 'Não foi possível concluir a baixa do produto.', variant: 'destructive' });
+      return false;
+    }
+
     try {
       const db = await getSupabaseClient();
-
-      // Use the dedicated RPC for baixa
-      const { error } = await db.rpc('rpc_pulseira_baixar_item', {
-        p_pulseira_id: pulseiraId,
-        p_produto_id: produto_id,
-        p_quantidade: quantidade,
-        p_atendente_id: atendente_user_id || null,
-        p_atendente_nome: atendente_nome || null,
-        p_observacao: observacao || null,
+      await executarBaixaRpc(db, {
+        pulseiraId,
+        produtoId: produto_id,
+        quantidade,
+        usuarioIdLogado: atendente_user_id,
+        atendenteNome: atendente_nome,
+        observacao,
       });
-
-      if (error) {
-        console.error('[Pulseiras] RPC rpc_pulseira_baixar_item failed:', error.message);
-        throw error;
-      }
 
       toast({ title: 'Produto baixado com sucesso.' });
       await carregarDetalhes(pulseiraId);
@@ -391,7 +505,7 @@ export function usePulseiras() {
       toast({ title: 'Erro', description: 'Não foi possível concluir a baixa do produto.', variant: 'destructive' });
       return false;
     }
-  }, [resumoProdutos, carregarDetalhes]);
+  }, [resumoProdutos, carregarDetalhes, executarBaixaRpc]);
 
   // Manual close: ONLY allowed when saldo = 0
   // 24h rule triggers abatement flow instead
