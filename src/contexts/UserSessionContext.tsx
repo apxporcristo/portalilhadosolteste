@@ -14,6 +14,7 @@ export interface UserAccess {
   acesso_comanda: boolean;
   acesso_kds: boolean;
   reimpressao_venda: boolean;
+  pulseira: boolean;
   is_admin: boolean;
   voucher_tempo_acesso: string | null;
 }
@@ -70,7 +71,7 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
       const db = await getSupabaseClient();
       const [profileRes, permRes] = await Promise.all([
         db.from('user_profiles').select('nome, email, cpf, ativo').eq('id', userId).maybeSingle(),
-        db.from('user_permissions').select('acesso_voucher, acesso_cadastrar_produto, acesso_ficha_consumo, acesso_comanda, acesso_kds, reimpressao_venda, is_admin, voucher_tempo_acesso').eq('user_id', userId).maybeSingle(),
+        db.from('user_permissions').select('acesso_voucher, acesso_cadastrar_produto, acesso_ficha_consumo, acesso_comanda, acesso_kds, reimpressao_venda, pulseira, is_admin, voucher_tempo_acesso').eq('user_id', userId).maybeSingle(),
       ]);
 
       const profile = profileRes.data as any;
@@ -89,6 +90,7 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
           acesso_comanda: perm?.acesso_comanda ?? false,
           acesso_kds: perm?.acesso_kds ?? false,
           reimpressao_venda: (perm as any)?.reimpressao_venda ?? false,
+          pulseira: (perm as any)?.pulseira ?? false,
           is_admin: perm?.is_admin ?? false,
           voucher_tempo_acesso: perm?.voucher_tempo_acesso ?? null,
         });

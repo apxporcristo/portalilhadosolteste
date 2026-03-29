@@ -28,6 +28,7 @@ interface UserWithPermissions {
   acesso_comanda: boolean;
   acesso_kds: boolean;
   reimpressao_venda: boolean;
+  pulseira: boolean;
   is_admin: boolean;
   voucher_tempo_acesso: string | null;
 }
@@ -75,6 +76,7 @@ async function invokeManageUsersDirect(body: Record<string, unknown>) {
     if (permissions.acesso_comanda !== undefined) permUpdate.acesso_comanda = !!permissions.acesso_comanda;
     if (permissions.acesso_kds !== undefined) permUpdate.acesso_kds = !!permissions.acesso_kds;
     if (permissions.reimpressao_venda !== undefined) permUpdate.reimpressao_venda = !!permissions.reimpressao_venda;
+    if (permissions.pulseira !== undefined) permUpdate.pulseira = !!permissions.pulseira;
     if (permissions.is_admin !== undefined) permUpdate.is_admin = !!permissions.is_admin;
     if (permissions.voucher_tempo_acesso !== undefined) {
       const value = permissions.voucher_tempo_acesso;
@@ -208,6 +210,7 @@ export function UserPermissionsManager() {
   const [formComanda, setFormComanda] = useState(false);
   const [formKds, setFormKds] = useState(false);
   const [formReimpressao, setFormReimpressao] = useState(false);
+  const [formPulseira, setFormPulseira] = useState(false);
   const [formAdmin, setFormAdmin] = useState(false);
   const [formVoucherTempo, setFormVoucherTempo] = useState<string>('todos');
 
@@ -240,6 +243,7 @@ export function UserPermissionsManager() {
           acesso_comanda: perm?.acesso_comanda ?? false,
           acesso_kds: perm?.acesso_kds ?? false,
           reimpressao_venda: (perm as any)?.reimpressao_venda ?? false,
+          pulseira: (perm as any)?.pulseira ?? false,
           is_admin: perm?.is_admin ?? false,
           voucher_tempo_acesso: perm?.voucher_tempo_acesso ?? null,
         };
@@ -269,7 +273,7 @@ export function UserPermissionsManager() {
   const resetForm = () => {
     setFormNome(''); setFormCpf(''); setFormEmail(''); setFormSenha('');
     setFormAtivo(true); setFormVoucher(false); setFormProduto(false);
-    setFormFicha(false); setFormComanda(false); setFormKds(false); setFormReimpressao(false); setFormAdmin(false);
+    setFormFicha(false); setFormComanda(false); setFormKds(false); setFormReimpressao(false); setFormPulseira(false); setFormAdmin(false);
     setFormVoucherTempo('todos');
   };
 
@@ -287,6 +291,7 @@ export function UserPermissionsManager() {
     setFormComanda(u.acesso_comanda);
     setFormKds(u.acesso_kds);
     setFormReimpressao(u.reimpressao_venda);
+    setFormPulseira(u.pulseira);
     setFormAdmin(u.is_admin);
     setFormVoucherTempo(u.voucher_tempo_acesso || 'todos');
     setModalMode('edit');
@@ -327,6 +332,7 @@ export function UserPermissionsManager() {
           acesso_kds: formKds,
           reimpressao_venda: formReimpressao,
           administrador: formAdmin,
+          pulseira: formPulseira,
         });
         toast({ title: 'Usuário criado com sucesso!' });
 
@@ -344,6 +350,7 @@ export function UserPermissionsManager() {
             acesso_comanda: formComanda,
             acesso_kds: formKds,
             reimpressao_venda: formReimpressao,
+            pulseira: formPulseira,
             is_admin: formAdmin,
             voucher_tempo_acesso: formVoucher && formVoucherTempo !== 'todos' ? formVoucherTempo : null,
           },
@@ -474,6 +481,7 @@ export function UserPermissionsManager() {
                         {u.acesso_comanda && <Badge variant="outline" className="text-xs">Comanda</Badge>}
                         {u.acesso_kds && <Badge variant="outline" className="text-xs">KDS</Badge>}
                         {u.reimpressao_venda && <Badge variant="outline" className="text-xs">Reimpressão</Badge>}
+                        {u.pulseira && <Badge variant="outline" className="text-xs">Pulseira</Badge>}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
@@ -593,6 +601,10 @@ export function UserPermissionsManager() {
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Reimpressão de Venda</Label>
                     <Switch checked={formReimpressao} onCheckedChange={setFormReimpressao} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Pulseira</Label>
+                    <Switch checked={formPulseira} onCheckedChange={setFormPulseira} />
                   </div>
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold text-destructive">Administrador</Label>

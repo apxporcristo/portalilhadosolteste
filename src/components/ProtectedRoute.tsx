@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  permission?: 'acesso_voucher' | 'acesso_cadastrar_produto' | 'acesso_ficha_consumo' | 'acesso_kds' | 'is_admin';
+  permission?: 'acesso_voucher' | 'acesso_cadastrar_produto' | 'acesso_ficha_consumo' | 'acesso_kds' | 'pulseira' | 'is_admin';
 }
 
 export function ProtectedRoute({ children, permission }: ProtectedRouteProps) {
