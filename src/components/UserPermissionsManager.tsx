@@ -251,7 +251,9 @@ export function UserPermissionsManager() {
     reimpressao_venda: fReimpressao,
     acesso_pulseira: fPulseira,
     voucher_todos: fVoucher ? fVoucherTodos : false,
-    voucher_tempo_id: fVoucher && !fVoucherTodos ? (fVoucherTempoId || null) : null,
+    voucher_tempo_id: fVoucher && !fVoucherTodos && fVoucherTemposSelecionados.length > 0
+      ? JSON.stringify(fVoucherTemposSelecionados)
+      : null,
     voucher_tempo_acesso: fVoucher ? (fVoucherTempoAcesso || null) : null,
   });
 
