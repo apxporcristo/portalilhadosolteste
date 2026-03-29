@@ -50,8 +50,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const externalUrl = requireEnv("EXTERNAL_SUPABASE_URL");
-    const externalServiceKey = requireEnv("EXTERNAL_SUPABASE_SERVICE_ROLE_KEY");
+    const externalUrl = requireEnvFallback("EXTERNAL_SUPABASE_URL", "SUPABASE_URL");
+    const externalServiceKey = requireEnvFallback("EXTERNAL_SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY");
 
     const body = await req.json();
     if (!isObject(body)) return json({ error: "Payload inválido." }, 400);
