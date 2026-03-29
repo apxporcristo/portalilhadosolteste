@@ -99,7 +99,13 @@ export default function PulseirasPage() {
   }, [pulseirasAtivas, numeroBusca]);
 
   const filteredFechadas = useMemo(() => {
-    let list = pulseirasFechadas;
+    const agora = new Date();
+    // Only show pulseiras closed less than 24h ago
+    let list = pulseirasFechadas.filter(p => {
+      if (!p.fechada_em) return false;
+      const diffHoras = (agora.getTime() - new Date(p.fechada_em).getTime()) / (1000 * 60 * 60);
+      return diffHoras < 24;
+    });
     if (numeroBusca.trim()) {
       const q = numeroBusca.toLowerCase();
       list = list.filter(p =>
@@ -449,7 +455,7 @@ export default function PulseirasPage() {
                 Pulseiras Abertas ({pulseirasAtivas.length})
               </TabsTrigger>
               <TabsTrigger value="fechadas" className="flex-1">
-                Pulseiras Fechadas ({pulseirasFechadas.length})
+                Pulseiras Fechadas ({filteredFechadas.length})
               </TabsTrigger>
             </TabsList>
 
@@ -496,18 +502,22 @@ export default function PulseirasPage() {
                   <CardContent className="py-8 text-center text-muted-foreground">
                     {numeroBusca.trim()
                       ? `Nenhuma pulseira fechada encontrada para "${numeroBusca}".`
-                      : 'Nenhuma pulseira fechada.'}
+                      : 'Nenhuma pulseira fechada nas últimas 24 horas.'}
                   </CardContent>
                 </Card>
               ) : (
                 filteredFechadas.map(p => {
-                  const reopenable = canReopen(p);
+                  const horasRestantes = p.fechada_em
+                    ? Math.max(0, 24 - (new Date().getTime() - new Date(p.fechada_em).getTime()) / (1000 * 60 * 60))
+                    : 0;
+                  const horas = Math.floor(horasRestantes);
+                  const minutos = Math.floor((horasRestantes - horas) * 60);
                   return (
-                    <Card key={p.id} className={cn('transition-colors', reopenable ? 'hover:border-primary cursor-pointer' : 'opacity-75')}>
+                    <Card key={p.id} className="hover:border-primary cursor-pointer transition-colors">
                       <CardContent className="py-3 flex items-center justify-between">
                         <div className="flex items-center gap-3" onClick={() => handleSelectPulseira(p)}>
-                          <div className={cn('rounded-full p-2', reopenable ? 'bg-primary/10' : 'bg-muted')}>
-                            <Watch className={cn('h-4 w-4', reopenable ? 'text-primary' : 'text-muted-foreground')} />
+                          <div className="bg-primary/10 rounded-full p-2">
+                            <Watch className="h-4 w-4 text-primary" />
                           </div>
                           <div>
                             <div className="font-bold text-sm">#{p.numero}</div>
@@ -516,23 +526,20 @@ export default function PulseirasPage() {
                               {p.telefone_cliente && <span>· {p.telefone_cliente}</span>}
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
-                              Fechada {formatTimeAgo(p.fechada_em)} · {formatDate(p.fechada_em)}
+                              Fechada em {formatDate(p.fechada_em)} · {formatTimeAgo(p.fechada_em)}
+                            </div>
+                            <div className="text-xs text-primary font-medium mt-0.5">
+                              ⏳ Reabertura disponível por mais {horas}h{minutos.toString().padStart(2, '0')}min
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {reopenable ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => { e.stopPropagation(); handleReabrir(p); }}
-                            >
-                              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
-                            </Button>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">Prazo expirado</Badge>
-                          )}
-                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); handleReabrir(p); }}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
+                        </Button>
                       </CardContent>
                     </Card>
                   );
