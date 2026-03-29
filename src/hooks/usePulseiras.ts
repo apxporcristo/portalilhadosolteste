@@ -274,11 +274,27 @@ export function usePulseiras() {
   }, [resumoProdutos, carregarDetalhes]);
 
   const fecharPulseira = useCallback(async (pulseiraId: string) => {
+    // Validate: check balances and opening time
+    const temSaldo = resumoProdutos.some(p => p.disponivel > 0);
+    if (temSaldo && pulseira) {
+      const abertaEm = new Date(pulseira.aberta_em);
+      const agora = new Date();
+      const diffHoras = (agora.getTime() - abertaEm.getTime()) / (1000 * 60 * 60);
+      if (diffHoras < 24) {
+        toast({
+          title: 'Não é possível fechar',
+          description: 'A pulseira só pode ser fechada quando não houver mais itens disponíveis para retirada ou após 24 horas da abertura.',
+          variant: 'destructive',
+        });
+        return false;
+      }
+    }
+
     try {
       const db = await getSupabaseClient();
       const { error } = await db
         .from('pulseiras')
-        .update({ status: 'fechada', fechada_em: new Date().toISOString() } as any)
+        .update({ status: 'encerrada', fechada_em: new Date().toISOString() } as any)
         .eq('id', pulseiraId);
       if (error) throw error;
       toast({ title: 'Pulseira fechada!' });
@@ -288,7 +304,7 @@ export function usePulseiras() {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
       return false;
     }
-  }, []);
+  }, [resumoProdutos, pulseira]);
 
   const limpar = useCallback(() => {
     setPulseira(null);
