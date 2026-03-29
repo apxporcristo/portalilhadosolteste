@@ -71,8 +71,8 @@ export function usePulseiras() {
   const [resumoProdutos, setResumoProdutos] = useState<PulseiraProdutoResumo[]>([]);
   const [historico, setHistorico] = useState<PulseiraHistorico[]>([]);
   const [pulseirasAtivas, setPulseirasAtivas] = useState<Pulseira[]>([]);
+  const [pulseirasFechadas, setPulseirasFechadas] = useState<Pulseira[]>([]);
 
-  // Uses vw_pulseiras_ativas view
   const listarAtivas = useCallback(async () => {
     try {
       const db = await getSupabaseClient();
@@ -89,16 +89,45 @@ export function usePulseiras() {
     }
   }, []);
 
+  const listarFechadas = useCallback(async () => {
+    try {
+      const db = await getSupabaseClient();
+      const { data, error } = await db
+        .from('pulseiras' as any)
+        .select('*')
+        .eq('status', 'encerrada')
+        .order('fechada_em', { ascending: false });
+      if (error) throw error;
+      setPulseirasFechadas((data || []) as any[]);
+      return (data || []) as Pulseira[];
+    } catch (err: any) {
+      console.warn('[Pulseiras] Erro ao listar fechadas:', err.message);
+      return [];
+    }
+  }, []);
+
   const buscarPulseira = useCallback(async (numero: string) => {
     setLoading(true);
     try {
       const db = await getSupabaseClient();
-      const { data, error } = await db
+      // Search in active first
+      let { data, error } = await db
         .from('vw_pulseiras_ativas' as any)
         .select('*')
         .eq('numero', numero.trim())
         .maybeSingle();
       if (error) throw error;
+      if (!data) {
+        // Also search in closed pulseiras for viewing
+        const { data: closedData, error: closedError } = await db
+          .from('pulseiras' as any)
+          .select('*')
+          .eq('numero', numero.trim())
+          .eq('status', 'encerrada')
+          .maybeSingle();
+        if (closedError) throw closedError;
+        data = closedData;
+      }
       if (!data) {
         setPulseira(null);
         setItens([]);
@@ -119,7 +148,6 @@ export function usePulseiras() {
     }
   }, []);
 
-  // Uses vw_pulseira_saldos + vw_pulseira_historico
   const carregarDetalhes = useCallback(async (pulseiraId: string) => {
     const db = await getSupabaseClient();
     const [saldosRes, historicoRes] = await Promise.all([
@@ -130,7 +158,6 @@ export function usePulseiras() {
     const saldosData = (saldosRes.data || []) as any[];
     const historicoData = (historicoRes.data || []) as any[];
 
-    // Map saldos to resumoProdutos
     const resumo: PulseiraProdutoResumo[] = saldosData.map((s: any) => ({
       produto_id: s.produto_id,
       produto_nome: s.produto_nome || s.nome_produto || 'Produto sem nome',
@@ -143,7 +170,6 @@ export function usePulseiras() {
     }));
     setResumoProdutos(resumo);
 
-    // Map historico
     const hist: PulseiraHistorico[] = historicoData.map((h: any) => ({
       tipo: h.tipo,
       produto_nome: h.produto_nome,
@@ -154,7 +180,6 @@ export function usePulseiras() {
     }));
     setHistorico(hist);
 
-    // Keep itens/consumos from historico for backward compat
     setItens(historicoData.filter((h: any) => h.tipo === 'carga').map((h: any) => ({
       id: h.id || h.data,
       pulseira_id: pulseiraId,
@@ -248,7 +273,6 @@ export function usePulseiras() {
     }
   }, [carregarDetalhes]);
 
-  // Uses RPC registrar_baixa_pulseira
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
     if (!prod || prod.disponivel < quantidade) {
@@ -275,24 +299,31 @@ export function usePulseiras() {
     }
   }, [resumoProdutos, carregarDetalhes]);
 
+  // Manual close: ONLY allowed when saldo = 0
+  // 24h rule triggers abatement flow instead
   const fecharPulseira = useCallback(async (pulseiraId: string): Promise<boolean | 'abatimento'> => {
     const temSaldo = resumoProdutos.some(p => p.disponivel > 0);
-    if (temSaldo && pulseira) {
-      const abertaEm = new Date(pulseira.aberta_em);
-      const agora = new Date();
-      const diffHoras = (agora.getTime() - abertaEm.getTime()) / (1000 * 60 * 60);
-      if (diffHoras < 24) {
-        toast({
-          title: 'Não é possível fechar',
-          description: 'A pulseira só pode ser fechada quando não houver mais itens disponíveis para retirada ou após 24 horas da abertura.',
-          variant: 'destructive',
-        });
-        return false;
+    
+    if (temSaldo) {
+      // Check if 24h passed — if so, offer abatement flow
+      if (pulseira) {
+        const abertaEm = new Date(pulseira.aberta_em);
+        const agora = new Date();
+        const diffHoras = (agora.getTime() - abertaEm.getTime()) / (1000 * 60 * 60);
+        if (diffHoras >= 24) {
+          return 'abatimento';
+        }
       }
-      // Has balance and 24h+ passed — needs abatement decision
-      return 'abatimento';
+      // Manual close blocked — saldo exists and < 24h
+      toast({
+        title: 'Não é possível fechar',
+        description: 'A pulseira não pode ser finalizada manualmente enquanto existir crédito ou produtos disponíveis para retirada.',
+        variant: 'destructive',
+      });
+      return false;
     }
 
+    // No saldo — close normally
     try {
       const db = await getSupabaseClient();
       const { error } = await db
@@ -309,7 +340,6 @@ export function usePulseiras() {
     }
   }, [resumoProdutos, pulseira]);
 
-  // Close pulseira with credit abatement: write down remaining balance, add new products, then close
   const fecharComAbatimento = useCallback(async (
     pulseiraId: string,
     produtosAbatimento: { produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number }[],
@@ -347,7 +377,6 @@ export function usePulseiras() {
         const { error: insertError } = await db.from('pulseira_itens').insert(rows as any);
         if (insertError) throw insertError;
 
-        // Give immediate baixa on the abatement products
         for (const prod of produtosAbatimento) {
           const { error } = await db.rpc('registrar_baixa_pulseira', {
             p_pulseira_id: pulseiraId,
@@ -377,6 +406,36 @@ export function usePulseiras() {
     }
   }, [resumoProdutos]);
 
+  // Reopen a closed pulseira (only if closed < 24h ago)
+  const reabrirPulseira = useCallback(async (pulseiraId: string, fechadaEm: string | null): Promise<boolean> => {
+    if (fechadaEm) {
+      const fechadaDate = new Date(fechadaEm);
+      const agora = new Date();
+      const diffHoras = (agora.getTime() - fechadaDate.getTime()) / (1000 * 60 * 60);
+      if (diffHoras >= 24) {
+        toast({
+          title: 'Prazo expirado',
+          description: 'Esta pulseira não pode mais ser reaberta porque o prazo de reabertura expirou (mais de 24h desde o fechamento).',
+          variant: 'destructive',
+        });
+        return false;
+      }
+    }
+    try {
+      const db = await getSupabaseClient();
+      const { error } = await db
+        .from('pulseiras')
+        .update({ status: 'ativa', fechada_em: null } as any)
+        .eq('id', pulseiraId);
+      if (error) throw error;
+      toast({ title: 'Pulseira reaberta com sucesso!' });
+      return true;
+    } catch (err: any) {
+      toast({ title: 'Erro ao reabrir', description: err.message, variant: 'destructive' });
+      return false;
+    }
+  }, []);
+
   const limpar = useCallback(() => {
     setPulseira(null);
     setItens([]);
@@ -393,14 +452,17 @@ export function usePulseiras() {
     resumoProdutos,
     historico,
     pulseirasAtivas,
+    pulseirasFechadas,
     buscarPulseira,
     abrirPulseira,
     adicionarItens,
     consumirProduto,
     fecharPulseira,
     fecharComAbatimento,
+    reabrirPulseira,
     carregarDetalhes,
     listarAtivas,
+    listarFechadas,
     limpar,
   };
 }
