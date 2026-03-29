@@ -23,9 +23,9 @@ export default function PulseirasPage() {
   const userSession = useOptionalUserSession();
   const {
     loading, pulseira, resumoProdutos, itens, consumos, historico, pulseirasAtivas,
-    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, listarAtivas, limpar, carregarDetalhes,
+    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, fecharComAbatimento, listarAtivas, limpar, carregarDetalhes,
   } = usePulseiras();
-  const { fichasAtivas } = useFichasConsumo();
+  const { fichasAtivas, produtos } = useFichasConsumo();
 
   const [numeroBusca, setNumeroBusca] = useState('');
   const [abrirModal, setAbrirModal] = useState(false);
