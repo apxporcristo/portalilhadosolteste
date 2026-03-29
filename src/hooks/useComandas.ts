@@ -164,22 +164,46 @@ export function useComandas() {
     complementos?: any[] | null;
     observacao?: string | null;
     printer_id?: string | null;
-  }[]) => {
+  }[], usuarioLogin?: string) => {
     const supabase = await getSupabaseClient();
-    const rows = items.map(item => ({
-      comanda_id: comandaId,
-      produto_id: item.produto_id,
-      produto_nome: item.produto_nome,
-      quantidade: item.quantidade,
-      valor_unitario: item.valor_unitario,
-      valor_total: item.valor_total,
-      peso: item.peso || null,
-      complementos_json: item.complementos ? JSON.stringify(item.complementos) : null,
-      observacao: item.observacao || null,
-      printer_id: item.printer_id || null,
-    }));
-    const { error } = await supabase.from('comanda_itens' as any).insert(rows as any);
-    if (error) throw error;
+
+    // Get authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Usuário não autenticado. Faça login para lançar itens.');
+    }
+
+    const login = usuarioLogin || user.email || user.id;
+    console.log('[lancarItens] Usuário autenticado:', { id: user.id, email: user.email, login });
+
+    for (const item of items) {
+      const payload = {
+        p_comanda_id: comandaId,
+        p_produto_id: item.produto_id,
+        p_descricao_produto: item.produto_nome,
+        p_quantidade: item.quantidade,
+        p_valor_unitario: item.valor_unitario,
+        p_subtotal: item.valor_total,
+        p_origem: 'ficha',
+        p_observacao: item.observacao || '',
+        p_possui_complementos: !!(item.complementos && item.complementos.length > 0),
+        p_complementos_json: item.complementos ? JSON.stringify(item.complementos) : null,
+        p_produto_nome: item.produto_nome,
+        p_valor_total: item.valor_total,
+        p_usuario_login: login,
+      };
+
+      console.log('[lancarItens] Payload RPC lancar_item_comanda:', payload);
+
+      const { error } = await supabase.rpc('lancar_item_comanda' as any, payload as any);
+
+      if (error) {
+        console.error('[lancarItens] Erro RPC lancar_item_comanda:', error);
+        throw new Error(`Erro ao lançar item "${item.produto_nome}": ${error.message}`);
+      }
+
+      console.log('[lancarItens] Item lançado com sucesso:', item.produto_nome);
+    }
   }, []);
 
   const editarItem = useCallback(async (itemId: string, dados: Partial<ComandaItem>) => {
