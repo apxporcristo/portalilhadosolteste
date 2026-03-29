@@ -22,7 +22,7 @@ export default function PulseirasPage() {
   const navigate = useNavigate();
   const userSession = useOptionalUserSession();
   const {
-    loading, pulseira, resumoProdutos, itens, consumos, pulseirasAtivas,
+    loading, pulseira, resumoProdutos, itens, consumos, historico, pulseirasAtivas,
     buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, listarAtivas, limpar, carregarDetalhes,
   } = usePulseiras();
   const { fichasAtivas } = useFichasConsumo();
