@@ -20,6 +20,7 @@ import { useFormasPagamento, FormaPagamento } from '@/hooks/useFormasPagamento';
 import { useComandas } from '@/hooks/useComandas';
 import { PagamentoDialog, PagamentoSelecionado } from '@/components/PagamentoDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { PrintSelectionDialog, PrintSelectableItem } from '@/components/PrintSelectionDialog';
 import { useBalanca } from '@/hooks/useBalanca';
 
 function generateCodigoVenda(): string {
@@ -108,6 +109,11 @@ export default function FichasLista() {
   // Forma de pagamento modal
   const { formasAtivas } = useFormasPagamento();
   const [showPagamentoModal, setShowPagamentoModal] = useState(false);
+
+  // Print selection modal (after payment confirmed)
+  const [showPrintSelection, setShowPrintSelection] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [savedCodigoVenda, setSavedCodigoVenda] = useState<string | null>(null);
 
   // Voucher Pix config
   const userAccess = userSession?.access;
