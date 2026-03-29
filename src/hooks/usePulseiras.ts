@@ -137,6 +137,7 @@ export function usePulseiras() {
       comprado: Number(s.total_carregado ?? s.comprado ?? 0),
       consumido: Number(s.total_baixado ?? s.consumido ?? 0),
       disponivel: Number(s.saldo_disponivel ?? s.disponivel ?? 0),
+      valor_unitario: Number(s.valor_unitario ?? 0),
       ultima_retirada: s.ultima_baixa ?? s.ultima_retirada ?? null,
       ultimo_atendente: s.ultimo_atendente ?? null,
     }));
