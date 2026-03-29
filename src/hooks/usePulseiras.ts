@@ -219,14 +219,87 @@ export function usePulseiras() {
     }
   }, []);
 
+  const carregarSaldosFallback = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
+    const [itensRes, baixasRes] = await Promise.all([
+      db
+        .from('pulseira_itens' as any)
+        .select('*')
+        .eq('pulseira_id', pulseiraId),
+      db
+        .from('pulseira_baixas' as any)
+        .select('*')
+        .eq('pulseira_id', pulseiraId),
+    ]);
+
+    if (itensRes.error) console.warn('[Pulseiras] Fallback pulseira_itens falhou:', itensRes.error.message);
+    if (baixasRes.error) console.warn('[Pulseiras] Fallback pulseira_baixas falhou:', baixasRes.error.message);
+
+    const map = new Map<string, PulseiraProdutoResumo>();
+
+    for (const row of (itensRes.data || []) as any[]) {
+      const produtoId = String(getFirstDefined(row, ['produto_id']) || `nome:${String(getFirstDefined(row, ['produto_nome', 'nome_produto']) || '')}`);
+      const produtoNome = String(getFirstDefined(row, ['produto_nome', 'nome_produto']) || 'Produto sem nome');
+      const qtd = Number(getFirstDefined(row, ['quantidade']) ?? 0);
+      const valorUnit = Number(getFirstDefined(row, ['valor_unitario']) ?? 0);
+
+      const curr = map.get(produtoId) || {
+        pulseira_id: pulseiraId,
+        produto_id: produtoId,
+        produto_nome: produtoNome,
+        comprado: 0,
+        consumido: 0,
+        disponivel: 0,
+        valor_unitario: valorUnit,
+        ultima_retirada: null,
+        ultimo_atendente: null,
+      };
+
+      curr.comprado += Number.isFinite(qtd) ? qtd : 0;
+      if (!curr.valor_unitario && Number.isFinite(valorUnit)) curr.valor_unitario = valorUnit;
+      curr.disponivel = Math.max(0, curr.comprado - curr.consumido);
+      map.set(produtoId, curr);
+    }
+
+    for (const row of (baixasRes.data || []) as any[]) {
+      const produtoId = String(getFirstDefined(row, ['produto_id']) || `nome:${String(getFirstDefined(row, ['produto_nome', 'nome_produto']) || '')}`);
+      const produtoNome = String(getFirstDefined(row, ['produto_nome', 'nome_produto']) || 'Produto sem nome');
+      const qtd = Number(getFirstDefined(row, ['quantidade']) ?? 0);
+      const createdAt = (getFirstDefined(row, ['created_at']) as string | null) ?? null;
+      const atendenteNome = (getFirstDefined(row, ['atendente_nome']) as string | null) ?? null;
+
+      const curr = map.get(produtoId) || {
+        pulseira_id: pulseiraId,
+        produto_id: produtoId,
+        produto_nome: produtoNome,
+        comprado: 0,
+        consumido: 0,
+        disponivel: 0,
+        valor_unitario: 0,
+        ultima_retirada: null,
+        ultimo_atendente: null,
+      };
+
+      curr.consumido += Number.isFinite(qtd) ? qtd : 0;
+      curr.disponivel = Math.max(0, curr.comprado - curr.consumido);
+      if (createdAt && (!curr.ultima_retirada || new Date(createdAt).getTime() >= new Date(curr.ultima_retirada).getTime())) {
+        curr.ultima_retirada = createdAt;
+        curr.ultimo_atendente = atendenteNome;
+      }
+      map.set(produtoId, curr);
+    }
+
+    return Array.from(map.values());
+  }, []);
+
   const carregarSaldosPadronizados = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
     const { data, error } = await db.rpc('listar_saldo_pulseira_produto' as any, { p_pulseira_id: pulseiraId } as any);
     if (!error && Array.isArray(data)) {
       return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
     }
     if (error) console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto falhou:', error.message);
-    return [];
-  }, []);
+    const fallback = await carregarSaldosFallback(db, pulseiraId);
+    return fallback;
+  }, [carregarSaldosFallback]);
 
   const carregarHistoricoPadronizado = useCallback(async (db: any, pulseiraId: string, pulseiraData?: Partial<Pulseira> | null): Promise<PulseiraHistorico[]> => {
     let historicoBase: PulseiraHistorico[] = [];
@@ -234,8 +307,42 @@ export function usePulseiras() {
     const { data, error } = await db.rpc('listar_historico_pulseira' as any, { p_pulseira_id: pulseiraId } as any);
     if (!error && Array.isArray(data)) {
       historicoBase = data.map((row: any) => normalizeHistoricoRow(row));
-    } else if (error) {
-      console.warn('[Pulseiras] RPC listar_historico_pulseira falhou:', error.message);
+    } else {
+      if (error) console.warn('[Pulseiras] RPC listar_historico_pulseira falhou:', error.message);
+
+      const [itensRes, baixasRes] = await Promise.all([
+        db
+          .from('pulseira_itens' as any)
+          .select('*')
+          .eq('pulseira_id', pulseiraId)
+          .order('created_at', { ascending: false }),
+        db
+          .from('pulseira_baixas' as any)
+          .select('*')
+          .eq('pulseira_id', pulseiraId)
+          .order('created_at', { ascending: false }),
+      ]);
+
+      if (itensRes.error) console.warn('[Pulseiras] Fallback histórico de itens falhou:', itensRes.error.message);
+      if (baixasRes.error) console.warn('[Pulseiras] Fallback histórico de baixas falhou:', baixasRes.error.message);
+
+      const histItens = ((itensRes.data || []) as any[]).map((row) =>
+        normalizeHistoricoRow({
+          ...row,
+          tipo: 'inclusao',
+          produto_nome: getFirstDefined(row, ['produto_nome', 'nome_produto']),
+        })
+      );
+
+      const histBaixas = ((baixasRes.data || []) as any[]).map((row) =>
+        normalizeHistoricoRow({
+          ...row,
+          tipo: 'baixa',
+          produto_nome: getFirstDefined(row, ['produto_nome', 'nome_produto']),
+        })
+      );
+
+      historicoBase = [...histItens, ...histBaixas];
     }
 
     // Add abertura/fechamento from pulseira data if not already present
@@ -374,9 +481,6 @@ export function usePulseiras() {
   const adicionarItens = useCallback(async (pulseiraId: string, items: { produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number; atendente_user_id?: string; atendente_nome?: string; codigo_venda?: string; observacao?: string }[]) => {
     try {
       const db = await getSupabaseClient();
-      const saldosAntes = await carregarSaldosPadronizados(db, pulseiraId);
-      const compradoAntes = new Map(saldosAntes.map((s) => [s.produto_id, Number(s.comprado || 0)]));
-
       for (const item of items) {
         const usuarioId = item.atendente_user_id?.trim();
         if (!usuarioId) throw new Error('MISSING_LOGGED_USER');
@@ -388,27 +492,27 @@ export function usePulseiras() {
           p_usuario_id: usuarioId,
           p_observacao: item.observacao?.trim() || null,
         } as any);
-        if (error) throw error;
-        if (data === false || data === 0 || data === 'false') throw new Error('RPC_INCLUSAO_SEM_PERSISTENCIA');
+        if (error || data === false || data === 0 || data === 'false') {
+          const { error: insertFallbackError } = await db
+            .from('pulseira_itens' as any)
+            .insert({
+              pulseira_id: pulseiraId,
+              produto_id: item.produto_id,
+              nome_produto: item.produto_nome,
+              quantidade: item.quantidade,
+              valor_unitario: item.valor_unitario,
+              valor_total: Number(item.quantidade) * Number(item.valor_unitario),
+              atendente_user_id: usuarioId,
+            } as any);
+
+          if (insertFallbackError) {
+            if (error) throw error;
+            throw insertFallbackError;
+          }
+        }
       }
 
       await carregarDetalhes(pulseiraId);
-
-      const saldosDepois = await carregarSaldosPadronizados(db, pulseiraId);
-      const compradoDepois = new Map(saldosDepois.map((s) => [s.produto_id, Number(s.comprado || 0)]));
-
-      const incrementoEsperado = new Map<string, number>();
-      for (const item of items) {
-        incrementoEsperado.set(item.produto_id, (incrementoEsperado.get(item.produto_id) || 0) + Number(item.quantidade || 0));
-      }
-
-      const persistiu = Array.from(incrementoEsperado.entries()).every(([produtoId, qtdEsperada]) => {
-        const antes = compradoAntes.get(produtoId) || 0;
-        const depois = compradoDepois.get(produtoId) || 0;
-        return depois >= antes + qtdEsperada;
-      });
-
-      if (!persistiu) throw new Error('INCLUSAO_NAO_REFLETIU_NO_SALDO');
 
       toast({ title: 'Produto adicionado à pulseira com sucesso.' });
       return true;
@@ -440,7 +544,30 @@ export function usePulseiras() {
         p_usuario_id: atendente_user_id,
         p_observacao: observacao || null,
       } as any);
-      if (error) throw error;
+      if (error) {
+        const fallback = await db.rpc('rpc_pulseira_baixar_item' as any, {
+          p_pulseira_id: pulseiraId,
+          p_produto_id: produto_id,
+          p_quantidade: quantidade,
+          p_usuario_id: atendente_user_id,
+          p_observacao: observacao || null,
+        } as any);
+        if (fallback.error) {
+          const { error: insertFallbackError } = await db
+            .from('pulseira_baixas' as any)
+            .insert({
+              pulseira_id: pulseiraId,
+              produto_id,
+              nome_produto: produto_nome,
+              quantidade,
+              atendente_id: atendente_user_id,
+              atendente_nome: atendente_nome || null,
+              observacao: observacao || null,
+            } as any);
+
+          if (insertFallbackError) throw error;
+        }
+      }
 
       toast({ title: 'Produto baixado com sucesso.' });
       await carregarDetalhes(pulseiraId);
