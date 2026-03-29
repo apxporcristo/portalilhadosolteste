@@ -121,13 +121,13 @@ const normalizeSaldoRow = (row: Record<string, any>, pulseiraId: string): Pulsei
 
 const normalizeHistoricoRow = (row: Record<string, any>): PulseiraHistorico => {
   const tipo = normalizeTipoHistorico(getFirstDefined(row, ['tipo', 'tipo_movimentacao', 'acao']));
-  const data = String(getFirstDefined(row, ['data', 'created_at', 'updated_at']) || new Date().toISOString());
+  const data = String(getFirstDefined(row, ['created_at', 'data', 'updated_at']) || new Date().toISOString());
 
   return {
     tipo,
     produto_nome: String(getFirstDefined(row, ['produto_nome', 'nome_produto']) || '—'),
     quantidade: Number(getFirstDefined(row, ['quantidade']) ?? 0),
-    atendente_nome: (getFirstDefined(row, ['atendente_nome', 'usuario_nome', 'responsavel_nome', 'aberta_por', 'fechada_por']) as string | null) ?? null,
+    atendente_nome: (getFirstDefined(row, ['usuario_nome', 'atendente_nome', 'responsavel_nome', 'aberta_por', 'fechada_por']) as string | null) ?? 'Usuário não identificado',
     observacao: (getFirstDefined(row, ['observacao', 'descricao']) as string | null) ?? null,
     data,
   };
