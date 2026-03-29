@@ -168,6 +168,8 @@ Deno.serve(async (req) => {
         if (permissions.acesso_ficha_consumo !== undefined) permUpdate.acesso_ficha_consumo = !!permissions.acesso_ficha_consumo;
         if (permissions.acesso_comanda !== undefined) permUpdate.acesso_comanda = !!permissions.acesso_comanda;
         if (permissions.acesso_kds !== undefined) permUpdate.acesso_kds = !!permissions.acesso_kds;
+        if (permissions.reimpressao_venda !== undefined) permUpdate.reimpressao_venda = !!permissions.reimpressao_venda;
+        if (permissions.pulseira !== undefined) permUpdate.pulseira = !!permissions.pulseira;
         if (permissions.is_admin !== undefined) permUpdate.is_admin = !!permissions.is_admin;
         if (permissions.voucher_tempo_acesso !== undefined) permUpdate.voucher_tempo_acesso = normalizeString(permissions.voucher_tempo_acesso);
 
