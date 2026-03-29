@@ -253,21 +253,44 @@ export function usePulseiras() {
   }, []);
 
   const carregarHistoricoPadronizado = useCallback(async (db: any, pulseiraId: string, pulseiraData?: Partial<Pulseira> | null): Promise<PulseiraHistorico[]> => {
-    const { data, error } = await db
-      .from('vw_pulseira_historico' as any)
-      .select('*')
-      .eq('pulseira_id', pulseiraId)
-      .order('data', { ascending: false });
+    let historicoBase: PulseiraHistorico[] = [];
 
-    if (error) {
-      console.warn('[Pulseiras] View vw_pulseira_historico falhou:', error.message);
+    // 1. Try RPC listar_historico_pulseira first (most reliable source)
+    const rpcPayloads = [
+      { p_pulseira_id: pulseiraId },
+      { pulseira_id: pulseiraId },
+    ];
+    let rpcSuccess = false;
+    for (const payload of rpcPayloads) {
+      const { data, error } = await db.rpc('listar_historico_pulseira' as any, payload as any);
+      if (!error && Array.isArray(data) && data.length > 0) {
+        historicoBase = data.map((row: any) => normalizeHistoricoRow(row));
+        rpcSuccess = true;
+        break;
+      }
+      if (error) console.warn('[Pulseiras] RPC listar_historico_pulseira falhou:', error.message);
     }
 
-    const historicoBase = ((data || []) as any[]).map((row) => normalizeHistoricoRow(row));
-    const eventosFixos: PulseiraHistorico[] = [];
+    // 2. Fallback to view vw_pulseira_historico
+    if (!rpcSuccess) {
+      const { data, error } = await db
+        .from('vw_pulseira_historico' as any)
+        .select('*')
+        .eq('pulseira_id', pulseiraId)
+        .order('created_at', { ascending: false });
 
-    if (pulseiraData?.aberta_em) {
-      eventosFixos.push({
+      if (!error && Array.isArray(data) && data.length > 0) {
+        historicoBase = data.map((row: any) => normalizeHistoricoRow(row));
+      } else if (error) {
+        console.warn('[Pulseiras] View vw_pulseira_historico falhou:', error.message);
+      }
+    }
+
+    // 3. Add abertura/fechamento from pulseira data if not already present
+    const tiposPresentes = new Set(historicoBase.map(h => h.tipo));
+
+    if (pulseiraData?.aberta_em && !tiposPresentes.has('abertura')) {
+      historicoBase.push({
         tipo: 'abertura',
         produto_nome: '—',
         quantidade: 0,
@@ -277,8 +300,8 @@ export function usePulseiras() {
       });
     }
 
-    if (pulseiraData?.fechada_em) {
-      eventosFixos.push({
+    if (pulseiraData?.fechada_em && !tiposPresentes.has('fechamento')) {
+      historicoBase.push({
         tipo: 'fechamento',
         produto_nome: '—',
         quantidade: 0,
@@ -288,8 +311,9 @@ export function usePulseiras() {
       });
     }
 
+    // Deduplicate and sort desc
     const unique = new Map<string, PulseiraHistorico>();
-    for (const mov of [...historicoBase, ...eventosFixos]) {
+    for (const mov of historicoBase) {
       const key = `${mov.tipo}|${mov.produto_nome}|${mov.quantidade}|${mov.data}|${mov.atendente_nome ?? ''}`;
       if (!unique.has(key)) unique.set(key, mov);
     }
