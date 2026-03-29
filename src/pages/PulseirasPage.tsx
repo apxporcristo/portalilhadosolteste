@@ -220,6 +220,52 @@ export default function PulseirasPage() {
     try { return formatDistanceToNow(new Date(d), { addSuffix: true, locale: ptBR }); } catch { return ''; }
   };
 
+  const normalizeTipo = (tipoRaw: any) => {
+    const tipo = String(tipoRaw || '').toLowerCase();
+    if (tipo.includes('reab')) return 'reabertura';
+    if (tipo.includes('abert')) return 'abertura';
+    if (tipo.includes('fech')) return 'fechamento';
+    if (tipo.includes('baix') || tipo.includes('consum')) return 'baixa';
+    if (tipo.includes('carg') || tipo.includes('inclu') || tipo.includes('adicion') || tipo.includes('lanc')) return 'carga';
+    return tipo || 'movimentacao';
+  };
+
+  const tipoBadge = (tipoRaw: string) => {
+    const tipo = normalizeTipo(tipoRaw);
+    if (tipo === 'carga') return { label: 'Inclusão', variant: 'default' as const };
+    if (tipo === 'baixa') return { label: 'Baixa', variant: 'secondary' as const };
+    if (tipo === 'abertura') return { label: 'Abertura', variant: 'outline' as const };
+    if (tipo === 'fechamento') return { label: 'Fechamento', variant: 'destructive' as const };
+    if (tipo === 'reabertura') return { label: 'Reabertura', variant: 'outline' as const };
+    return { label: 'Movimentação', variant: 'secondary' as const };
+  };
+
+  const mapSaldoRow = (s: any, pulseiraId: string): PulseiraProdutoResumo => {
+    const comprado = Number(s.comprado ?? s.total_comprado ?? s.total_carregado ?? 0);
+    const consumido = Number(s.consumido ?? s.total_consumido ?? s.total_baixado ?? 0);
+    const disponivelRaw = Number(s.disponivel ?? s.saldo_disponivel ?? s.saldo_quantidade ?? (comprado - consumido));
+    return {
+      pulseira_id: String(s.pulseira_id || pulseiraId),
+      produto_id: s.produto_id,
+      produto_nome: s.produto_nome || s.nome_produto || 'Produto sem nome',
+      comprado,
+      consumido,
+      disponivel: Number.isFinite(disponivelRaw) ? disponivelRaw : Math.max(0, comprado - consumido),
+      valor_unitario: Number(s.valor_unitario ?? 0),
+      ultima_retirada: s.ultima_baixa_em ?? s.ultima_baixa ?? s.ultima_retirada ?? null,
+      ultimo_atendente: s.ultimo_atendente_nome ?? s.ultimo_atendente ?? null,
+    };
+  };
+
+  const mapHistoricoRow = (h: any) => ({
+    tipo: normalizeTipo(h.tipo ?? h.tipo_movimentacao ?? h.acao),
+    produto_nome: h.produto_nome || h.nome_produto || '—',
+    quantidade: Number(h.quantidade ?? 0),
+    atendente_nome: h.atendente_nome ?? h.usuario_nome ?? h.responsavel_nome ?? h.aberta_por ?? h.fechada_por ?? null,
+    observacao: h.observacao ?? h.descricao ?? null,
+    data: h.data ?? h.created_at ?? h.updated_at,
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b shadow-sm sticky top-0 z-10">
@@ -525,27 +571,21 @@ export default function PulseirasPage() {
                           // Load details for this closed pulseira
                           const db = await (await import('@/lib/supabase-external')).getSupabaseClient();
                           const [saldosRes, historicoRes] = await Promise.all([
-                            db.from('vw_pulseira_saldos' as any).select('*').eq('pulseira_id', p.id),
+                            db.from('vw_pulseira_saldo_produto' as any).select('*').eq('pulseira_id', p.id),
                             db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', p.id).order('data', { ascending: false }),
                           ]);
-                          setViewFechadaSaldos((saldosRes.data || []).map((s: any) => ({
-                            produto_id: s.produto_id,
-                            produto_nome: s.produto_nome || s.nome_produto || 'Produto sem nome',
-                            comprado: Number(s.total_carregado ?? s.comprado ?? 0),
-                            consumido: Number(s.total_baixado ?? s.consumido ?? 0),
-                            disponivel: Number(s.saldo_disponivel ?? s.disponivel ?? 0),
-                            valor_unitario: Number(s.valor_unitario ?? 0),
-                            ultima_retirada: s.ultima_baixa ?? s.ultima_retirada ?? null,
-                            ultimo_atendente: s.ultimo_atendente ?? null,
-                          })));
-                          setViewFechadaHistorico((historicoRes.data || []).map((h: any) => ({
-                            tipo: h.tipo,
-                            produto_nome: h.produto_nome,
-                            quantidade: Number(h.quantidade),
-                            atendente_nome: h.atendente_nome ?? null,
-                            observacao: h.observacao ?? null,
-                            data: h.data,
-                          })));
+
+                          let saldosData: any[] = (saldosRes.data || []) as any[];
+                          if (saldosRes.error) {
+                            const { data: fallbackSaldos } = await db
+                              .from('vw_pulseira_saldos' as any)
+                              .select('*')
+                              .eq('pulseira_id', p.id);
+                            saldosData = (fallbackSaldos || []) as any[];
+                          }
+
+                          setViewFechadaSaldos(saldosData.map((s: any) => mapSaldoRow(s, p.id)));
+                          setViewFechadaHistorico((historicoRes.data || []).map((h: any) => mapHistoricoRow(h)));
                         }}>
                           <div className="bg-primary/10 rounded-full p-2">
                             <Watch className="h-4 w-4 text-primary" />
@@ -696,7 +736,7 @@ export default function PulseirasPage() {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Produto</TableHead>
                     <TableHead className="text-center">Qtd</TableHead>
-                    <TableHead>Atendente</TableHead>
+                     <TableHead>Usuário</TableHead>
                     <TableHead>Obs</TableHead>
                     <TableHead>Data</TableHead>
                   </TableRow>
@@ -704,11 +744,11 @@ export default function PulseirasPage() {
                 <TableBody>
                   {historico.map((h, idx) => (
                     <TableRow key={idx}>
-                      <TableCell>
-                        <Badge variant={h.tipo === 'carga' ? 'default' : 'secondary'} className="text-xs">
-                          {h.tipo === 'carga' ? 'Carga' : 'Baixa'}
-                        </Badge>
-                      </TableCell>
+                       <TableCell>
+                         <Badge variant={tipoBadge(h.tipo).variant} className="text-xs">
+                           {tipoBadge(h.tipo).label}
+                         </Badge>
+                       </TableCell>
                       <TableCell className="text-sm">{h.produto_nome}</TableCell>
                       <TableCell className="text-center">{h.quantidade}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || '—'}</TableCell>
@@ -979,18 +1019,18 @@ export default function PulseirasPage() {
                           <TableHead>Tipo</TableHead>
                           <TableHead>Produto</TableHead>
                           <TableHead className="text-center">Qtd</TableHead>
-                          <TableHead>Atendente</TableHead>
+                           <TableHead>Usuário</TableHead>
                           <TableHead>Data</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {viewFechadaHistorico.map((h, idx) => (
                           <TableRow key={idx}>
-                            <TableCell>
-                              <Badge variant={h.tipo === 'carga' ? 'default' : 'secondary'} className="text-xs">
-                                {h.tipo === 'carga' ? 'Carga' : 'Baixa'}
-                              </Badge>
-                            </TableCell>
+                             <TableCell>
+                               <Badge variant={tipoBadge(h.tipo).variant} className="text-xs">
+                                 {tipoBadge(h.tipo).label}
+                               </Badge>
+                             </TableCell>
                             <TableCell className="text-sm">{h.produto_nome}</TableCell>
                             <TableCell className="text-center">{h.quantidade}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || '—'}</TableCell>
