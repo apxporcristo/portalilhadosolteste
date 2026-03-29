@@ -99,7 +99,13 @@ export default function PulseirasPage() {
   }, [pulseirasAtivas, numeroBusca]);
 
   const filteredFechadas = useMemo(() => {
-    let list = pulseirasFechadas;
+    const agora = new Date();
+    // Only show pulseiras closed less than 24h ago
+    let list = pulseirasFechadas.filter(p => {
+      if (!p.fechada_em) return false;
+      const diffHoras = (agora.getTime() - new Date(p.fechada_em).getTime()) / (1000 * 60 * 60);
+      return diffHoras < 24;
+    });
     if (numeroBusca.trim()) {
       const q = numeroBusca.toLowerCase();
       list = list.filter(p =>
