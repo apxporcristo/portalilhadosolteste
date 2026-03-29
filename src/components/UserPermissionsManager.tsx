@@ -223,7 +223,15 @@ export function UserPermissionsManager() {
     setFReimpressao(u.reimpressao_venda);
     setFPulseira(u.acesso_pulseira);
     setFVoucherTodos(u.voucher_todos);
-    setFVoucherTempoId(u.voucher_tempo_id || '');
+    // Parse voucher_tempo_id: could be JSON array or single value
+    const tempoId = u.voucher_tempo_id || '';
+    try {
+      const parsed = JSON.parse(tempoId);
+      setFVoucherTemposSelecionados(Array.isArray(parsed) ? parsed : tempoId ? [tempoId] : []);
+    } catch {
+      setFVoucherTemposSelecionados(tempoId ? [tempoId] : []);
+    }
+    console.log('[openEdit] vouchers carregados:', tempoId);
     setFVoucherTempoAcesso(u.voucher_tempo_acesso || '');
     setModalMode('edit');
   };
