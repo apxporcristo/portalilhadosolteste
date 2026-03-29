@@ -85,7 +85,7 @@ const normalizeTipoHistorico = (tipoRaw: any): string => {
   if (tipo.includes('abert')) return 'abertura';
   if (tipo.includes('fech')) return 'fechamento';
   if (tipo.includes('baix') || tipo.includes('consum')) return 'baixa';
-  if (tipo.includes('carg') || tipo.includes('inclu') || tipo.includes('adicion') || tipo.includes('lanc')) return 'carga';
+  if (tipo.includes('inclu') || tipo.includes('carg') || tipo.includes('adicion') || tipo.includes('lanc')) return 'inclusao';
   return tipo || 'movimentacao';
 };
 
