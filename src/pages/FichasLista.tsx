@@ -395,14 +395,164 @@ export default function FichasLista() {
     return cart.filter(c => c.ficha.id === fichaId).reduce((sum, c) => sum + c.quantidade, 0);
   };
 
-  const startDirectPrint = async () => {
-    // Filter printable items (imprimir_ficha = true)
-    const printableItems = cart.filter(item => {
-      const produto = produtos.find(p => p.id === item.ficha.id);
-      return (produto as any)?.imprimir_ficha !== false;
-    });
+  // Save all cart items to DB (payment registration) without printing
+  const saveAllToDB = async (): Promise<string | null> => {
+    const codigoVenda = generateCodigoVenda();
+    const sbClient = await getSupabaseClient();
+    for (const item of cart) {
+      const unitTotal = cartItemTotal(item);
+      const dadosExtras: any = {};
+      if (item.ficha.exigir_dados_cliente && nomeCliente.trim()) {
+        dadosExtras.nome_cliente = nomeCliente.trim();
+        if (telefoneCliente.trim()) dadosExtras.telefone_cliente = telefoneCliente.trim();
+      }
+      if (item.ficha.exigir_dados_atendente && nomeAtendente.trim()) {
+        dadosExtras.nome_atendente = nomeAtendente.trim();
+      }
+      try {
+        await registrarImpressao(item.ficha.id, item.quantidade, unitTotal, dadosExtras);
+      } catch (e) { console.warn('[Ficha] registrarImpressao falhou:', e); }
 
-    executePrint(printableItems, false);
+      let produtoNome = item.ficha.nome_produto;
+      if (item.selectedItems.length > 0) {
+        produtoNome += ' | ' + item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ');
+      }
+      try {
+        await sbClient.from('fichas_impressas' as any).insert({
+          produto_id: item.ficha.id,
+          produto_nome: produtoNome,
+          categoria_id: item.ficha.categoria_id,
+          categoria_nome: item.ficha.categoria_nome,
+          quantidade: item.quantidade,
+          valor_unitario: unitTotal,
+          valor_total: unitTotal * item.quantidade,
+          nome_cliente: nomeCliente.trim() || null,
+          telefone_cliente: telefoneCliente.trim() || null,
+          nome_atendente: nomeAtendente.trim() || null,
+          codigo_venda: codigoVenda,
+        });
+      } catch (e) { console.warn('[Ficha] fichas_impressas insert falhou:', e); }
+
+      // Send to KDS if product is marked
+      const produto = produtos.find(p => p.id === item.ficha.id);
+      if ((produto as any)?.enviar_para_kds) {
+        try {
+          await sbClient.from('kds_orders' as any).insert({
+            produto_id: item.ficha.id,
+            produto_nome: produtoNome,
+            categoria_nome: item.ficha.categoria_nome || '',
+            quantidade: item.quantidade,
+            valor_unitario: unitTotal,
+            valor_total: unitTotal * item.quantidade,
+            nome_cliente: nomeCliente.trim() || null,
+            telefone_cliente: telefoneCliente.trim() || null,
+            nome_atendente: nomeAtendente.trim() || null,
+            complementos: item.selectedItems.length > 0 ? item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ') : null,
+            observacao: (produto as any)?.obs || null,
+            kds_status: 'novo',
+          });
+        } catch (e) { console.warn('[Ficha] kds_orders insert falhou:', e); }
+      }
+    }
+    return codigoVenda;
+  };
+
+  // Build list of selectable items for the print selection modal
+  const printSelectableItems = useMemo((): PrintSelectableItem[] => {
+    return cart.map(item => {
+      const key = cartItemKey(item);
+      const produto = produtos.find(p => p.id === item.ficha.id);
+      const imprimivel = (produto as any)?.imprimir_ficha !== false;
+      return {
+        key,
+        nome: item.ficha.nome_produto,
+        quantidade: item.quantidade,
+        categoria: item.ficha.categoria_nome,
+        complementos: item.selectedItems.length > 0 ? item.selectedItems.map(si => si.item.nome).join(', ') : undefined,
+        obs: (produto as any)?.obs || undefined,
+        imprimivel,
+      };
+    });
+  }, [cart, produtos]);
+
+  // Called when payment is confirmed → save to DB, then open print selection
+  const handlePaymentConfirmedForPrint = async () => {
+    if (cart.length === 0) return;
+    if (needsAtendente && !nomeAtendente) {
+      toast({ title: 'Atendente obrigatório', description: 'Faça login para identificar o atendente automaticamente.', variant: 'destructive' });
+      return;
+    }
+    if (needsCliente) {
+      setNomeCliente('');
+      setTelefoneCliente('');
+      setDocumentoCliente('');
+      setPrintDialog(true);
+      return;
+    }
+    await proceedAfterClientData();
+  };
+
+  const proceedAfterClientData = async () => {
+    setPrinting(true);
+    try {
+      const codigoVenda = await saveAllToDB();
+      setSavedCodigoVenda(codigoVenda);
+      setPaymentConfirmed(true);
+      // Check if there are any printable items
+      const hasPrintable = cart.some(item => {
+        const produto = produtos.find(p => p.id === item.ficha.id);
+        return (produto as any)?.imprimir_ficha !== false;
+      });
+      if (hasPrintable) {
+        setShowPrintSelection(true);
+      } else {
+        toast({ title: 'Pagamento confirmado!', description: `Venda ${codigoVenda} registrada. Nenhum item gera ficha de impressão.` });
+        clearCart();
+        setPaymentConfirmed(false);
+        setSavedCodigoVenda(null);
+      }
+    } catch (err) {
+      toast({ title: 'Erro', description: `Falha ao registrar pagamento: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  // Print only selected items via Bluetooth
+  const handlePrintSelected = async (selectedKeys: string[]) => {
+    setPrinting(true);
+    try {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('pt-BR');
+      const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+      const itemsToPrint = cart.filter(item => selectedKeys.includes(cartItemKey(item)));
+
+      if (itemsToPrint.length > 0) {
+        const characteristic = await ensureBluetoothConnected();
+        if (!characteristic) {
+          toast({ title: 'Impressora não conectada', description: 'Não foi possível conectar à impressora Bluetooth.', variant: 'destructive' });
+        } else {
+          for (const item of itemsToPrint) {
+            for (let i = 0; i < item.quantidade; i++) {
+              const escposData = generateFichaConsumoEscPos(item, dateStr, timeStr, savedCodigoVenda || undefined);
+              await writeToCharacteristic(characteristic, escposData);
+            }
+          }
+          toast({ title: 'Impressão enviada!', description: `Venda ${savedCodigoVenda} - fichas impressas com sucesso.` });
+        }
+      }
+
+      setShowPrintSelection(false);
+      clearCart();
+      setPaymentConfirmed(false);
+      setSavedCodigoVenda(null);
+    } catch (err) {
+      console.error('[Ficha Print] Erro:', err);
+      toast({ title: 'Erro na impressão', description: (err as Error)?.message || 'Erro desconhecido', variant: 'destructive' });
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const startConferencePrint = async () => {
@@ -414,63 +564,7 @@ export default function FichasLista() {
     if (cart.length === 0) return;
     setPrinting(true);
     try {
-      const codigoVenda = generateCodigoVenda();
-      const sbClient = await getSupabaseClient();
-      for (const item of cart) {
-        const unitTotal = cartItemTotal(item);
-        const dadosExtras: any = {};
-        if (item.ficha.exigir_dados_cliente && nomeCliente.trim()) {
-          dadosExtras.nome_cliente = nomeCliente.trim();
-          if (telefoneCliente.trim()) dadosExtras.telefone_cliente = telefoneCliente.trim();
-        }
-        if (item.ficha.exigir_dados_atendente && nomeAtendente.trim()) {
-          dadosExtras.nome_atendente = nomeAtendente.trim();
-        }
-        try {
-          await registrarImpressao(item.ficha.id, item.quantidade, unitTotal, dadosExtras);
-        } catch (e) { console.warn('[Ficha Save] registrarImpressao falhou:', e); }
-
-        let produtoNome = item.ficha.nome_produto;
-        if (item.selectedItems.length > 0) {
-          produtoNome += ' | ' + item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ');
-        }
-        try {
-          await sbClient.from('fichas_impressas' as any).insert({
-            produto_id: item.ficha.id,
-            produto_nome: produtoNome,
-            categoria_id: item.ficha.categoria_id,
-            categoria_nome: item.ficha.categoria_nome,
-            quantidade: item.quantidade,
-            valor_unitario: unitTotal,
-            valor_total: unitTotal * item.quantidade,
-            nome_cliente: nomeCliente.trim() || null,
-            telefone_cliente: telefoneCliente.trim() || null,
-            nome_atendente: nomeAtendente.trim() || null,
-            codigo_venda: codigoVenda,
-          });
-        } catch (e) { console.warn('[Ficha Save] fichas_impressas insert falhou:', e); }
-
-        // Send to KDS if product is marked
-        const produto = produtos.find(p => p.id === item.ficha.id);
-        if ((produto as any)?.enviar_para_kds) {
-          try {
-            await sbClient.from('kds_orders' as any).insert({
-              produto_id: item.ficha.id,
-              produto_nome: produtoNome,
-              categoria_nome: item.ficha.categoria_nome || '',
-              quantidade: item.quantidade,
-              valor_unitario: unitTotal,
-              valor_total: unitTotal * item.quantidade,
-              nome_cliente: nomeCliente.trim() || null,
-              telefone_cliente: telefoneCliente.trim() || null,
-              nome_atendente: nomeAtendente.trim() || null,
-              complementos: item.selectedItems.length > 0 ? item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ') : null,
-              observacao: (produto as any)?.obs || null,
-              kds_status: 'novo',
-            });
-          } catch (e) { console.warn('[Ficha Save] kds_orders insert falhou:', e); }
-        }
-      }
+      const codigoVenda = await saveAllToDB();
       toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
@@ -481,19 +575,7 @@ export default function FichasLista() {
   };
 
   const handleInitPrint = () => {
-    if (cart.length === 0) return;
-    if (needsAtendente && !nomeAtendente) {
-      toast({ title: 'Atendente obrigatório', description: 'Faça login para identificar o atendente automaticamente.', variant: 'destructive' });
-      return;
-    }
-    if (needsCliente) {
-      setNomeCliente('');
-      setTelefoneCliente('');
-      setDocumentoCliente('');
-      setPrintDialog(true);
-    } else {
-      startDirectPrint();
-    }
+    handlePaymentConfirmedForPrint();
   };
 
   const handleInitConferencePrint = () => {
@@ -503,7 +585,7 @@ export default function FichasLista() {
 
   const handleConfirmPrint = () => {
     setPrintDialog(false);
-    startDirectPrint();
+    proceedAfterClientData();
   };
 
   const buildItemsText = (item: CartItem): string => {
