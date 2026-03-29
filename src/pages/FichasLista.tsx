@@ -1216,6 +1216,23 @@ export default function FichasLista() {
         cancelText="Não"
       />
 
+      {/* Print Selection Dialog - after payment confirmed */}
+      <PrintSelectionDialog
+        open={showPrintSelection}
+        onOpenChange={(open) => {
+          setShowPrintSelection(open);
+          if (!open && paymentConfirmed) {
+            // User cancelled printing after payment - still clear cart since payment was saved
+            clearCart();
+            setPaymentConfirmed(false);
+            setSavedCodigoVenda(null);
+            toast({ title: 'Pagamento registrado', description: 'A venda foi salva sem impressão.' });
+          }
+        }}
+        items={printSelectableItems}
+        onConfirm={handlePrintSelected}
+        printing={printing}
+      />
 
     </div>
   );
