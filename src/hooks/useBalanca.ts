@@ -860,76 +860,37 @@ export function useBalanca() {
   const lerPesoSerial = useCallback(async (): Promise<number | null> => {
     try {
       if (!('serial' in navigator)) return null;
-      let port = serialPort;
-
-      // If current port is not readable, try to recover from granted ports
-      if (!port || !port.readable) {
-        try {
-          const ports = await (navigator as any).serial.getPorts();
-          const openPort = ports?.find((p: any) => p.readable);
-          if (openPort) {
-            port = openPort;
-            setSerialPort(openPort);
-          } else if (ports?.length) {
-            // Try to reopen the first granted port
-            const p = ports[0];
-            await p.open({
-              baudRate: serialConfig.baudRate,
-              dataBits: serialConfig.dataBits,
-              stopBits: serialConfig.stopBits,
-              parity: serialConfig.parity,
-            });
-            port = p;
-            setSerialPort(p);
-          }
-        } catch (reopenErr) {
-          console.warn('[Balança] Falha ao reabrir porta:', reopenErr);
-        }
-      }
-
-      if (!port || !port.readable) {
-        console.log('[Balança] Nenhuma porta serial aberta para leitura.');
+      const port = await ensureSerialPortReady();
+      if (!port) {
+        console.log('[Balança] Nenhuma porta serial disponível para leitura.');
         return null;
       }
 
-      // Send ENQ (0x05) if writable
-      if (port.writable) {
-        try {
-          const writer = port.writable.getWriter();
-          await writer.write(new Uint8Array([0x05]));
-          writer.releaseLock();
-        } catch (writeErr) {
-          console.warn('[Balança] Falha ao enviar ENQ:', writeErr);
+      const result = await readFromSerialPort(port, { origin: 'lerPesoSerial' });
+      if (result !== null && result > 0) {
+        consecutiveReadFailuresRef.current = 0;
+        return result;
+      }
+
+      // Increment failure counter; try recovery if threshold reached
+      consecutiveReadFailuresRef.current++;
+      console.warn(`[Balança] Falhas consecutivas: ${consecutiveReadFailuresRef.current}`);
+      if (consecutiveReadFailuresRef.current >= 2) {
+        const recovered = await recoverSerialConnection('consecutive-read-failures');
+        if (recovered) {
+          consecutiveReadFailuresRef.current = 0;
+          // Retry once after recovery
+          const retryResult = await readFromSerialPort(port, { origin: 'lerPesoSerial-retry' });
+          if (retryResult !== null && retryResult > 0) return retryResult;
         }
       }
 
-      // Check if readable is locked (another reader active)
-      if (port.readable.locked) {
-        console.warn('[Balança] Porta serial com reader travado, aguardando...');
-        await new Promise(r => setTimeout(r, 500));
-        if (port.readable.locked) {
-          console.warn('[Balança] Reader ainda travado, tentando ENQ novamente...');
-          return null;
-        }
-      }
-
-      const reader = port.readable.getReader();
-      const timeout = setTimeout(() => { try { reader.cancel(); } catch {} }, 3000);
-      try {
-        const { value, done } = await reader.read();
-        clearTimeout(timeout);
-        reader.releaseLock();
-        if (value && !done) return parseToledoWeightBytes(value);
-      } catch {
-        clearTimeout(timeout);
-        try { reader.releaseLock(); } catch {}
-      }
       return null;
     } catch (err) {
       console.error('[Balança] Erro serial:', err);
       return null;
     }
-  }, [serialPort, serialConfig]);
+  }, [ensureSerialPortReady, readFromSerialPort, recoverSerialConnection]);
   const conectarBalancaAndroid = useCallback((): boolean => {
     const bridge = window.AndroidBridge;
     if (!bridge?.connectScale) return false;
@@ -1040,21 +1001,91 @@ export function useBalanca() {
 
   const verificarConexaoHeartbeat = useCallback(async (): Promise<boolean> => {
     if (config.tipo_conexao === 'bluetooth') {
-      const ok = window.IS_ANDROID_APP
-        ? isScaleConnectedAndroid()
-        : (canUseWebSerialForBluetooth() ? await reconnectSerialFromGrantedPorts() : isBtConnected());
+      if (window.IS_ANDROID_APP) {
+        const ok = isScaleConnectedAndroid();
+        setStatus(ok ? 'conectada' : 'desconectada');
+        return ok;
+      }
+      if (canUseWebSerialForBluetooth()) {
+        const port = await ensureSerialPortReady();
+        if (!port) {
+          setStatus('desconectada');
+          return false;
+        }
+        // Functional probe: try a quick read to verify stream is alive
+        if (!readingInProgressRef.current) {
+          setStatus('verificando_conexao');
+          const probe = await readFromSerialPort(port, { timeoutMs: 2000, emitStatus: false, origin: 'heartbeat-probe' });
+          if (probe !== null && probe > 0) {
+            console.log('[Balança][Heartbeat] Conexão funcional, peso probe:', probe.toFixed(3));
+            consecutiveReadFailuresRef.current = 0;
+            setStatus('aguardando_leitura');
+            return true;
+          }
+          // Probe returned null but port still exists — still "connected" but may be stale
+          if (port.readable) {
+            consecutiveReadFailuresRef.current++;
+            if (consecutiveReadFailuresRef.current >= 3) {
+              console.warn('[Balança][Heartbeat] Falhas consecutivas no probe, tentando recuperação');
+              const recovered = await recoverSerialConnection('heartbeat-probe-failures');
+              return recovered;
+            }
+            setStatus('aguardando_leitura');
+            return true;
+          }
+          setStatus('desconectada');
+          return false;
+        }
+        // Reading in progress — connection is alive
+        return true;
+      }
+      const ok = isBtConnected();
       setStatus(ok ? 'conectada' : 'desconectada');
       return ok;
     }
 
     if (config.tipo_conexao === 'serial' || config.tipo_conexao === 'usb_serial') {
-      const ok = await reconnectSerialFromGrantedPorts();
-      if (!ok) setStatus('desconectada');
-      return ok;
+      const port = await ensureSerialPortReady();
+      if (!port) {
+        setStatus('desconectada');
+        return false;
+      }
+      if (!readingInProgressRef.current) {
+        setStatus('verificando_conexao');
+        const probe = await readFromSerialPort(port, { timeoutMs: 2000, emitStatus: false, origin: 'heartbeat-serial' });
+        if (probe !== null && probe > 0) {
+          consecutiveReadFailuresRef.current = 0;
+          setStatus('aguardando_leitura');
+          return true;
+        }
+        if (port.readable) {
+          consecutiveReadFailuresRef.current++;
+          if (consecutiveReadFailuresRef.current >= 3) {
+            const recovered = await recoverSerialConnection('heartbeat-serial-failures');
+            return recovered;
+          }
+          setStatus('aguardando_leitura');
+          return true;
+        }
+        setStatus('desconectada');
+        return false;
+      }
+      return true;
     }
 
     return false;
-  }, [config.tipo_conexao, canUseWebSerialForBluetooth, isScaleConnectedAndroid, isBtConnected, reconnectSerialFromGrantedPorts]);
+  }, [config.tipo_conexao, canUseWebSerialForBluetooth, isScaleConnectedAndroid, isBtConnected, ensureSerialPortReady, readFromSerialPort, recoverSerialConnection]);
+
+  const startHeartbeat = useCallback(() => {
+    stopHeartbeat('restart');
+    console.log('[Balança][Heartbeat] Iniciando intervalo de 10s');
+    heartbeatRunningRef.current = true;
+    heartbeatIntervalRef.current = setInterval(async () => {
+      if (!heartbeatRunningRef.current) return;
+      console.log('[Balança][Heartbeat] Tick');
+      await verificarConexaoHeartbeat();
+    }, 10_000);
+  }, [stopHeartbeat, verificarConexaoHeartbeat]);
 
   const garantirConexaoComTentativas = useCallback(async (maxTentativas = 3): Promise<boolean> => {
     const conectado = await verificarConexaoHeartbeat();
@@ -1094,6 +1125,8 @@ export function useBalanca() {
   }, []);
 
   const disconnect = useCallback(async () => {
+    stopHeartbeat('disconnect');
+    await releaseActiveReader('disconnect');
     if (_btServer && _btServer.connected) {
       try { _btServer.disconnect(); } catch { /* ignore */ }
     }
@@ -1106,7 +1139,8 @@ export function useBalanca() {
       setSerialPort(null);
     }
     setStatus('desconectada');
-  }, [serialPort]);
+    consecutiveReadFailuresRef.current = 0;
+  }, [serialPort, stopHeartbeat, releaseActiveReader]);
 
   return {
     config,
@@ -1133,6 +1167,9 @@ export function useBalanca() {
     isBtConnected,
     verificarConexaoHeartbeat,
     garantirConexaoComTentativas,
+    startHeartbeat,
+    stopHeartbeat,
+    recoverSerialConnection,
     // Android Bridge scale
     conectarBalancaAndroid,
     desconectarBalancaAndroid,
