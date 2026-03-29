@@ -60,6 +60,7 @@ function cartItemTotal(item: CartItem) {
 }
 
 export default function FichasLista() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const pulseiraContextId = searchParams.get('pulseira_id');
   const pulseiraContextNumero = searchParams.get('pulseira_numero');
