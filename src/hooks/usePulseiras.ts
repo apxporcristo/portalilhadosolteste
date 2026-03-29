@@ -398,6 +398,7 @@ export function usePulseiras() {
     adicionarItens,
     consumirProduto,
     fecharPulseira,
+    fecharComAbatimento,
     carregarDetalhes,
     listarAtivas,
     limpar,
