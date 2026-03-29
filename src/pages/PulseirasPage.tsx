@@ -903,6 +903,127 @@ export default function PulseirasPage() {
           }
         }}
       />
+
+      {/* Modal: Visualizar Pulseira Fechada (somente leitura) */}
+      <Dialog open={!!viewFechadaModal} onOpenChange={(open) => { if (!open) { setViewFechadaModal(null); setViewFechadaHistorico([]); setViewFechadaSaldos([]); } }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Watch className="h-5 w-5 text-primary" />
+              Pulseira #{viewFechadaModal?.numero}
+              <Badge variant="secondary" className="ml-2">Fechada</Badge>
+            </DialogTitle>
+            <DialogDescription>Visualização — esta pulseira está fechada e não pode ser alterada.</DialogDescription>
+          </DialogHeader>
+
+          {viewFechadaModal && (
+            <div className="space-y-4">
+              {/* Dados do cliente */}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{viewFechadaModal.nome_cliente}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{viewFechadaModal.telefone_cliente}</span>
+                </div>
+                {viewFechadaModal.cpf && (
+                  <div className="flex items-center gap-1.5">
+                    <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>{viewFechadaModal.cpf}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Aberta em {formatDate(viewFechadaModal.aberta_em)}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Fechada em {formatDate(viewFechadaModal.fechada_em)}</span>
+                </div>
+              </div>
+
+              {/* Saldo por produto */}
+              {viewFechadaSaldos.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                    <Package className="h-4 w-4 text-primary" /> Produtos
+                  </h4>
+                  <div className="space-y-1.5">
+                    {viewFechadaSaldos.map(p => (
+                      <div key={p.produto_id} className="flex justify-between text-sm p-2 rounded border bg-muted/50">
+                        <span className="font-medium">{p.produto_nome}</span>
+                        <div className="flex gap-3 text-xs text-muted-foreground">
+                          <span>Comprado: <strong>{p.comprado}</strong></span>
+                          <span>Consumido: <strong>{p.consumido}</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Histórico */}
+              {viewFechadaHistorico.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                    <History className="h-4 w-4 text-primary" /> Histórico
+                  </h4>
+                  <div className="rounded-md border overflow-auto max-h-60">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Produto</TableHead>
+                          <TableHead className="text-center">Qtd</TableHead>
+                          <TableHead>Atendente</TableHead>
+                          <TableHead>Data</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {viewFechadaHistorico.map((h, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>
+                              <Badge variant={h.tipo === 'carga' ? 'default' : 'secondary'} className="text-xs">
+                                {h.tipo === 'carga' ? 'Carga' : 'Baixa'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">{h.produto_nome}</TableCell>
+                            <TableCell className="text-center">{h.quantidade}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || '—'}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{formatDate(h.data)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Botão reabrir dentro do modal */}
+              {viewFechadaModal.fechada_em && (() => {
+                const diffH = (new Date().getTime() - new Date(viewFechadaModal.fechada_em!).getTime()) / (1000 * 60 * 60);
+                return diffH < 24;
+              })() && (
+                <div className="pt-2 flex justify-end">
+                  <Button size="sm" onClick={async () => {
+                    const result = await reabrirPulseira(viewFechadaModal.id, viewFechadaModal.fechada_em);
+                    if (result) {
+                      setViewFechadaModal(null);
+                      listarAtivas();
+                      listarFechadas();
+                      setActiveTab('abertas');
+                    }
+                  }}>
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir Pulseira
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
