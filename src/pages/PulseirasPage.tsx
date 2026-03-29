@@ -47,6 +47,30 @@ export default function PulseirasPage() {
   const [consumoQtd, setConsumoQtd] = useState(1);
   const [consumoObs, setConsumoObs] = useState('');
 
+  // Abatimento de crédito
+  const [abatimentoModal, setAbatimentoModal] = useState(false);
+  const [abatimentoProdutos, setAbatimentoProdutos] = useState<{ produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number }[]>([]);
+  const [abatimentoProdutoId, setAbatimentoProdutoId] = useState('');
+  const [abatimentoQtd, setAbatimentoQtd] = useState(1);
+
+  const creditoTotal = useMemo(() => {
+    return resumoProdutos
+      .filter(p => p.disponivel > 0)
+      .reduce((sum, p) => sum + p.disponivel * p.valor_unitario, 0);
+  }, [resumoProdutos]);
+
+  const creditoUsado = useMemo(() => {
+    return abatimentoProdutos.reduce((sum, p) => sum + p.quantidade * p.valor_unitario, 0);
+  }, [abatimentoProdutos]);
+
+  const creditoRestante = creditoTotal - creditoUsado;
+
+  const is24hPassadas = useMemo(() => {
+    if (!pulseira) return false;
+    const abertaEm = new Date(pulseira.aberta_em);
+    const agora = new Date();
+    return (agora.getTime() - abertaEm.getTime()) / (1000 * 60 * 60) >= 24;
+  }, [pulseira]);
   // Load active pulseiras on mount
   useEffect(() => {
     listarAtivas();
