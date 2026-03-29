@@ -71,7 +71,7 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
       const db = await getSupabaseClient();
       const [profileRes, permRes] = await Promise.all([
         db.from('user_profiles').select('nome, email, cpf, ativo').eq('id', userId).maybeSingle(),
-        db.from('user_permissions').select('acesso_voucher, cadastrar_produto, ficha_consumo, acesso_comanda, acesso_kds, reimpressao_venda, pulseira, is_admin').eq('user_id', userId).maybeSingle(),
+        db.from('user_permissions').select('acesso_voucher, acesso_cadastrar_produto, acesso_ficha_consumo, acesso_comanda, acesso_kds, reimpressao_venda, acesso_pulseira, is_admin, voucher_todos, voucher_tempo_id, voucher_tempo_acesso').eq('user_id', userId).maybeSingle(),
       ]);
 
       const profile = profileRes.data as any;
@@ -85,14 +85,14 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
           cpf: profile?.cpf || '',
           ativo: profile?.ativo ?? true,
           acesso_voucher: perm?.acesso_voucher ?? false,
-          acesso_cadastrar_produto: perm?.cadastrar_produto ?? false,
-          acesso_ficha_consumo: perm?.ficha_consumo ?? false,
+          acesso_cadastrar_produto: perm?.acesso_cadastrar_produto ?? false,
+          acesso_ficha_consumo: perm?.acesso_ficha_consumo ?? false,
           acesso_comanda: perm?.acesso_comanda ?? false,
           acesso_kds: perm?.acesso_kds ?? false,
           reimpressao_venda: perm?.reimpressao_venda ?? false,
-          pulseira: perm?.pulseira ?? false,
+          pulseira: perm?.acesso_pulseira ?? false,
           is_admin: perm?.is_admin ?? false,
-          voucher_tempo_acesso: null,
+          voucher_tempo_acesso: perm?.voucher_tempo_acesso ?? null,
         });
       }
     } catch (err) {
