@@ -223,11 +223,11 @@ export function usePulseiras() {
     const [itensRes, baixasRes] = await Promise.all([
       db
         .from('pulseira_itens' as any)
-        .select('pulseira_id, produto_id, produto_nome, nome_produto, quantidade, valor_unitario, created_at')
+        .select('*')
         .eq('pulseira_id', pulseiraId),
       db
         .from('pulseira_baixas' as any)
-        .select('pulseira_id, produto_id, produto_nome, nome_produto, quantidade, atendente_nome, created_at')
+        .select('*')
         .eq('pulseira_id', pulseiraId),
     ]);
 
@@ -313,12 +313,12 @@ export function usePulseiras() {
       const [itensRes, baixasRes] = await Promise.all([
         db
           .from('pulseira_itens' as any)
-          .select('produto_id, produto_nome, nome_produto, quantidade, atendente_nome, observacao, created_at')
+          .select('*')
           .eq('pulseira_id', pulseiraId)
           .order('created_at', { ascending: false }),
         db
           .from('pulseira_baixas' as any)
-          .select('produto_id, produto_nome, nome_produto, quantidade, atendente_nome, observacao, created_at')
+          .select('*')
           .eq('pulseira_id', pulseiraId)
           .order('created_at', { ascending: false }),
       ]);
