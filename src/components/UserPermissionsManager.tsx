@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSupabaseClient } from '@/lib/supabase-external';
-import { supabase as cloudSupabase } from '@/integrations/supabase/client';
+import { getSupabaseClient, getSupabaseConfig } from '@/lib/supabase-external';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
