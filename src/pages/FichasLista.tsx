@@ -910,6 +910,14 @@ export default function FichasLista() {
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
+            {hasPulseiraContext && (
+              <div className="px-4 pb-2 flex items-center gap-2 text-sm">
+                <Watch className="h-4 w-4 text-primary" />
+                <span className="text-muted-foreground">Destino:</span>
+                <Badge variant="default">Pulseira #{pulseiraContextNumero}</Badge>
+                <span className="text-xs text-muted-foreground">{pulseiraContextNome}</span>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {cart.map(item => {
