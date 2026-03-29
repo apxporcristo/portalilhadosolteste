@@ -34,6 +34,7 @@ export default function PulseirasPage() {
   const [addModal, setAddModal] = useState(false);
   const [consumoModal, setConsumoModal] = useState<PulseiraProdutoResumo | null>(null);
   const [historicoModal, setHistoricoModal] = useState(false);
+  const [historicoDetalhe, setHistoricoDetalhe] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState('abertas');
 
   // Form: abrir pulseira
