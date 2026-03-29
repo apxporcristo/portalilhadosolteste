@@ -527,12 +527,38 @@ export default function FichasLista() {
     await proceedAfterClientData();
   };
 
+  const addItemsToPulseiraContext = async () => {
+    if (!hasPulseiraContext || !pulseiraContextId) return;
+    try {
+      const itemsToAdd = cart.map(ci => ({
+        produto_id: ci.ficha.id,
+        produto_nome: ci.ficha.nome_produto + (ci.selectedItems.length > 0 ? ' | ' + ci.selectedItems.map(si => si.item.nome).join(', ') : ''),
+        quantidade: ci.quantidade,
+        valor_unitario: cartItemTotal(ci),
+        atendente_user_id: userSession?.user?.id,
+        atendente_nome: userName || undefined,
+      }));
+      const success = await adicionarItensPulseira(pulseiraContextId, itemsToAdd);
+      if (success) {
+        toast({ title: `${totalItems} item(ns) adicionados à pulseira #${pulseiraContextNumero}` });
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao adicionar à pulseira', description: err?.message || String(err), variant: 'destructive' });
+    }
+  };
+
   const proceedAfterClientData = async () => {
     setPrinting(true);
     try {
       const codigoVenda = await saveAllToDB();
       setSavedCodigoVenda(codigoVenda);
       setPaymentConfirmed(true);
+
+      // If pulseira context, add items to pulseira after payment
+      if (hasPulseiraContext) {
+        await addItemsToPulseiraContext();
+      }
+
       // Check if there are any printable items
       const hasPrintable = cart.some(item => {
         const produto = produtos.find(p => p.id === item.ficha.id);
@@ -541,7 +567,7 @@ export default function FichasLista() {
       if (hasPrintable) {
         setShowPrintSelection(true);
       } else {
-        toast({ title: 'Pagamento confirmado!', description: `Venda ${codigoVenda} registrada. Nenhum item gera ficha de impressão.` });
+        toast({ title: 'Pagamento confirmado!', description: `Venda ${codigoVenda} registrada.${hasPulseiraContext ? ` Itens lançados na pulseira #${pulseiraContextNumero}.` : ' Nenhum item gera ficha de impressão.'}` });
         clearCart();
         setPaymentConfirmed(false);
         setSavedCodigoVenda(null);
