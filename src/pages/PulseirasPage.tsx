@@ -246,6 +246,12 @@ export default function PulseirasPage() {
                     <span>Aberta em {formatDate(pulseira.aberta_em)}</span>
                   </div>
                 </div>
+                {is24hPassadas && resumoProdutos.some(p => p.disponivel > 0) && (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 border border-destructive/30 text-sm text-destructive">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>Pulseira com mais de 24h — fechamento obrigatório.</span>
+                  </div>
+                )}
                 <div className="flex gap-2 pt-2">
                   <Button size="sm" variant="outline" onClick={() => navigate(`/fichas?pulseira_id=${pulseira.id}&pulseira_numero=${encodeURIComponent(pulseira.numero)}&pulseira_nome=${encodeURIComponent(pulseira.nome_cliente)}`)}>
                     <Plus className="h-3.5 w-3.5 mr-1" /> Fichas
@@ -253,7 +259,18 @@ export default function PulseirasPage() {
                   <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
                     <History className="h-3.5 w-3.5 mr-1" /> Histórico
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={async () => { const closed = await fecharPulseira(pulseira.id); if (closed) { limpar(); listarAtivas(); } }}>
+                  <Button size="sm" variant="destructive" onClick={async () => {
+                    const result = await fecharPulseira(pulseira.id);
+                    if (result === 'abatimento') {
+                      setAbatimentoProdutos([]);
+                      setAbatimentoProdutoId('');
+                      setAbatimentoQtd(1);
+                      setAbatimentoModal(true);
+                    } else if (result === true) {
+                      limpar();
+                      listarAtivas();
+                    }
+                  }}>
                     Fechar Pulseira
                   </Button>
                 </div>
