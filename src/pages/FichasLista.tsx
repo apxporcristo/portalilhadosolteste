@@ -985,10 +985,17 @@ export default function FichasLista() {
                 </span>
               </div>
 
-              <Button variant="outline" className="w-full" onClick={() => setShowPagamentoModal(true)}>
-                <CreditCard className="h-4 w-4 mr-2" />
-                Forma de Pagamento
-              </Button>
+              {hasPulseiraContext ? (
+                <Button className="w-full" onClick={handleAddToPulseiraDirectly} disabled={printing || totalItems === 0}>
+                  <Watch className="h-4 w-4 mr-2" />
+                  Adicionar à Pulseira #{pulseiraContextNumero}
+                </Button>
+              ) : (
+                <Button variant="outline" className="w-full" onClick={() => setShowPagamentoModal(true)}>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Forma de Pagamento
+                </Button>
+              )}
             </div>
           </aside>
         )}
