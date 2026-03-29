@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -103,6 +104,7 @@ export function UserPermissionsManager() {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [availableTempos, setAvailableTempos] = useState<string[]>([]);
 
   // Form state
   const [fNome, setFNome] = useState('');
@@ -119,8 +121,26 @@ export function UserPermissionsManager() {
   const [fReimpressao, setFReimpressao] = useState(false);
   const [fPulseira, setFPulseira] = useState(false);
   const [fVoucherTodos, setFVoucherTodos] = useState(false);
-  const [fVoucherTempoId, setFVoucherTempoId] = useState('');
+  const [fVoucherTemposSelecionados, setFVoucherTemposSelecionados] = useState<string[]>([]);
   const [fVoucherTempoAcesso, setFVoucherTempoAcesso] = useState('');
+
+  /* ── Fetch available voucher tempos ── */
+  const fetchAvailableTempos = useCallback(async () => {
+    try {
+      const db = await getSupabaseClient();
+      const { data, error } = await db
+        .from('vouchers')
+        .select('tempo_validade')
+        .eq('status', 'livre');
+      if (error) throw error;
+      const tempos = Array.from(new Set((data || []).map((v: any) => v.tempo_validade).filter(Boolean)));
+      tempos.sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+      console.log('[fetchAvailableTempos] tempos:', tempos);
+      setAvailableTempos(tempos);
+    } catch (err) {
+      console.error('[fetchAvailableTempos]', err);
+    }
+  }, []);
 
   /* ── Fetch users ── */
   const fetchUsers = useCallback(async () => {
@@ -175,7 +195,7 @@ export function UserPermissionsManager() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { fetchUsers(); fetchAvailableTempos(); }, [fetchUsers, fetchAvailableTempos]);
 
   /* ── Form helpers ── */
   const resetForm = () => {
@@ -183,7 +203,7 @@ export function UserPermissionsManager() {
     setFAtivo(true); setFAdmin(false); setFVoucher(false);
     setFCadProduto(false); setFFicha(false); setFComanda(false);
     setFKds(false); setFReimpressao(false); setFPulseira(false);
-    setFVoucherTodos(false); setFVoucherTempoId(''); setFVoucherTempoAcesso('');
+    setFVoucherTodos(false); setFVoucherTemposSelecionados([]); setFVoucherTempoAcesso('');
   };
 
   const openCreate = () => { resetForm(); setSelectedUser(null); setModalMode('create'); };
@@ -203,7 +223,15 @@ export function UserPermissionsManager() {
     setFReimpressao(u.reimpressao_venda);
     setFPulseira(u.acesso_pulseira);
     setFVoucherTodos(u.voucher_todos);
-    setFVoucherTempoId(u.voucher_tempo_id || '');
+    // Parse voucher_tempo_id: could be JSON array or single value
+    const tempoId = u.voucher_tempo_id || '';
+    try {
+      const parsed = JSON.parse(tempoId);
+      setFVoucherTemposSelecionados(Array.isArray(parsed) ? parsed : tempoId ? [tempoId] : []);
+    } catch {
+      setFVoucherTemposSelecionados(tempoId ? [tempoId] : []);
+    }
+    console.log('[openEdit] vouchers carregados:', tempoId);
     setFVoucherTempoAcesso(u.voucher_tempo_acesso || '');
     setModalMode('edit');
   };
@@ -223,7 +251,9 @@ export function UserPermissionsManager() {
     reimpressao_venda: fReimpressao,
     acesso_pulseira: fPulseira,
     voucher_todos: fVoucher ? fVoucherTodos : false,
-    voucher_tempo_id: fVoucher && !fVoucherTodos ? (fVoucherTempoId || null) : null,
+    voucher_tempo_id: fVoucher && !fVoucherTodos && fVoucherTemposSelecionados.length > 0
+      ? JSON.stringify(fVoucherTemposSelecionados)
+      : null,
     voucher_tempo_acesso: fVoucher ? (fVoucherTempoAcesso || null) : null,
   });
 
@@ -416,7 +446,16 @@ export function UserPermissionsManager() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {u.is_admin && <Badge variant="destructive" className="text-xs">Admin</Badge>}
-                        {u.acesso_voucher && <Badge variant="outline" className="text-xs">Voucher</Badge>}
+                        {u.acesso_voucher && (
+                          <Badge variant="outline" className="text-xs">
+                            {u.voucher_todos ? 'Todos vouchers' : (() => {
+                              try {
+                                const parsed = JSON.parse(u.voucher_tempo_id || '[]');
+                                return Array.isArray(parsed) && parsed.length > 0 ? `${parsed.length} voucher(s)` : 'Voucher';
+                              } catch { return u.voucher_tempo_id ? '1 voucher' : 'Voucher'; }
+                            })()}
+                          </Badge>
+                        )}
                         {u.acesso_cadastrar_produto && <Badge variant="outline" className="text-xs">Produtos</Badge>}
                         {u.acesso_ficha_consumo && <Badge variant="outline" className="text-xs">Fichas</Badge>}
                         {u.acesso_comanda && <Badge variant="outline" className="text-xs">Comanda</Badge>}
@@ -510,17 +549,36 @@ export function UserPermissionsManager() {
                   {/* Voucher sub-options */}
                   {fVoucher && (
                     <div className="ml-4 border-l-2 border-muted pl-3 space-y-3">
-                      <PermToggle label="Todos os vouchers" checked={fVoucherTodos} onChange={setFVoucherTodos} />
+                      <PermToggle label="Todos os vouchers ativos" checked={fVoucherTodos} onChange={v => { setFVoucherTodos(v); if (v) setFVoucherTemposSelecionados([]); }} />
                       {!fVoucherTodos && (
                         <div className="space-y-2">
-                          <Label className="text-sm">Voucher Tempo ID</Label>
-                          <Input value={fVoucherTempoId} onChange={e => setFVoucherTempoId(e.target.value)} placeholder="ID do tempo" />
+                          <Label className="text-sm font-medium">Selecionar vouchers específicos</Label>
+                          {availableTempos.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Nenhum voucher ativo encontrado.</p>
+                          ) : (
+                            <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-2">
+                              {availableTempos.map(tempo => (
+                                <label key={tempo} className="flex items-center gap-2 cursor-pointer text-sm">
+                                  <Checkbox
+                                    checked={fVoucherTemposSelecionados.includes(tempo)}
+                                    onCheckedChange={(checked) => {
+                                      setFVoucherTemposSelecionados(prev =>
+                                        checked ? [...prev, tempo] : prev.filter(t => t !== tempo)
+                                      );
+                                    }}
+                                  />
+                                  {tempo}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          {fVoucherTemposSelecionados.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              {fVoucherTemposSelecionados.length} voucher(s) selecionado(s)
+                            </p>
+                          )}
                         </div>
                       )}
-                      <div className="space-y-2">
-                        <Label className="text-sm">Voucher Tempo Acesso</Label>
-                        <Input value={fVoucherTempoAcesso} onChange={e => setFVoucherTempoAcesso(e.target.value)} placeholder="Tempo de acesso" />
-                      </div>
                     </div>
                   )}
 
