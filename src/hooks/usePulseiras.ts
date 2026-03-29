@@ -229,7 +229,7 @@ export function usePulseiras() {
       const rows = items.map(i => ({
         pulseira_id: pulseiraId,
         produto_id: i.produto_id,
-        produto_nome: i.produto_nome,
+        nome_produto: i.produto_nome,
         quantidade: i.quantidade,
         valor_unitario: i.valor_unitario,
         valor_total: i.quantidade * i.valor_unitario,
