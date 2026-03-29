@@ -126,7 +126,7 @@ const Index = () => {
   const canSeeFichas = isLoggedIn ? (userAccess?.acesso_ficha_consumo ?? false) : showFichasConsumo;
   const canSeeFichasAdmin = isLoggedIn ? (userAccess?.acesso_cadastrar_produto ?? false) : false;
   const canSeeKds = isLoggedIn ? (userAccess?.acesso_kds ?? false) : false;
-  const canSeePulseira = isLoggedIn ? (userAccess?.pulseira ?? false) : false;
+  const canSeePulseira = isLoggedIn ? (userAccess?.acesso_pulseira ?? false) : false;
 
   if (loading) {
     return (

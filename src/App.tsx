@@ -68,7 +68,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/pulseiras" element={
-                <ProtectedRoute permission="pulseira">
+                <ProtectedRoute permission="acesso_pulseira">
                   <PulseirasPage />
                 </ProtectedRoute>
               } />
