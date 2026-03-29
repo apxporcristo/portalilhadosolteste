@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Plus, Minus, Watch, User, Phone, CreditCard, Clock, Package, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePulseiras, PulseiraProdutoResumo } from '@/hooks/usePulseiras';
+import { usePulseiras, Pulseira, PulseiraProdutoResumo } from '@/hooks/usePulseiras';
 import { useFichasConsumo } from '@/hooks/useFichasConsumo';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
 import { toast } from '@/hooks/use-toast';
@@ -22,8 +22,8 @@ export default function PulseirasPage() {
   const navigate = useNavigate();
   const userSession = useOptionalUserSession();
   const {
-    loading, pulseira, resumoProdutos, itens, consumos,
-    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, limpar,
+    loading, pulseira, resumoProdutos, itens, consumos, pulseirasAtivas,
+    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, listarAtivas, limpar, carregarDetalhes,
   } = usePulseiras();
   const { fichasAtivas } = useFichasConsumo();
 
@@ -47,9 +47,28 @@ export default function PulseirasPage() {
   const [consumoQtd, setConsumoQtd] = useState(1);
   const [consumoObs, setConsumoObs] = useState('');
 
+  // Load active pulseiras on mount
+  useEffect(() => {
+    listarAtivas();
+  }, [listarAtivas]);
+
+  const filteredAtivas = useMemo(() => {
+    if (!numeroBusca.trim()) return pulseirasAtivas;
+    const q = numeroBusca.toLowerCase();
+    return pulseirasAtivas.filter(p =>
+      p.numero.toLowerCase().includes(q) ||
+      p.nome_cliente.toLowerCase().includes(q) ||
+      (p.telefone_cliente || '').toLowerCase().includes(q)
+    );
+  }, [pulseirasAtivas, numeroBusca]);
+
   const handleBuscar = async () => {
     if (!numeroBusca.trim()) return;
     await buscarPulseira(numeroBusca.trim());
+  };
+
+  const handleSelectPulseira = async (p: Pulseira) => {
+    await buscarPulseira(p.numero);
   };
 
   const handleAbrir = async () => {
@@ -71,6 +90,7 @@ export default function PulseirasPage() {
       setFormTelefone('');
       setFormCpf('');
       setNumeroBusca((result as any).numero);
+      listarAtivas();
     }
   };
 
@@ -146,7 +166,7 @@ export default function PulseirasPage() {
           <CardContent className="pt-4">
             <div className="flex gap-2">
               <Input
-                placeholder="Digite o número da pulseira..."
+                placeholder="Buscar por número, nome ou telefone..."
                 value={numeroBusca}
                 onChange={e => setNumeroBusca(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleBuscar()}
@@ -161,15 +181,7 @@ export default function PulseirasPage() {
 
         {loading && <Skeleton className="h-64 w-full" />}
 
-        {!loading && !pulseira && numeroBusca && (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              Nenhuma pulseira ativa encontrada com o número "{numeroBusca}".
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Pulseira Details */}
+        {/* Pulseira Details (when one is selected) */}
         {pulseira && !loading && (
           <>
             <Card>
@@ -179,9 +191,14 @@ export default function PulseirasPage() {
                     <Watch className="h-5 w-5 text-primary" />
                     Pulseira #{pulseira.numero}
                   </CardTitle>
-                  <Badge variant={pulseira.status === 'ativa' ? 'default' : 'secondary'}>
-                    {pulseira.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={pulseira.status === 'ativa' ? 'default' : 'secondary'}>
+                      {pulseira.status}
+                    </Badge>
+                    <Button size="sm" variant="ghost" onClick={() => { limpar(); }}>
+                      ✕ Voltar à lista
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
@@ -212,7 +229,7 @@ export default function PulseirasPage() {
                   <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
                     <History className="h-3.5 w-3.5 mr-1" /> Histórico
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={() => fecharPulseira(pulseira.id).then(() => limpar())}>
+                  <Button size="sm" variant="destructive" onClick={async () => { await fecharPulseira(pulseira.id); limpar(); listarAtivas(); }}>
                     Fechar Pulseira
                   </Button>
                 </div>
@@ -271,6 +288,46 @@ export default function PulseirasPage() {
               </CardContent>
             </Card>
           </>
+        )}
+
+        {/* List of active pulseiras (when no specific pulseira is selected) */}
+        {!pulseira && !loading && (
+          <div className="space-y-2">
+            {filteredAtivas.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  {numeroBusca.trim()
+                    ? `Nenhuma pulseira ativa encontrada para "${numeroBusca}".`
+                    : 'Nenhuma pulseira ativa no momento.'}
+                </CardContent>
+              </Card>
+            ) : (
+              filteredAtivas.map(p => (
+                <Card key={p.id} className="cursor-pointer hover:border-primary transition-colors" onClick={() => handleSelectPulseira(p)}>
+                  <CardContent className="py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 rounded-full p-2">
+                        <Watch className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm">#{p.numero}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span>{p.nome_cliente}</span>
+                          {p.telefone_cliente && <span>· {p.telefone_cliente}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground text-right">
+                        {formatDate(p.aberta_em)}
+                      </div>
+                      <Badge variant="default" className="text-xs">Ativa</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
         )}
       </main>
 
