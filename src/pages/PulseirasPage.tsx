@@ -751,7 +751,7 @@ export default function PulseirasPage() {
                        </TableCell>
                       <TableCell className="text-sm">{h.produto_nome}</TableCell>
                       <TableCell className="text-center">{h.quantidade}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || 'Usuário não identificado'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{h.observacao || '—'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatDate(h.data)}</TableCell>
                     </TableRow>
