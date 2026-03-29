@@ -275,12 +275,32 @@ export function UserPermissionsManager() {
 
       } else if (modalMode === 'edit' && selectedUser) {
         const cpfClean = cleanCPF(fCpf);
-        await invokeEdgeFunction('manage-users', {
-          action: 'update-user',
-          user_id: selectedUser.user_id,
-          profile: { nome: fNome, email: fEmail, cpf: cpfClean, ativo: fAtivo },
-          permissions: buildPermissions(),
-        });
+        const perms = buildPermissions();
+        const rpcPayload = {
+          p_user_id: selectedUser.user_id,
+          p_nome: fNome,
+          p_email: fEmail,
+          p_cpf: cpfClean,
+          p_ativo: fAtivo,
+          p_acesso_voucher: perms.acesso_voucher,
+          p_acesso_cadastrar_produto: perms.acesso_cadastrar_produto,
+          p_acesso_ficha_consumo: perms.acesso_ficha_consumo,
+          p_acesso_comanda: perms.acesso_comanda,
+          p_acesso_kds: perms.acesso_kds,
+          p_reimpressao_venda: perms.reimpressao_venda,
+          p_acesso_pulseira: perms.acesso_pulseira,
+          p_is_admin: perms.is_admin,
+          p_voucher_todos: perms.voucher_todos,
+          p_voucher_tempo_id: perms.voucher_tempo_id,
+          p_voucher_tempo_acesso: perms.voucher_tempo_acesso,
+        };
+        console.log('[editUser] RPC payload:', rpcPayload);
+        const db = await getSupabaseClient();
+        const { error: rpcError } = await db.rpc('upsert_usuario_admin', rpcPayload);
+        if (rpcError) {
+          console.error('[editUser] RPC error:', rpcError);
+          throw new Error(rpcError.message || 'Erro ao atualizar usuário via RPC.');
+        }
         toast({ title: 'Usuário atualizado com sucesso!' });
 
       } else if (modalMode === 'reset-password' && selectedUser) {
