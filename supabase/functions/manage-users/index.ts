@@ -125,6 +125,8 @@ Deno.serve(async (req) => {
         acesso_ficha_consumo: !!permissions.acesso_ficha_consumo,
         acesso_comanda: !!permissions.acesso_comanda,
         acesso_kds: !!permissions.acesso_kds,
+        reimpressao_venda: !!permissions.reimpressao_venda,
+        pulseira: !!permissions.pulseira,
         is_admin: !!permissions.is_admin,
         voucher_tempo_acesso: normalizeString(permissions.voucher_tempo_acesso),
       };
