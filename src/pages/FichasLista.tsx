@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save, FileText, Settings2, Watch } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -61,6 +61,11 @@ function cartItemTotal(item: CartItem) {
 
 export default function FichasLista() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const pulseiraContextId = searchParams.get('pulseira_id');
+  const pulseiraContextNumero = searchParams.get('pulseira_numero');
+  const pulseiraContextNome = searchParams.get('pulseira_nome');
+  const hasPulseiraContext = !!(pulseiraContextId && pulseiraContextNumero);
   const { fichasAtivas, loading, registrarImpressao, produtos } = useFichasConsumo();
   const { getCategoriasOrdenadas, getItemsDaCategoria, getGruposDaCategoria, loading: loadingComp } = useComplementos();
   const userSession = useOptionalUserSession();
@@ -522,12 +527,38 @@ export default function FichasLista() {
     await proceedAfterClientData();
   };
 
+  const addItemsToPulseiraContext = async () => {
+    if (!hasPulseiraContext || !pulseiraContextId) return;
+    try {
+      const itemsToAdd = cart.map(ci => ({
+        produto_id: ci.ficha.id,
+        produto_nome: ci.ficha.nome_produto + (ci.selectedItems.length > 0 ? ' | ' + ci.selectedItems.map(si => si.item.nome).join(', ') : ''),
+        quantidade: ci.quantidade,
+        valor_unitario: cartItemTotal(ci),
+        atendente_user_id: userSession?.user?.id,
+        atendente_nome: userName || undefined,
+      }));
+      const success = await adicionarItensPulseira(pulseiraContextId, itemsToAdd);
+      if (success) {
+        toast({ title: `${totalItems} item(ns) adicionados à pulseira #${pulseiraContextNumero}` });
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao adicionar à pulseira', description: err?.message || String(err), variant: 'destructive' });
+    }
+  };
+
   const proceedAfterClientData = async () => {
     setPrinting(true);
     try {
       const codigoVenda = await saveAllToDB();
       setSavedCodigoVenda(codigoVenda);
       setPaymentConfirmed(true);
+
+      // If pulseira context, add items to pulseira after payment
+      if (hasPulseiraContext) {
+        await addItemsToPulseiraContext();
+      }
+
       // Check if there are any printable items
       const hasPrintable = cart.some(item => {
         const produto = produtos.find(p => p.id === item.ficha.id);
@@ -536,7 +567,7 @@ export default function FichasLista() {
       if (hasPrintable) {
         setShowPrintSelection(true);
       } else {
-        toast({ title: 'Pagamento confirmado!', description: `Venda ${codigoVenda} registrada. Nenhum item gera ficha de impressão.` });
+        toast({ title: 'Pagamento confirmado!', description: `Venda ${codigoVenda} registrada.${hasPulseiraContext ? ` Itens lançados na pulseira #${pulseiraContextNumero}.` : ' Nenhum item gera ficha de impressão.'}` });
         clearCart();
         setPaymentConfirmed(false);
         setSavedCodigoVenda(null);
@@ -595,7 +626,11 @@ export default function FichasLista() {
     setPrinting(true);
     try {
       const codigoVenda = await saveAllToDB();
-      toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
+      // If pulseira context, add items to pulseira after save
+      if (hasPulseiraContext) {
+        await addItemsToPulseiraContext();
+      }
+      toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s).${hasPulseiraContext ? ` Itens lançados na pulseira #${pulseiraContextNumero}.` : ''} Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
       toast({ title: 'Erro', description: `Falha ao salvar: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
@@ -795,10 +830,12 @@ export default function FichasLista() {
       <header className="bg-card border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-full mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+            <Button variant="ghost" size="icon" onClick={() => navigate(hasPulseiraContext ? '/pulseiras' : '/')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-lg sm:text-xl font-bold text-foreground">Lista de Fichas</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-foreground">
+              {hasPulseiraContext ? `Fichas — Pulseira #${pulseiraContextNumero}` : 'Lista de Fichas'}
+            </h1>
           </div>
         </div>
       </header>
@@ -905,6 +942,14 @@ export default function FichasLista() {
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
+            {hasPulseiraContext && (
+              <div className="px-4 pb-2 flex items-center gap-2 text-sm">
+                <Watch className="h-4 w-4 text-primary" />
+                <span className="text-muted-foreground">Destino:</span>
+                <Badge variant="default">Pulseira #{pulseiraContextNumero}</Badge>
+                <span className="text-xs text-muted-foreground">{pulseiraContextNome}</span>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {cart.map(item => {
@@ -1075,13 +1120,19 @@ export default function FichasLista() {
           onGenerateVoucher: handleGeneratePixVoucher,
         } : undefined}
       >
-        {comandasAbertas.length > 0 && (
+        {hasPulseiraContext && (
+          <div className="w-full flex items-center gap-2 p-3 rounded-lg border border-primary/30 bg-primary/5 text-sm">
+            <Watch className="h-4 w-4 text-primary" />
+            <span>Itens serão lançados na <strong>Pulseira #{pulseiraContextNumero}</strong> ({pulseiraContextNome}) após confirmar o pagamento.</span>
+          </div>
+        )}
+        {comandasAbertas.length > 0 && !hasPulseiraContext && (
           <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setComandaSearch(''); setShowComandaModal(true); }} disabled={totalItems === 0}>
             <ClipboardList className="h-5 w-5 mr-2" />
             Lançar na comanda
           </Button>
         )}
-        {pulseirasAtivas.length > 0 && (
+        {pulseirasAtivas.length > 0 && !hasPulseiraContext && (
           <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setPulseiraSearch(''); setShowPulseiraModal(true); }} disabled={totalItems === 0}>
             <Watch className="h-5 w-5 mr-2" />
             Adicionar à pulseira

@@ -223,8 +223,8 @@ export default function PulseirasPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <Button size="sm" variant="outline" onClick={() => setAddModal(true)}>
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Itens
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/fichas?pulseira_id=${pulseira.id}&pulseira_numero=${encodeURIComponent(pulseira.numero)}&pulseira_nome=${encodeURIComponent(pulseira.nome_cliente)}`)}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Fichas
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
                     <History className="h-3.5 w-3.5 mr-1" /> Histórico
