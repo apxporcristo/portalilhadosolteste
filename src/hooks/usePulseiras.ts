@@ -58,6 +58,24 @@ export function usePulseiras() {
   const [itens, setItens] = useState<PulseiraItem[]>([]);
   const [consumos, setConsumos] = useState<PulseiraConsumo[]>([]);
   const [resumoProdutos, setResumoProdutos] = useState<PulseiraProdutoResumo[]>([]);
+  const [pulseirasAtivas, setPulseirasAtivas] = useState<Pulseira[]>([]);
+
+  const listarAtivas = useCallback(async () => {
+    try {
+      const db = await getSupabaseClient();
+      const { data, error } = await db
+        .from('pulseiras')
+        .select('*')
+        .eq('status', 'ativa')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setPulseirasAtivas((data || []) as any[]);
+      return (data || []) as Pulseira[];
+    } catch (err: any) {
+      console.warn('[Pulseiras] Erro ao listar ativas:', err.message);
+      return [];
+    }
+  }, []);
 
   const buscarPulseira = useCallback(async (numero: string) => {
     setLoading(true);
@@ -251,12 +269,14 @@ export function usePulseiras() {
     itens,
     consumos,
     resumoProdutos,
+    pulseirasAtivas,
     buscarPulseira,
     abrirPulseira,
     adicionarItens,
     consumirProduto,
     fecharPulseira,
     carregarDetalhes,
+    listarAtivas,
     limpar,
   };
 }

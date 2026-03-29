@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save, FileText, Settings2 } from 'lucide-react';
+import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save, FileText, Settings2, Watch } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useFormasPagamento, FormaPagamento } from '@/hooks/useFormasPagamento';
 import { useComandas } from '@/hooks/useComandas';
+import { usePulseiras, Pulseira } from '@/hooks/usePulseiras';
 import { PagamentoDialog, PagamentoSelecionado } from '@/components/PagamentoDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PrintSelectionDialog, PrintSelectableItem } from '@/components/PrintSelectionDialog';
@@ -65,6 +66,7 @@ export default function FichasLista() {
   const userSession = useOptionalUserSession();
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
+  const { pulseirasAtivas, listarAtivas: listarPulseirasAtivas, adicionarItens: adicionarItensPulseira } = usePulseiras();
   const { getFreVouchersBatch, markVouchersPreReservado, stats: voucherStats } = useVouchers();
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const balanca = useBalanca();
@@ -84,6 +86,16 @@ export default function FichasLista() {
   const [showComandaModal, setShowComandaModal] = useState(false);
   const [comandaSearch, setComandaSearch] = useState('');
   const [confirmComanda, setConfirmComanda] = useState<{ id: string; numero: number } | null>(null);
+
+  // Lançar na pulseira
+  const [showPulseiraModal, setShowPulseiraModal] = useState(false);
+  const [pulseiraSearch, setPulseiraSearch] = useState('');
+  const [confirmPulseira, setConfirmPulseira] = useState<Pulseira | null>(null);
+
+  // Load pulseiras when needed
+  useEffect(() => {
+    listarPulseirasAtivas();
+  }, [listarPulseirasAtivas]);
 
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -1069,6 +1081,12 @@ export default function FichasLista() {
             Lançar na comanda
           </Button>
         )}
+        {pulseirasAtivas.length > 0 && (
+          <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setPulseiraSearch(''); setShowPulseiraModal(true); }} disabled={totalItems === 0}>
+            <Watch className="h-5 w-5 mr-2" />
+            Adicionar à pulseira
+          </Button>
+        )}
       </PagamentoDialog>
 
       {/* Modal Peso - estilo ServeService */}
@@ -1250,13 +1268,76 @@ export default function FichasLista() {
         cancelText="Não"
       />
 
+      {/* Modal Selecionar Pulseira */}
+      <Dialog open={showPulseiraModal} onOpenChange={setShowPulseiraModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar à Pulseira</DialogTitle>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por número ou nome..." value={pulseiraSearch} onChange={e => setPulseiraSearch(e.target.value)} className="pl-10" />
+          </div>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {pulseirasAtivas.filter(p => {
+              if (!pulseiraSearch.trim()) return true;
+              const q = pulseiraSearch.toLowerCase();
+              return p.numero.toLowerCase().includes(q) || p.nome_cliente.toLowerCase().includes(q);
+            }).map(p => (
+              <button
+                key={p.id}
+                onClick={() => setConfirmPulseira(p)}
+                className="w-full flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors text-left"
+              >
+                <div>
+                  <span className="font-bold">#{p.numero}</span>
+                  <span className="text-sm text-muted-foreground ml-2">{p.nome_cliente}</span>
+                </div>
+                {p.telefone_cliente && <span className="text-xs text-muted-foreground">{p.telefone_cliente}</span>}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmar lançamento na pulseira */}
+      <ConfirmDialog
+        open={!!confirmPulseira}
+        onOpenChange={(open) => { if (!open) setConfirmPulseira(null); }}
+        title="Confirmar adição à pulseira"
+        description={`Deseja adicionar ${totalItems} item(ns) como saldo na pulseira #${confirmPulseira?.numero || ''} (${confirmPulseira?.nome_cliente || ''})?`}
+        onConfirm={async () => {
+          if (!confirmPulseira) return;
+          try {
+            const itemsToAdd = cart.map(ci => ({
+              produto_id: ci.ficha.id,
+              produto_nome: ci.ficha.nome_produto + (ci.selectedItems.length > 0 ? ' | ' + ci.selectedItems.map(si => si.item.nome).join(', ') : ''),
+              quantidade: ci.quantidade,
+              valor_unitario: cartItemTotal(ci),
+              atendente_user_id: userSession?.user?.id,
+              atendente_nome: userName || undefined,
+            }));
+            const success = await adicionarItensPulseira(confirmPulseira.id, itemsToAdd);
+            if (success) {
+              toast({ title: `${totalItems} item(ns) adicionados à pulseira #${confirmPulseira.numero}` });
+              clearCart();
+              setConfirmPulseira(null);
+              setShowPulseiraModal(false);
+            }
+          } catch (err: any) {
+            toast({ title: 'Erro ao adicionar à pulseira', description: err?.message || String(err), variant: 'destructive' });
+          }
+        }}
+        confirmText="Sim, adicionar"
+        cancelText="Não"
+      />
+
       {/* Print Selection Dialog - after payment confirmed */}
       <PrintSelectionDialog
         open={showPrintSelection}
         onOpenChange={(open) => {
           setShowPrintSelection(open);
           if (!open && paymentConfirmed) {
-            // User cancelled printing after payment - still clear cart since payment was saved
             clearCart();
             setPaymentConfirmed(false);
             setSavedCodigoVenda(null);
