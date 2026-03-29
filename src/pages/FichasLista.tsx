@@ -1268,13 +1268,76 @@ export default function FichasLista() {
         cancelText="Não"
       />
 
+      {/* Modal Selecionar Pulseira */}
+      <Dialog open={showPulseiraModal} onOpenChange={setShowPulseiraModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar à Pulseira</DialogTitle>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por número ou nome..." value={pulseiraSearch} onChange={e => setPulseiraSearch(e.target.value)} className="pl-10" />
+          </div>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {pulseirasAtivas.filter(p => {
+              if (!pulseiraSearch.trim()) return true;
+              const q = pulseiraSearch.toLowerCase();
+              return p.numero.toLowerCase().includes(q) || p.nome_cliente.toLowerCase().includes(q);
+            }).map(p => (
+              <button
+                key={p.id}
+                onClick={() => setConfirmPulseira(p)}
+                className="w-full flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors text-left"
+              >
+                <div>
+                  <span className="font-bold">#{p.numero}</span>
+                  <span className="text-sm text-muted-foreground ml-2">{p.nome_cliente}</span>
+                </div>
+                {p.telefone_cliente && <span className="text-xs text-muted-foreground">{p.telefone_cliente}</span>}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmar lançamento na pulseira */}
+      <ConfirmDialog
+        open={!!confirmPulseira}
+        onOpenChange={(open) => { if (!open) setConfirmPulseira(null); }}
+        title="Confirmar adição à pulseira"
+        description={`Deseja adicionar ${totalItems} item(ns) como saldo na pulseira #${confirmPulseira?.numero || ''} (${confirmPulseira?.nome_cliente || ''})?`}
+        onConfirm={async () => {
+          if (!confirmPulseira) return;
+          try {
+            const itemsToAdd = cart.map(ci => ({
+              produto_id: ci.ficha.id,
+              produto_nome: ci.ficha.nome_produto + (ci.selectedItems.length > 0 ? ' | ' + ci.selectedItems.map(si => si.item.nome).join(', ') : ''),
+              quantidade: ci.quantidade,
+              valor_unitario: cartItemTotal(ci),
+              atendente_user_id: userSession?.user?.id,
+              atendente_nome: userName || undefined,
+            }));
+            const success = await adicionarItensPulseira(confirmPulseira.id, itemsToAdd);
+            if (success) {
+              toast({ title: `${totalItems} item(ns) adicionados à pulseira #${confirmPulseira.numero}` });
+              clearCart();
+              setConfirmPulseira(null);
+              setShowPulseiraModal(false);
+            }
+          } catch (err: any) {
+            toast({ title: 'Erro ao adicionar à pulseira', description: err?.message || String(err), variant: 'destructive' });
+          }
+        }}
+        confirmText="Sim, adicionar"
+        cancelText="Não"
+      />
+
       {/* Print Selection Dialog - after payment confirmed */}
       <PrintSelectionDialog
         open={showPrintSelection}
         onOpenChange={(open) => {
           setShowPrintSelection(open);
           if (!open && paymentConfirmed) {
-            // User cancelled printing after payment - still clear cart since payment was saved
             clearCart();
             setPaymentConfirmed(false);
             setSavedCodigoVenda(null);
