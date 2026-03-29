@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Search, Printer, ShoppingCart, Trash2, Minus, CreditCard, ClipboardList, Scale, RefreshCw, Save, FileText, Settings2, Watch } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -60,7 +60,11 @@ function cartItemTotal(item: CartItem) {
 }
 
 export default function FichasLista() {
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const pulseiraContextId = searchParams.get('pulseira_id');
+  const pulseiraContextNumero = searchParams.get('pulseira_numero');
+  const pulseiraContextNome = searchParams.get('pulseira_nome');
+  const hasPulseiraContext = !!(pulseiraContextId && pulseiraContextNumero);
   const { fichasAtivas, loading, registrarImpressao, produtos } = useFichasConsumo();
   const { getCategoriasOrdenadas, getItemsDaCategoria, getGruposDaCategoria, loading: loadingComp } = useComplementos();
   const userSession = useOptionalUserSession();
