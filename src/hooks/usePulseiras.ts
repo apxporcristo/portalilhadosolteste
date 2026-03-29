@@ -220,73 +220,25 @@ export function usePulseiras() {
   }, []);
 
   const carregarSaldosPadronizados = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
-    const rpcTentativas: { nome: string; payload: Record<string, any> }[] = [
-      { nome: 'listar_saldo_pulseira_produto', payload: { pulseira_id: pulseiraId } },
-      { nome: 'listar_saldo_pulseira_produto', payload: { p_pulseira_id: pulseiraId } },
-    ];
-
-    for (const tentativa of rpcTentativas) {
-      const { data, error } = await db.rpc(tentativa.nome as any, tentativa.payload as any);
-      if (!error && Array.isArray(data)) {
-        return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
-      }
-      if (error) {
-        console.warn(`[Pulseiras] RPC ${tentativa.nome} falhou:`, error.message);
-      }
+    const { data, error } = await db.rpc('listar_saldo_pulseira_produto' as any, { p_pulseira_id: pulseiraId } as any);
+    if (!error && Array.isArray(data)) {
+      return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
     }
-
-    const views = ['vw_pulseira_saldo_produto', 'vw_pulseira_saldos'];
-    for (const viewName of views) {
-      const { data, error } = await db
-        .from(viewName as any)
-        .select('*')
-        .eq('pulseira_id', pulseiraId);
-
-      if (!error) {
-        return ((data || []) as any[]).map((row) => normalizeSaldoRow(row, pulseiraId));
-      }
-
-      console.warn(`[Pulseiras] View ${viewName} falhou:`, error.message);
-    }
-
+    if (error) console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto falhou:', error.message);
     return [];
   }, []);
 
   const carregarHistoricoPadronizado = useCallback(async (db: any, pulseiraId: string, pulseiraData?: Partial<Pulseira> | null): Promise<PulseiraHistorico[]> => {
     let historicoBase: PulseiraHistorico[] = [];
 
-    // 1. Try RPC listar_historico_pulseira first (most reliable source)
-    const rpcPayloads = [
-      { p_pulseira_id: pulseiraId },
-      { pulseira_id: pulseiraId },
-    ];
-    let rpcSuccess = false;
-    for (const payload of rpcPayloads) {
-      const { data, error } = await db.rpc('listar_historico_pulseira' as any, payload as any);
-      if (!error && Array.isArray(data) && data.length > 0) {
-        historicoBase = data.map((row: any) => normalizeHistoricoRow(row));
-        rpcSuccess = true;
-        break;
-      }
-      if (error) console.warn('[Pulseiras] RPC listar_historico_pulseira falhou:', error.message);
+    const { data, error } = await db.rpc('listar_historico_pulseira' as any, { p_pulseira_id: pulseiraId } as any);
+    if (!error && Array.isArray(data)) {
+      historicoBase = data.map((row: any) => normalizeHistoricoRow(row));
+    } else if (error) {
+      console.warn('[Pulseiras] RPC listar_historico_pulseira falhou:', error.message);
     }
 
-    // 2. Fallback to view vw_pulseira_historico
-    if (!rpcSuccess) {
-      const { data, error } = await db
-        .from('vw_pulseira_historico' as any)
-        .select('*')
-        .eq('pulseira_id', pulseiraId)
-        .order('created_at', { ascending: false });
-
-      if (!error && Array.isArray(data) && data.length > 0) {
-        historicoBase = data.map((row: any) => normalizeHistoricoRow(row));
-      } else if (error) {
-        console.warn('[Pulseiras] View vw_pulseira_historico falhou:', error.message);
-      }
-    }
-
-    // 3. Add abertura/fechamento from pulseira data if not already present
+    // Add abertura/fechamento from pulseira data if not already present
     const tiposPresentes = new Set(historicoBase.map(h => h.tipo));
 
     if (pulseiraData?.aberta_em && !tiposPresentes.has('abertura')) {
@@ -422,80 +374,25 @@ export function usePulseiras() {
   const adicionarItens = useCallback(async (pulseiraId: string, items: { produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number; atendente_user_id?: string; atendente_nome?: string; codigo_venda?: string }[]) => {
     try {
       const db = await getSupabaseClient();
-      const rows = items.map(i => ({
-        pulseira_id: pulseiraId,
-        produto_id: i.produto_id,
-        nome_produto: i.produto_nome,
-        quantidade: i.quantidade,
-        valor_unitario: i.valor_unitario,
-        valor_total: i.quantidade * i.valor_unitario,
-        atendente_user_id: i.atendente_user_id || null,
-      }));
-      const { error } = await db.from('pulseira_itens').insert(rows as any);
-      if (error) throw error;
+      for (const item of items) {
+        const { error } = await db.rpc('incluir_produto_pulseira' as any, {
+          p_pulseira_id: pulseiraId,
+          p_produto_id: item.produto_id,
+          p_quantidade: item.quantidade,
+          p_usuario_id: item.atendente_user_id || null,
+          p_observacao: null,
+        } as any);
+        if (error) throw error;
+      }
       toast({ title: 'Itens adicionados à pulseira!' });
       await carregarDetalhes(pulseiraId);
       return true;
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+      console.error('[Pulseiras] Erro ao incluir produto:', err);
+      toast({ title: 'Erro', description: 'Não foi possível adicionar o produto à pulseira.', variant: 'destructive' });
       return false;
     }
   }, [carregarDetalhes]);
-
-  const executarBaixaRpc = useCallback(async (
-    db: any,
-    params: {
-      pulseiraId: string;
-      produtoId: string;
-      quantidade: number;
-      usuarioIdLogado: string;
-      atendenteNome?: string;
-      observacao?: string;
-    }
-  ) => {
-    const tentativas: { nome: string; payload: Record<string, any> }[] = [
-      {
-        nome: 'baixar_produto_pulseira',
-        payload: {
-          pulseira_id: params.pulseiraId,
-          produto_id: params.produtoId,
-          quantidade: params.quantidade,
-          usuario_id_logado: params.usuarioIdLogado,
-        },
-      },
-      {
-        nome: 'rpc_pulseira_baixar_item',
-        payload: {
-          p_pulseira_id: params.pulseiraId,
-          p_produto_id: params.produtoId,
-          p_quantidade: params.quantidade,
-          p_atendente_id: params.usuarioIdLogado,
-          p_atendente_nome: params.atendenteNome || null,
-          p_observacao: params.observacao || null,
-        },
-      },
-      {
-        nome: 'rpc_pulseira_baixar_item',
-        payload: {
-          pulseira_id: params.pulseiraId,
-          produto_id: params.produtoId,
-          quantidade: params.quantidade,
-          usuario_id_logado: params.usuarioIdLogado,
-          observacao: params.observacao || null,
-        },
-      },
-    ];
-
-    let lastError: any = null;
-    for (const tentativa of tentativas) {
-      const { error } = await db.rpc(tentativa.nome as any, tentativa.payload as any);
-      if (!error) return;
-      lastError = error;
-      console.warn(`[Pulseiras] RPC ${tentativa.nome} falhou na baixa:`, error.message);
-    }
-
-    throw lastError || new Error('Falha ao executar baixa da pulseira');
-  }, []);
 
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
@@ -505,21 +402,20 @@ export function usePulseiras() {
     }
 
     if (!atendente_user_id) {
-      console.warn('[Pulseiras] Baixa bloqueada por falta de usuário logado:', { pulseiraId, produto_id, produto_nome });
       toast({ title: 'Erro', description: 'Não foi possível concluir a baixa do produto.', variant: 'destructive' });
       return false;
     }
 
     try {
       const db = await getSupabaseClient();
-      await executarBaixaRpc(db, {
-        pulseiraId,
-        produtoId: produto_id,
-        quantidade,
-        usuarioIdLogado: atendente_user_id,
-        atendenteNome: atendente_nome,
-        observacao,
-      });
+      const { error } = await db.rpc('baixar_produto_pulseira' as any, {
+        p_pulseira_id: pulseiraId,
+        p_produto_id: produto_id,
+        p_quantidade: quantidade,
+        p_usuario_id: atendente_user_id,
+        p_observacao: observacao || null,
+      } as any);
+      if (error) throw error;
 
       toast({ title: 'Produto baixado com sucesso.' });
       await carregarDetalhes(pulseiraId);
@@ -529,7 +425,7 @@ export function usePulseiras() {
       toast({ title: 'Erro', description: 'Não foi possível concluir a baixa do produto.', variant: 'destructive' });
       return false;
     }
-  }, [resumoProdutos, carregarDetalhes, executarBaixaRpc]);
+  }, [resumoProdutos, carregarDetalhes]);
 
   // Manual close: ONLY allowed when saldo = 0
   // 24h rule triggers abatement flow instead
