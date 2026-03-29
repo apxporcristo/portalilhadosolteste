@@ -52,18 +52,21 @@ function bool(v: unknown): boolean {
   return v === true;
 }
 
-function parsePermissions(input: unknown): Record<string, boolean> {
+function parsePermissions(input: unknown): Record<string, unknown> {
   const p = isObject(input) ? input : {};
 
   return {
     is_admin: bool(p.is_admin),
     acesso_voucher: bool(p.acesso_voucher),
-    cadastrar_produto: bool(p.cadastrar_produto) || bool(p.acesso_cadastrar_produto),
-    ficha_consumo: bool(p.ficha_consumo) || bool(p.acesso_ficha_consumo),
+    acesso_cadastrar_produto: bool(p.acesso_cadastrar_produto) || bool(p.cadastrar_produto),
+    acesso_ficha_consumo: bool(p.acesso_ficha_consumo) || bool(p.ficha_consumo),
     acesso_comanda: bool(p.acesso_comanda),
     acesso_kds: bool(p.acesso_kds),
     reimpressao_venda: bool(p.reimpressao_venda),
-    pulseira: bool(p.pulseira) || bool(p.acesso_pulseira),
+    acesso_pulseira: bool(p.acesso_pulseira) || bool(p.pulseira),
+    voucher_todos: bool(p.voucher_todos),
+    voucher_tempo_id: typeof p.voucher_tempo_id === 'string' ? p.voucher_tempo_id || null : null,
+    voucher_tempo_acesso: typeof p.voucher_tempo_acesso === 'string' ? p.voucher_tempo_acesso || null : null,
   };
 }
 
