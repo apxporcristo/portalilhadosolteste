@@ -848,6 +848,25 @@ export default function PulseirasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal: Confirmar Exclusão */}
+      <ConfirmDialog
+        open={confirmExcluirModal}
+        onOpenChange={setConfirmExcluirModal}
+        title="Excluir Pulseira"
+        description={`Tem certeza que deseja excluir a pulseira #${pulseira?.numero}? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        onConfirm={async () => {
+          if (!pulseira) return;
+          const result = await excluirPulseira(pulseira.id);
+          if (result) {
+            setConfirmExcluirModal(false);
+            limpar();
+            listarAtivas();
+          }
+        }}
+      />
     </div>
   );
 }
