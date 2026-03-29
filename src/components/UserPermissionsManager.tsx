@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -15,7 +14,6 @@ import { Users, RefreshCw, Plus, Pencil, KeyRound, Trash2, Power, Search } from 
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { formatCPF, cleanCPF, isValidCPF } from '@/lib/cpf-utils';
-import { hashPassword } from '@/lib/password-utils';
 
 interface UserWithPermissions {
   user_id: string;
@@ -24,14 +22,13 @@ interface UserWithPermissions {
   cpf: string;
   ativo: boolean;
   acesso_voucher: boolean;
-  acesso_cadastrar_produto: boolean;
-  acesso_ficha_consumo: boolean;
+  cadastrar_produto: boolean;
+  ficha_consumo: boolean;
   acesso_comanda: boolean;
   acesso_kds: boolean;
   reimpressao_venda: boolean;
   pulseira: boolean;
   is_admin: boolean;
-  voucher_tempo_acesso: string | null;
 }
 
 type ModalMode = 'create' | 'edit' | 'reset-password' | null;
@@ -47,207 +44,34 @@ function getCallerUserId(): string {
   throw new Error('Sessão expirada. Faça login novamente.');
 }
 
-async function createUserDirect(body: Record<string, unknown>) {
-  const db = await getSupabaseClient();
-  const profile = typeof body.profile === 'object' && body.profile !== null ? body.profile as Record<string, unknown> : {};
-  const permissions = typeof body.permissions === 'object' && body.permissions !== null ? body.permissions as Record<string, unknown> : {};
-
-  const nome = String(profile.nome ?? body.nome ?? '').trim();
-  const email = String(profile.email ?? body.email ?? '').trim().toLowerCase();
-  const password = String(body.password ?? '');
-  const cpfRaw = String(profile.cpf ?? body.cpf ?? '');
-  const ativo = profile.ativo !== undefined ? !!profile.ativo : true;
-  const cpfClean = cleanCPF(cpfRaw);
-
-  const acessoVoucher = !!(permissions.acesso_voucher ?? body.acesso_voucher);
-  const acessoCadastrarProduto = !!(permissions.acesso_cadastrar_produto ?? body.acesso_cadastrar_produto ?? body.cadastrar_produto);
-  const acessoFichaConsumo = !!(permissions.acesso_ficha_consumo ?? body.acesso_ficha_consumo ?? body.ficha_consumo);
-  const acessoComanda = !!(permissions.acesso_comanda ?? body.acesso_comanda);
-  const acessoKds = !!(permissions.acesso_kds ?? body.acesso_kds);
-  const reimpressaoVenda = !!(permissions.reimpressao_venda ?? body.reimpressao_venda);
-  const pulseira = !!(permissions.pulseira ?? permissions.acesso_pulseira ?? body.pulseira ?? body.acesso_pulseira);
-  const isAdmin = !!(permissions.is_admin ?? body.is_admin ?? body.administrador);
-  const voucherTempoAcesso = permissions.voucher_tempo_acesso ?? body.voucher_tempo_acesso ?? body.tempo_voucher;
-
-  if (!nome || !email || !password || !cpfClean) throw new Error('Campos obrigatórios: nome, email, senha e cpf.');
-  if (password.length < 6) throw new Error('Senha deve ter pelo menos 6 caracteres.');
-
-  const { data: existingCpf } = await db.from('user_profiles').select('id').eq('cpf', cpfClean).maybeSingle();
-  if (existingCpf) throw new Error('CPF já cadastrado.');
-
-  const senhaHash = await hashPassword(password, cpfClean);
-  const userId = crypto.randomUUID();
-
-  const { error: profErr } = await db.from('user_profiles').insert({
-    id: userId,
-    nome,
-    email,
-    cpf: cpfClean,
-    senha_hash: senhaHash,
-    ativo,
-  } as any);
-  if (profErr) throw new Error(`Erro perfil: ${profErr.message}`);
-
-  const { error: permErr } = await db.from('user_permissions').insert({
-    user_id: userId,
-    acesso_voucher: acessoVoucher,
-    acesso_cadastrar_produto: acessoCadastrarProduto,
-    acesso_ficha_consumo: acessoFichaConsumo,
-    acesso_comanda: acessoComanda,
-    acesso_kds: acessoKds,
-    reimpressao_venda: reimpressaoVenda,
-    pulseira,
-    is_admin: isAdmin,
-    voucher_tempo_acesso: typeof voucherTempoAcesso === 'string' && voucherTempoAcesso !== 'Todos' && voucherTempoAcesso.trim()
-      ? voucherTempoAcesso.trim()
-      : null,
-  } as any);
-  if (permErr) {
-    await db.from('user_profiles').delete().eq('id', userId);
-    throw new Error(`Erro permissões: ${permErr.message}`);
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'object' && err !== null) {
+    const maybe = err as Record<string, unknown>;
+    if (typeof maybe.message === 'string' && maybe.message) return maybe.message;
+    if (typeof maybe.error === 'string' && maybe.error) return maybe.error;
+    if (typeof maybe.error_description === 'string' && maybe.error_description) return maybe.error_description;
   }
-
-  return { success: true, user_id: userId };
-}
-
-async function invokeManageUsersDirect(body: Record<string, unknown>) {
-  const db = await getSupabaseClient();
-  const action = typeof body.action === 'string' ? body.action : null;
-  const userId = typeof body.user_id === 'string' ? body.user_id : null;
-
-  if (!action) throw new Error('Ação inválida.');
-
-  if (action === 'create-user') {
-    return createUserDirect(body);
-  }
-
-  if (!userId) throw new Error('user_id é obrigatório.');
-
-  if (action === 'update-user') {
-    const profile = typeof body.profile === 'object' && body.profile !== null ? body.profile as Record<string, unknown> : {};
-    const permissions = typeof body.permissions === 'object' && body.permissions !== null ? body.permissions as Record<string, unknown> : {};
-
-    const profileUpdate: Record<string, unknown> = {};
-    if (profile.nome !== undefined) profileUpdate.nome = String(profile.nome ?? '').trim();
-    if (profile.email !== undefined) profileUpdate.email = String(profile.email ?? '').trim().toLowerCase();
-    if (profile.cpf !== undefined) profileUpdate.cpf = cleanCPF(String(profile.cpf ?? ''));
-    if (profile.ativo !== undefined) profileUpdate.ativo = !!profile.ativo;
-
-    if (Object.keys(profileUpdate).length > 0) {
-      const { error } = await db.from('user_profiles').update(profileUpdate as any).eq('id', userId);
-      if (error) throw new Error(`Erro perfil: ${error.message}`);
-    }
-
-    const permUpdate: Record<string, unknown> = {};
-    if (permissions.acesso_voucher !== undefined) permUpdate.acesso_voucher = !!permissions.acesso_voucher;
-    if (permissions.acesso_cadastrar_produto !== undefined) permUpdate.acesso_cadastrar_produto = !!permissions.acesso_cadastrar_produto;
-    if (permissions.acesso_ficha_consumo !== undefined) permUpdate.acesso_ficha_consumo = !!permissions.acesso_ficha_consumo;
-    if (permissions.acesso_comanda !== undefined) permUpdate.acesso_comanda = !!permissions.acesso_comanda;
-    if (permissions.acesso_kds !== undefined) permUpdate.acesso_kds = !!permissions.acesso_kds;
-    if (permissions.reimpressao_venda !== undefined) permUpdate.reimpressao_venda = !!permissions.reimpressao_venda;
-    if (permissions.pulseira !== undefined) permUpdate.pulseira = !!permissions.pulseira;
-    if (permissions.is_admin !== undefined) permUpdate.is_admin = !!permissions.is_admin;
-    if (permissions.voucher_tempo_acesso !== undefined) {
-      const value = permissions.voucher_tempo_acesso;
-      permUpdate.voucher_tempo_acesso = typeof value === 'string' && value.trim() ? value.trim() : null;
-    }
-
-    if (Object.keys(permUpdate).length > 0) {
-      const { error } = await db
-        .from('user_permissions')
-        .upsert({ user_id: userId, ...permUpdate } as any, { onConflict: 'user_id' });
-      if (error) throw new Error(`Erro permissões: ${error.message}`);
-    }
-
-    return { success: true };
-  }
-
-  if (action === 'reset-password') {
-    const newPassword = typeof body.new_password === 'string' ? body.new_password : '';
-    if (newPassword.length < 6) throw new Error('Senha deve ter pelo menos 6 caracteres.');
-
-    const { data: userProfile, error: profileError } = await db
-      .from('user_profiles')
-      .select('cpf')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (profileError) throw new Error(profileError.message);
-    if (!userProfile?.cpf) throw new Error('Usuário sem CPF cadastrado.');
-
-    const senhaHash = await hashPassword(newPassword, String(userProfile.cpf));
-    const { error } = await db
-      .from('user_profiles')
-      .update({ senha_hash: senhaHash } as any)
-      .eq('id', userId);
-
-    if (error) throw new Error(error.message);
-    return { success: true };
-  }
-
-  if (action === 'delete-user') {
-    const [permRes, profRes] = await Promise.all([
-      db.from('user_permissions').delete().eq('user_id', userId),
-      db.from('user_profiles').delete().eq('id', userId),
-    ]);
-
-    if (permRes.error) throw new Error(permRes.error.message);
-    if (profRes.error) throw new Error(profRes.error.message);
-    return { success: true };
-  }
-
-  if (action === 'toggle-ativo') {
-    const { error } = await db
-      .from('user_profiles')
-      .update({ ativo: !!body.ativo } as any)
-      .eq('id', userId);
-
-    if (error) throw new Error(error.message);
-    return { success: true };
-  }
-
-  throw new Error(`Ação desconhecida: ${action}`);
+  return 'Erro desconhecido.';
 }
 
 async function invokeEdgeFunction(functionName: string, body: Record<string, unknown>): Promise<any> {
   const callerUserId = getCallerUserId();
   const requestBody = { ...body, caller_user_id: callerUserId };
 
-  try {
-    const { data, error } = await cloudSupabase.functions.invoke(functionName, {
-      body: requestBody,
-    });
+  const { data, error } = await cloudSupabase.functions.invoke(functionName, {
+    body: requestBody,
+  });
 
-    if (error) {
-      const msg = String(error.message || '').toLowerCase();
-      if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed') || msg.includes('non-2xx')) {
-        if (functionName === 'manage-users') return invokeManageUsersDirect(requestBody);
-        if (functionName === 'create-user-admin') return createUserDirect(requestBody);
-      }
-      throw error;
-    }
-
-    if (data?.error) {
-      throw new Error(data.error);
-    }
-
-    if (functionName === 'manage-users' && data?.success !== true) {
-      return invokeManageUsersDirect(requestBody);
-    }
-    if (functionName === 'create-user-admin' && data?.success !== true) {
-      return createUserDirect(requestBody);
-    }
-
-    return data;
-
-  } catch (err: any) {
-    const msg = String(err?.message || '').toLowerCase();
-    if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed')) {
-      if (functionName === 'manage-users') return invokeManageUsersDirect(requestBody);
-      if (functionName === 'create-user-admin') return createUserDirect(requestBody);
-    }
-    throw err;
+  if (error) {
+    throw new Error(error.message || 'Falha ao chamar função de usuários.');
   }
+
+  if (data?.error) {
+    throw new Error(String(data.error));
+  }
+
+  return data;
 }
 
 export function UserPermissionsManager() {
@@ -258,7 +82,6 @@ export function UserPermissionsManager() {
   const [selectedUser, setSelectedUser] = useState<UserWithPermissions | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [temposDisponiveis, setTemposDisponiveis] = useState<string[]>([]);
 
   // Form fields
   const [formNome, setFormNome] = useState('');
@@ -274,69 +97,66 @@ export function UserPermissionsManager() {
   const [formReimpressao, setFormReimpressao] = useState(false);
   const [formPulseira, setFormPulseira] = useState(false);
   const [formAdmin, setFormAdmin] = useState(false);
-  const [formVoucherTempo, setFormVoucherTempo] = useState<string>('todos');
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const db = await getSupabaseClient();
-      const [profilesRes, permsRes] = await Promise.all([
-        db.from('user_profiles').select('*').order('nome'),
-        db.from('user_permissions').select('*'),
-      ]);
-      if (profilesRes.error) throw profilesRes.error;
-      if (permsRes.error) throw permsRes.error;
+      const { data, error } = await db
+        .from('user_profiles')
+        .select(`
+          id,
+          nome,
+          email,
+          cpf,
+          ativo,
+          user_permissions!left(
+            user_id,
+            is_admin,
+            acesso_voucher,
+            cadastrar_produto,
+            ficha_consumo,
+            acesso_comanda,
+            acesso_kds,
+            reimpressao_venda,
+            pulseira
+          )
+        `)
+        .order('nome');
 
-      const profiles = profilesRes.data || [];
-      const perms = permsRes.data || [];
+      if (error) throw error;
 
-      const merged: UserWithPermissions[] = profiles.map((p: any) => {
-        const uid = p.user_id || p.id;
-        const perm = perms.find((pm: any) => pm.user_id === uid);
+      const merged: UserWithPermissions[] = (data || []).map((p: any) => {
+        const perm = Array.isArray(p.user_permissions) ? p.user_permissions[0] : p.user_permissions;
         return {
-          user_id: uid,
+          user_id: p.id,
           nome: p.nome || '',
           email: p.email || '',
           cpf: p.cpf ? String(p.cpf) : '',
           ativo: p.ativo ?? true,
           acesso_voucher: perm?.acesso_voucher ?? false,
-          acesso_cadastrar_produto: perm?.acesso_cadastrar_produto ?? false,
-          acesso_ficha_consumo: perm?.acesso_ficha_consumo ?? false,
+          cadastrar_produto: perm?.cadastrar_produto ?? false,
+          ficha_consumo: perm?.ficha_consumo ?? false,
           acesso_comanda: perm?.acesso_comanda ?? false,
           acesso_kds: perm?.acesso_kds ?? false,
-          reimpressao_venda: (perm as any)?.reimpressao_venda ?? false,
-          pulseira: (perm as any)?.pulseira ?? false,
+          reimpressao_venda: perm?.reimpressao_venda ?? false,
+          pulseira: perm?.pulseira ?? false,
           is_admin: perm?.is_admin ?? false,
-          voucher_tempo_acesso: perm?.voucher_tempo_acesso ?? null,
         };
       });
       setUsers(merged);
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message || 'Não foi possível carregar usuários.', variant: 'destructive' });
+      toast({ title: 'Erro', description: extractErrorMessage(err), variant: 'destructive' });
     }
     setLoading(false);
   }, []);
 
-  const fetchTempos = useCallback(async () => {
-    try {
-      const db = await getSupabaseClient();
-      const { data, error } = await db.from('vouchers').select('tempo_validade');
-      if (error) throw error;
-      const temposSet = new Set<string>();
-      (data || []).forEach((v: any) => { if (v.tempo_validade) temposSet.add(v.tempo_validade); });
-      setTemposDisponiveis(Array.from(temposSet).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)));
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => { fetchUsers(); fetchTempos(); }, [fetchUsers, fetchTempos]);
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   const resetForm = () => {
     setFormNome(''); setFormCpf(''); setFormEmail(''); setFormSenha('');
     setFormAtivo(true); setFormVoucher(false); setFormProduto(false);
     setFormFicha(false); setFormComanda(false); setFormKds(false); setFormReimpressao(false); setFormPulseira(false); setFormAdmin(false);
-    setFormVoucherTempo('todos');
   };
 
   const openCreate = () => { resetForm(); setSelectedUser(null); setModalMode('create'); };
@@ -348,14 +168,13 @@ export function UserPermissionsManager() {
     setFormEmail(u.email);
     setFormAtivo(u.ativo);
     setFormVoucher(u.acesso_voucher);
-    setFormProduto(u.acesso_cadastrar_produto);
-    setFormFicha(u.acesso_ficha_consumo);
+    setFormProduto(u.cadastrar_produto);
+    setFormFicha(u.ficha_consumo);
     setFormComanda(u.acesso_comanda);
     setFormKds(u.acesso_kds);
     setFormReimpressao(u.reimpressao_venda);
     setFormPulseira(u.pulseira);
     setFormAdmin(u.is_admin);
-    setFormVoucherTempo(u.voucher_tempo_acesso || 'todos');
     setModalMode('edit');
   };
 
@@ -392,15 +211,13 @@ export function UserPermissionsManager() {
           },
           permissions: {
             acesso_voucher: formVoucher,
-            acesso_cadastrar_produto: formProduto,
-            acesso_ficha_consumo: formFicha,
+            cadastrar_produto: formProduto,
+            ficha_consumo: formFicha,
             acesso_comanda: formComanda,
             acesso_kds: formKds,
             reimpressao_venda: formReimpressao,
             pulseira: formPulseira,
-            acesso_pulseira: formPulseira,
             is_admin: formAdmin,
-            voucher_tempo_acesso: formVoucher && formVoucherTempo !== 'todos' ? formVoucherTempo : null,
           },
         });
         toast({ title: 'Usuário salvo com sucesso.' });
@@ -414,16 +231,14 @@ export function UserPermissionsManager() {
           profile: { nome: formNome, email: formEmail, cpf: cpfClean, ativo: formAtivo },
           permissions: {
             acesso_voucher: formVoucher,
-            acesso_cadastrar_produto: formProduto,
-            acesso_ficha_consumo: formFicha,
+            cadastrar_produto: formProduto,
+            ficha_consumo: formFicha,
             acesso_comanda: formComanda,
             acesso_kds: formKds,
             reimpressao_venda: formReimpressao,
             pulseira: formPulseira,
             is_admin: formAdmin,
-            voucher_tempo_acesso: formVoucher && formVoucherTempo !== 'todos' ? formVoucherTempo : null,
           },
-          new_email: formEmail !== selectedUser.email ? formEmail : undefined,
         });
         toast({ title: 'Usuário salvo com sucesso.' });
 
@@ -444,7 +259,7 @@ export function UserPermissionsManager() {
       await fetchUsers();
     } catch (err: any) {
       console.error('Erro ao salvar usuário:', err);
-      toast({ title: 'Erro', description: 'Não foi possível salvar o usuário.', variant: 'destructive' });
+      toast({ title: 'Erro', description: extractErrorMessage(err), variant: 'destructive' });
     }
     setSaving(false);
   };
@@ -546,8 +361,8 @@ export function UserPermissionsManager() {
                       <div className="flex flex-wrap gap-1">
                         {u.is_admin && <Badge variant="destructive" className="text-xs">Admin</Badge>}
                         {u.acesso_voucher && <Badge variant="outline" className="text-xs">Voucher</Badge>}
-                        {u.acesso_cadastrar_produto && <Badge variant="outline" className="text-xs">Produtos</Badge>}
-                        {u.acesso_ficha_consumo && <Badge variant="outline" className="text-xs">Fichas</Badge>}
+                        {u.cadastrar_produto && <Badge variant="outline" className="text-xs">Produtos</Badge>}
+                        {u.ficha_consumo && <Badge variant="outline" className="text-xs">Fichas</Badge>}
                         {u.acesso_comanda && <Badge variant="outline" className="text-xs">Comanda</Badge>}
                         {u.acesso_kds && <Badge variant="outline" className="text-xs">KDS</Badge>}
                         {u.reimpressao_venda && <Badge variant="outline" className="text-xs">Reimpressão</Badge>}
@@ -631,27 +446,8 @@ export function UserPermissionsManager() {
                   <Label className="text-sm font-semibold">Permissões</Label>
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Acesso Voucher</Label>
-                    <Switch checked={formVoucher} onCheckedChange={(checked) => {
-                      setFormVoucher(checked);
-                      if (!checked) setFormVoucherTempo('todos');
-                    }} />
+                    <Switch checked={formVoucher} onCheckedChange={setFormVoucher} />
                   </div>
-                  {formVoucher && (
-                    <div className="ml-4 space-y-1">
-                      <Label className="text-xs text-muted-foreground">Tempo de voucher</Label>
-                      <Select value={formVoucherTempo} onValueChange={setFormVoucherTempo}>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue placeholder="Selecione o tempo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todos</SelectItem>
-                          {temposDisponiveis.map(t => (
-                            <SelectItem key={t} value={t}>{t}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Cadastrar Produto</Label>
                     <Switch checked={formProduto} onCheckedChange={setFormProduto} />
