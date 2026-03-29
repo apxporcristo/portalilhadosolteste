@@ -173,10 +173,13 @@ class BluetoothScaleBridge(private val webView: WebView) {
         val etxIdx = data.indexOf('\u0003', if (stxIdx >= 0) stxIdx else 0)
         if (stxIdx >= 0 && etxIdx > stxIdx) {
             val payload = data.substring(stxIdx + 1, etxIdx).trim()
-            val match = Regex("(\\d+\\.?\\d*)").find(payload)
+            val match = Regex("(\\d+[.,]?\\d*)").find(payload)
             if (match != null) {
-                val value = match.value.toDoubleOrNull() ?: return null
-                val kg = if (value > 100) value / 1000.0 else value
+                val numStr = match.value.replace(',', '.')
+                val value = numStr.toDoubleOrNull() ?: return null
+                val hasDecimal = numStr.contains('.')
+                // If explicit decimal, use as-is; otherwise treat as grams
+                val kg = if (hasDecimal) value else value / 1000.0
                 return String.format("%.3f", kg)
             }
         }
@@ -188,9 +191,13 @@ class BluetoothScaleBridge(private val webView: WebView) {
             if (trimmed.isEmpty()) continue
             val match = Regex("(\\d+[.,]?\\d*)").find(trimmed)
             if (match != null) {
-                val value = match.value.replace(',', '.').toDoubleOrNull() ?: continue
-                if (value in 0.001..999.0) {
-                    return String.format("%.3f", value)
+                val numStr = match.value.replace(',', '.')
+                val value = numStr.toDoubleOrNull() ?: continue
+                val hasDecimal = numStr.contains('.')
+                // No decimal = grams, divide by 1000; with decimal = already kg
+                val kg = if (hasDecimal) value else value / 1000.0
+                if (kg in 0.001..999.0) {
+                    return String.format("%.3f", kg)
                 }
             }
         }

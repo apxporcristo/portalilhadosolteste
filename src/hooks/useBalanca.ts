@@ -599,8 +599,14 @@ export function useBalanca() {
       if (!raw) return null;
       const parsed = parseToledoWeight(raw);
       if (parsed !== null) return parsed;
-      const num = parseFloat(raw.replace(',', '.'));
-      return isNaN(num) ? null : num;
+      // Fallback: try plain number
+      const numStr = raw.replace(',', '.').trim();
+      const num = parseFloat(numStr);
+      if (isNaN(num) || num <= 0) return null;
+      const hasDecimal = numStr.includes('.');
+      const kg = hasDecimal ? num : num / 1000;
+      console.log('[Balança] Android fallback: bruto=', raw, 'hasDecimal=', hasDecimal, 'kg=', kg);
+      return Math.round(kg * 1000) / 1000;
     } catch {
       return null;
     }
