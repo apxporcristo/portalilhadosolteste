@@ -190,20 +190,34 @@ async function invokeManageUsersDirect(body: Record<string, unknown>) {
 
 async function invokeEdgeFunction(functionName: string, body: Record<string, unknown>): Promise<any> {
   const callerUserId = getCallerUserId();
-  const config = await getSupabaseConfig();
-  const url = `${config.url}/functions/v1/${functionName}`;
   const requestBody = { ...body, caller_user_id: callerUserId };
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.anonKey}`,
-        'apikey': config.anonKey,
-      },
-      body: JSON.stringify(requestBody),
+    const { data, error } = await cloudSupabase.functions.invoke(functionName, {
+      body: requestBody,
     });
+
+    if (error) {
+      const msg = String(error.message || '').toLowerCase();
+      if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed') || msg.includes('non-2xx')) {
+        if (functionName === 'manage-users') return invokeManageUsersDirect(requestBody);
+        if (functionName === 'create-user-admin') return createUserDirect(requestBody);
+      }
+      throw error;
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    if (functionName === 'manage-users' && data?.success !== true) {
+      return invokeManageUsersDirect(requestBody);
+    }
+    if (functionName === 'create-user-admin' && data?.success !== true) {
+      return createUserDirect(requestBody);
+    }
+
+    return data;
 
     let data: any = null;
     try {
