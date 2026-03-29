@@ -71,7 +71,7 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
       const db = await getSupabaseClient();
       const [profileRes, permRes] = await Promise.all([
         db.from('user_profiles').select('nome, email, cpf, ativo').eq('id', userId).maybeSingle(),
-        db.from('user_permissions').select('acesso_voucher, cadastrar_produto, ficha_consumo, acesso_comanda, acesso_kds, reimpressao_venda, pulseira, is_admin').eq('user_id', userId).maybeSingle(),
+        db.from('user_permissions').select('acesso_voucher, acesso_cadastrar_produto, acesso_ficha_consumo, acesso_comanda, acesso_kds, reimpressao_venda, acesso_pulseira, is_admin, voucher_todos, voucher_tempo_id, voucher_tempo_acesso').eq('user_id', userId).maybeSingle(),
       ]);
 
       const profile = profileRes.data as any;
