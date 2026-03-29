@@ -1081,6 +1081,12 @@ export default function FichasLista() {
             Lançar na comanda
           </Button>
         )}
+        {pulseirasAtivas.length > 0 && (
+          <Button variant="outline" className="w-full" size="lg" onClick={() => { setShowPagamentoModal(false); setPulseiraSearch(''); setShowPulseiraModal(true); }} disabled={totalItems === 0}>
+            <Watch className="h-5 w-5 mr-2" />
+            Adicionar à pulseira
+          </Button>
+        )}
       </PagamentoDialog>
 
       {/* Modal Peso - estilo ServeService */}
