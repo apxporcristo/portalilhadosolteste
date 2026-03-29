@@ -360,30 +360,24 @@ export function usePulseiras() {
     }
     try {
       const db = await getSupabaseClient();
-      const { error } = await db.rpc('registrar_baixa_pulseira', {
-        p_pulseira_id: pulseiraId,
-        p_produto_id: produto_id,
-        p_quantidade: quantidade,
-        p_atendente_user_id: atendente_user_id || null,
-        p_atendente_nome: atendente_nome || null,
-        p_observacao: observacao || null,
-      });
-      if (error) {
-        // Friendly error for PostgreSQL column/constraint errors
-        const msg = error.message || '';
-        if (msg.includes('does not exist') || msg.includes('column') || msg.includes('relation')) {
-          throw new Error('Não foi possível atualizar o saldo do produto. Verifique a configuração da consulta.');
-        }
-        throw error;
-      }
-      toast({ title: 'Baixa registrada!' });
+      const { error } = await db
+        .from('pulseira_baixas' as any)
+        .insert({
+          pulseira_id: pulseiraId,
+          produto_id: produto_id,
+          nome_produto: produto_nome,
+          quantidade: quantidade,
+          atendente_id: atendente_user_id || null,
+          atendente_nome: atendente_nome || null,
+          observacao: observacao || null,
+        });
+      if (error) throw error;
+      toast({ title: 'Produto baixado com sucesso.' });
       await carregarDetalhes(pulseiraId);
       return true;
     } catch (err: any) {
-      const friendlyMsg = err.message?.includes('Não foi possível') 
-        ? err.message 
-        : 'Não foi possível registrar a baixa. Tente novamente.';
-      toast({ title: 'Erro', description: friendlyMsg, variant: 'destructive' });
+      console.error('[Pulseiras] Erro na baixa:', err);
+      toast({ title: 'Erro', description: 'Não foi possível concluir a baixa do produto.', variant: 'destructive' });
       return false;
     }
   }, [resumoProdutos, carregarDetalhes]);
@@ -438,17 +432,20 @@ export function usePulseiras() {
     try {
       const db = await getSupabaseClient();
 
-      // 1. Give baixa on all remaining products
+      // 1. Give baixa on all remaining products via direct insert
       const produtosComSaldo = resumoProdutos.filter(p => p.disponivel > 0);
       for (const prod of produtosComSaldo) {
-        const { error } = await db.rpc('registrar_baixa_pulseira', {
-          p_pulseira_id: pulseiraId,
-          p_produto_id: prod.produto_id,
-          p_quantidade: prod.disponivel,
-          p_atendente_user_id: atendenteUserId || null,
-          p_atendente_nome: atendenteNome || null,
-          p_observacao: 'baixa automática para encerramento com abate de crédito',
-        });
+        const { error } = await db
+          .from('pulseira_baixas' as any)
+          .insert({
+            pulseira_id: pulseiraId,
+            produto_id: prod.produto_id,
+            nome_produto: prod.produto_nome,
+            quantidade: prod.disponivel,
+            atendente_id: atendenteUserId || null,
+            atendente_nome: atendenteNome || null,
+            observacao: 'baixa automática para encerramento com abate de crédito',
+          });
         if (error) throw error;
       }
 
@@ -467,14 +464,17 @@ export function usePulseiras() {
         if (insertError) throw insertError;
 
         for (const prod of produtosAbatimento) {
-          const { error } = await db.rpc('registrar_baixa_pulseira', {
-            p_pulseira_id: pulseiraId,
-            p_produto_id: prod.produto_id,
-            p_quantidade: prod.quantidade,
-            p_atendente_user_id: atendenteUserId || null,
-            p_atendente_nome: atendenteNome || null,
-            p_observacao: 'inseridos para abate de credito',
-          });
+          const { error } = await db
+            .from('pulseira_baixas' as any)
+            .insert({
+              pulseira_id: pulseiraId,
+              produto_id: prod.produto_id,
+              nome_produto: prod.produto_nome,
+              quantidade: prod.quantidade,
+              atendente_id: atendenteUserId || null,
+              atendente_nome: atendenteNome || null,
+              observacao: 'inseridos para abate de credito',
+            });
           if (error) throw error;
         }
       }
