@@ -68,7 +68,7 @@ export default function FichasLista() {
   const { getFreVouchersBatch, markVouchersPreReservado, stats: voucherStats } = useVouchers();
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const balanca = useBalanca();
-  const { lerPeso, verificarConexaoHeartbeat, garantirConexaoComTentativas, parearNovoDispositivo } = balanca;
+  const { lerPeso, verificarConexaoHeartbeat, garantirConexaoComTentativas, parearNovoDispositivo, startHeartbeat, stopHeartbeat } = balanca;
   const [search, setSearch] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -242,6 +242,7 @@ export default function FichasLista() {
         console.log('[Balança] Já conectada, reutilizando conexão existente');
         setAutoConnectingBalanca(false);
         setShowManualConnectButton(false);
+        startHeartbeat();
         return;
       }
 
@@ -255,14 +256,18 @@ export default function FichasLista() {
       setAutoConnectingBalanca(false);
       setShowManualConnectButton(!connectedOk);
       console.log('[Balança] Resultado conexão automática:', connectedOk ? 'OK' : 'Falha');
+      if (connectedOk) {
+        startHeartbeat();
+      }
     };
 
     autoConnectScale();
 
     return () => {
       active = false;
+      stopHeartbeat('modal-closed');
     };
-  }, [showPesoModal, verificarConexaoHeartbeat, garantirConexaoComTentativas]);
+  }, [showPesoModal, verificarConexaoHeartbeat, garantirConexaoComTentativas, startHeartbeat, stopHeartbeat]);
 
   const handleConfirmPesoManual = () => {
     if (!pendingPesoFicha) return;
@@ -1073,8 +1078,22 @@ export default function FichasLista() {
             <DialogTitle className="flex items-center gap-2">
               <Scale className="h-5 w-5 text-primary" />
               {pendingPesoFicha?.ficha.nome_produto || 'Informar peso'}
-              <Badge variant={balanca.status === 'conectada' ? 'default' : balanca.status === 'conectando' || balanca.status === 'tentando' ? 'secondary' : 'outline'} className="ml-auto text-xs">
-                {balanca.status === 'conectada' ? 'Conectada' : balanca.status === 'conectando' ? 'Conectando...' : balanca.status === 'tentando' ? `Tentando...` : balanca.status === 'falha' ? 'Falha' : 'Desconectada'}
+              <Badge variant={
+                balanca.connected ? 'default'
+                : balanca.status === 'conectando' || balanca.status === 'tentando' || balanca.status === 'verificando_conexao' || balanca.status === 'recuperando_conexao' ? 'secondary'
+                : balanca.status === 'falha' || balanca.status === 'erro_leitura' ? 'destructive'
+                : 'outline'
+              } className="ml-auto text-xs">
+                {balanca.status === 'lendo' ? 'Lendo...'
+                : balanca.status === 'aguardando_leitura' ? 'Conectada'
+                : balanca.status === 'conectada' ? 'Conectada'
+                : balanca.status === 'verificando_conexao' ? 'Verificando...'
+                : balanca.status === 'recuperando_conexao' ? 'Recuperando...'
+                : balanca.status === 'conectando' ? 'Conectando...'
+                : balanca.status === 'tentando' ? 'Tentando...'
+                : balanca.status === 'falha' ? 'Falha'
+                : balanca.status === 'erro_leitura' ? 'Erro leitura'
+                : 'Desconectada'}
               </Badge>
             </DialogTitle>
             <DialogDescription>
@@ -1108,10 +1127,10 @@ export default function FichasLista() {
                 if (resultado !== null && resultado > 0) {
                   setPesoManual(resultado.toFixed(3));
                 } else {
-                  toast({ title: 'Não foi possível ler o peso', description: 'Digite o peso manualmente.', variant: 'destructive' });
+                  toast({ title: 'Não foi possível ler o peso', description: 'Tentando recuperar conexão... Tente novamente ou digite manualmente.', variant: 'destructive' });
                 }
               }} className="w-full">
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <RefreshCw className={`h-4 w-4 mr-2 ${balanca.status === 'lendo' ? 'animate-spin' : ''}`} />
                 Ler Peso da Balança
               </Button>
             )}
