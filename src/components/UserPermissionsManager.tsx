@@ -446,7 +446,16 @@ export function UserPermissionsManager() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {u.is_admin && <Badge variant="destructive" className="text-xs">Admin</Badge>}
-                        {u.acesso_voucher && <Badge variant="outline" className="text-xs">Voucher</Badge>}
+                        {u.acesso_voucher && (
+                          <Badge variant="outline" className="text-xs">
+                            {u.voucher_todos ? 'Todos vouchers' : (() => {
+                              try {
+                                const parsed = JSON.parse(u.voucher_tempo_id || '[]');
+                                return Array.isArray(parsed) && parsed.length > 0 ? `${parsed.length} voucher(s)` : 'Voucher';
+                              } catch { return u.voucher_tempo_id ? '1 voucher' : 'Voucher'; }
+                            })()}
+                          </Badge>
+                        )}
                         {u.acesso_cadastrar_produto && <Badge variant="outline" className="text-xs">Produtos</Badge>}
                         {u.acesso_ficha_consumo && <Badge variant="outline" className="text-xs">Fichas</Badge>}
                         {u.acesso_comanda && <Badge variant="outline" className="text-xs">Comanda</Badge>}
