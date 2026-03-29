@@ -492,8 +492,24 @@ export function usePulseiras() {
           p_usuario_id: usuarioId,
           p_observacao: item.observacao?.trim() || null,
         } as any);
-        if (error) throw error;
-        if (data === false || data === 0 || data === 'false') throw new Error('RPC_INCLUSAO_SEM_PERSISTENCIA');
+        if (error || data === false || data === 0 || data === 'false') {
+          const { error: insertFallbackError } = await db
+            .from('pulseira_itens' as any)
+            .insert({
+              pulseira_id: pulseiraId,
+              produto_id: item.produto_id,
+              nome_produto: item.produto_nome,
+              quantidade: item.quantidade,
+              valor_unitario: item.valor_unitario,
+              valor_total: Number(item.quantidade) * Number(item.valor_unitario),
+              atendente_user_id: usuarioId,
+            } as any);
+
+          if (insertFallbackError) {
+            if (error) throw error;
+            throw insertFallbackError;
+          }
+        }
       }
 
       await carregarDetalhes(pulseiraId);
@@ -536,7 +552,21 @@ export function usePulseiras() {
           p_usuario_id: atendente_user_id,
           p_observacao: observacao || null,
         } as any);
-        if (fallback.error) throw error;
+        if (fallback.error) {
+          const { error: insertFallbackError } = await db
+            .from('pulseira_baixas' as any)
+            .insert({
+              pulseira_id: pulseiraId,
+              produto_id,
+              nome_produto: produto_nome,
+              quantidade,
+              atendente_id: atendente_user_id,
+              atendente_nome: atendente_nome || null,
+              observacao: observacao || null,
+            } as any);
+
+          if (insertFallbackError) throw error;
+        }
       }
 
       toast({ title: 'Produto baixado com sucesso.' });
