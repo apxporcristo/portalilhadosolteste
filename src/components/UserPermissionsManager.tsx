@@ -104,6 +104,7 @@ export function UserPermissionsManager() {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [availableTempos, setAvailableTempos] = useState<string[]>([]);
 
   // Form state
   const [fNome, setFNome] = useState('');
@@ -120,7 +121,7 @@ export function UserPermissionsManager() {
   const [fReimpressao, setFReimpressao] = useState(false);
   const [fPulseira, setFPulseira] = useState(false);
   const [fVoucherTodos, setFVoucherTodos] = useState(false);
-  const [fVoucherTempoId, setFVoucherTempoId] = useState('');
+  const [fVoucherTemposSelecionados, setFVoucherTemposSelecionados] = useState<string[]>([]);
   const [fVoucherTempoAcesso, setFVoucherTempoAcesso] = useState('');
 
   /* ── Fetch users ── */
