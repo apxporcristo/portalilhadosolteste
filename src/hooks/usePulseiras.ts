@@ -491,6 +491,7 @@ export function usePulseiras() {
     fecharPulseira,
     fecharComAbatimento,
     reabrirPulseira,
+    excluirPulseira,
     carregarDetalhes,
     listarAtivas,
     listarFechadas,
