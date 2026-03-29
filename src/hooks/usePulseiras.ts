@@ -49,6 +49,7 @@ export interface PulseiraProdutoResumo {
   comprado: number;
   consumido: number;
   disponivel: number;
+  valor_unitario: number;
   ultima_retirada: string | null;
   ultimo_atendente: string | null;
 }
@@ -136,6 +137,7 @@ export function usePulseiras() {
       comprado: Number(s.total_carregado ?? s.comprado ?? 0),
       consumido: Number(s.total_baixado ?? s.consumido ?? 0),
       disponivel: Number(s.saldo_disponivel ?? s.disponivel ?? 0),
+      valor_unitario: Number(s.valor_unitario ?? 0),
       ultima_retirada: s.ultima_baixa ?? s.ultima_retirada ?? null,
       ultimo_atendente: s.ultimo_atendente ?? null,
     }));
@@ -273,8 +275,7 @@ export function usePulseiras() {
     }
   }, [resumoProdutos, carregarDetalhes]);
 
-  const fecharPulseira = useCallback(async (pulseiraId: string) => {
-    // Validate: check balances and opening time
+  const fecharPulseira = useCallback(async (pulseiraId: string): Promise<boolean | 'abatimento'> => {
     const temSaldo = resumoProdutos.some(p => p.disponivel > 0);
     if (temSaldo && pulseira) {
       const abertaEm = new Date(pulseira.aberta_em);
@@ -288,6 +289,8 @@ export function usePulseiras() {
         });
         return false;
       }
+      // Has balance and 24h+ passed — needs abatement decision
+      return 'abatimento';
     }
 
     try {
@@ -305,6 +308,74 @@ export function usePulseiras() {
       return false;
     }
   }, [resumoProdutos, pulseira]);
+
+  // Close pulseira with credit abatement: write down remaining balance, add new products, then close
+  const fecharComAbatimento = useCallback(async (
+    pulseiraId: string,
+    produtosAbatimento: { produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number }[],
+    atendenteUserId?: string,
+    atendenteNome?: string,
+  ): Promise<boolean> => {
+    try {
+      const db = await getSupabaseClient();
+
+      // 1. Give baixa on all remaining products
+      const produtosComSaldo = resumoProdutos.filter(p => p.disponivel > 0);
+      for (const prod of produtosComSaldo) {
+        const { error } = await db.rpc('registrar_baixa_pulseira', {
+          p_pulseira_id: pulseiraId,
+          p_produto_id: prod.produto_id,
+          p_quantidade: prod.disponivel,
+          p_atendente_user_id: atendenteUserId || null,
+          p_atendente_nome: atendenteNome || null,
+          p_observacao: 'baixa automática para encerramento com abate de crédito',
+        });
+        if (error) throw error;
+      }
+
+      // 2. Add the abatement products
+      if (produtosAbatimento.length > 0) {
+        const rows = produtosAbatimento.map(i => ({
+          pulseira_id: pulseiraId,
+          produto_id: i.produto_id,
+          nome_produto: i.produto_nome,
+          quantidade: i.quantidade,
+          valor_unitario: i.valor_unitario,
+          valor_total: i.quantidade * i.valor_unitario,
+          atendente_user_id: atendenteUserId || null,
+        }));
+        const { error: insertError } = await db.from('pulseira_itens').insert(rows as any);
+        if (insertError) throw insertError;
+
+        // Give immediate baixa on the abatement products
+        for (const prod of produtosAbatimento) {
+          const { error } = await db.rpc('registrar_baixa_pulseira', {
+            p_pulseira_id: pulseiraId,
+            p_produto_id: prod.produto_id,
+            p_quantidade: prod.quantidade,
+            p_atendente_user_id: atendenteUserId || null,
+            p_atendente_nome: atendenteNome || null,
+            p_observacao: 'inseridos para abate de credito',
+          });
+          if (error) throw error;
+        }
+      }
+
+      // 3. Close the pulseira
+      const { error: closeError } = await db
+        .from('pulseiras')
+        .update({ status: 'encerrada', fechada_em: new Date().toISOString() } as any)
+        .eq('id', pulseiraId);
+      if (closeError) throw closeError;
+
+      toast({ title: 'Pulseira encerrada com abatimento de crédito!' });
+      setPulseira(null);
+      return true;
+    } catch (err: any) {
+      toast({ title: 'Erro ao fechar com abatimento', description: err.message, variant: 'destructive' });
+      return false;
+    }
+  }, [resumoProdutos]);
 
   const limpar = useCallback(() => {
     setPulseira(null);
@@ -327,6 +398,7 @@ export function usePulseiras() {
     adicionarItens,
     consumirProduto,
     fecharPulseira,
+    fecharComAbatimento,
     carregarDetalhes,
     listarAtivas,
     limpar,

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Plus, Minus, Watch, User, Phone, CreditCard, Clock, Package, History } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Watch, User, Phone, CreditCard, Clock, Package, History, AlertTriangle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -23,9 +23,9 @@ export default function PulseirasPage() {
   const userSession = useOptionalUserSession();
   const {
     loading, pulseira, resumoProdutos, itens, consumos, historico, pulseirasAtivas,
-    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, listarAtivas, limpar, carregarDetalhes,
+    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, fecharComAbatimento, listarAtivas, limpar, carregarDetalhes,
   } = usePulseiras();
-  const { fichasAtivas } = useFichasConsumo();
+  const { fichasAtivas, produtos } = useFichasConsumo();
 
   const [numeroBusca, setNumeroBusca] = useState('');
   const [abrirModal, setAbrirModal] = useState(false);
@@ -47,6 +47,30 @@ export default function PulseirasPage() {
   const [consumoQtd, setConsumoQtd] = useState(1);
   const [consumoObs, setConsumoObs] = useState('');
 
+  // Abatimento de crédito
+  const [abatimentoModal, setAbatimentoModal] = useState(false);
+  const [abatimentoProdutos, setAbatimentoProdutos] = useState<{ produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number }[]>([]);
+  const [abatimentoProdutoId, setAbatimentoProdutoId] = useState('');
+  const [abatimentoQtd, setAbatimentoQtd] = useState(1);
+
+  const creditoTotal = useMemo(() => {
+    return resumoProdutos
+      .filter(p => p.disponivel > 0)
+      .reduce((sum, p) => sum + p.disponivel * p.valor_unitario, 0);
+  }, [resumoProdutos]);
+
+  const creditoUsado = useMemo(() => {
+    return abatimentoProdutos.reduce((sum, p) => sum + p.quantidade * p.valor_unitario, 0);
+  }, [abatimentoProdutos]);
+
+  const creditoRestante = creditoTotal - creditoUsado;
+
+  const is24hPassadas = useMemo(() => {
+    if (!pulseira) return false;
+    const abertaEm = new Date(pulseira.aberta_em);
+    const agora = new Date();
+    return (agora.getTime() - abertaEm.getTime()) / (1000 * 60 * 60) >= 24;
+  }, [pulseira]);
   // Load active pulseiras on mount
   useEffect(() => {
     listarAtivas();
@@ -222,6 +246,12 @@ export default function PulseirasPage() {
                     <span>Aberta em {formatDate(pulseira.aberta_em)}</span>
                   </div>
                 </div>
+                {is24hPassadas && resumoProdutos.some(p => p.disponivel > 0) && (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 border border-destructive/30 text-sm text-destructive">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>Pulseira com mais de 24h — fechamento obrigatório.</span>
+                  </div>
+                )}
                 <div className="flex gap-2 pt-2">
                   <Button size="sm" variant="outline" onClick={() => navigate(`/fichas?pulseira_id=${pulseira.id}&pulseira_numero=${encodeURIComponent(pulseira.numero)}&pulseira_nome=${encodeURIComponent(pulseira.nome_cliente)}`)}>
                     <Plus className="h-3.5 w-3.5 mr-1" /> Fichas
@@ -229,7 +259,18 @@ export default function PulseirasPage() {
                   <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
                     <History className="h-3.5 w-3.5 mr-1" /> Histórico
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={async () => { const closed = await fecharPulseira(pulseira.id); if (closed) { limpar(); listarAtivas(); } }}>
+                  <Button size="sm" variant="destructive" onClick={async () => {
+                    const result = await fecharPulseira(pulseira.id);
+                    if (result === 'abatimento') {
+                      setAbatimentoProdutos([]);
+                      setAbatimentoProdutoId('');
+                      setAbatimentoQtd(1);
+                      setAbatimentoModal(true);
+                    } else if (result === true) {
+                      limpar();
+                      listarAtivas();
+                    }
+                  }}>
                     Fechar Pulseira
                   </Button>
                 </div>
@@ -471,6 +512,168 @@ export default function PulseirasPage() {
               </Table>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Abatimento de Crédito */}
+      <Dialog open={abatimentoModal} onOpenChange={setAbatimentoModal}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Abatimento de Crédito
+            </DialogTitle>
+            <DialogDescription>
+              A pulseira #{pulseira?.numero} tem produtos disponíveis que ainda não foram retirados.
+              Você pode converter o crédito restante em outros produtos.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Produtos restantes originais */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-muted-foreground">Produtos ainda disponíveis:</h4>
+            {resumoProdutos.filter(p => p.disponivel > 0).map(p => (
+              <div key={p.produto_id} className="flex justify-between text-sm p-2 rounded border bg-muted/50">
+                <span>{p.produto_nome} × {p.disponivel}</span>
+                <span className="font-medium">R$ {(p.disponivel * p.valor_unitario).toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Credit summary */}
+          <div className="rounded-lg border-2 border-primary/30 p-3 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span>Crédito total:</span>
+              <span className="font-bold">R$ {creditoTotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Usado em abatimento:</span>
+              <span className="font-medium text-primary">R$ {creditoUsado.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm border-t pt-1">
+              <span>Crédito restante:</span>
+              <span className={cn('font-bold', creditoRestante <= 0 ? 'text-muted-foreground' : 'text-destructive')}>
+                R$ {Math.max(0, creditoRestante).toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* Add products for abatement */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold">Adicionar produto para abatimento:</h4>
+            <div className="flex gap-2">
+              <Select value={abatimentoProdutoId} onValueChange={setAbatimentoProdutoId}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Selecione um produto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {fichasAtivas.filter(f => {
+                    const prod = produtos?.find(p => p.id === f.id);
+                    return prod?.ativo !== false;
+                  }).map(f => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.nome_produto} — R$ {Number(f.valor).toFixed(2)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="number"
+                min={1}
+                value={abatimentoQtd}
+                onChange={e => setAbatimentoQtd(Math.max(1, Number(e.target.value)))}
+                className="w-20"
+              />
+              <Button
+                size="sm"
+                onClick={() => {
+                  const ficha = fichasAtivas.find(f => f.id === abatimentoProdutoId);
+                  if (!ficha) return;
+                  const valorItem = Number(ficha.valor) * abatimentoQtd;
+                  if (valorItem > creditoRestante + 0.01) {
+                    toast({ title: 'Valor excede o crédito', description: `Crédito restante: R$ ${creditoRestante.toFixed(2)}`, variant: 'destructive' });
+                    return;
+                  }
+                  setAbatimentoProdutos(prev => [...prev, {
+                    produto_id: ficha.id,
+                    produto_nome: ficha.nome_produto,
+                    quantidade: abatimentoQtd,
+                    valor_unitario: Number(ficha.valor),
+                  }]);
+                  setAbatimentoProdutoId('');
+                  setAbatimentoQtd(1);
+                }}
+                disabled={!abatimentoProdutoId}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* List of abatement products */}
+          {abatimentoProdutos.length > 0 && (
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold text-muted-foreground">Produtos para abatimento:</h4>
+              {abatimentoProdutos.map((p, idx) => (
+                <div key={idx} className="flex items-center justify-between text-sm p-2 rounded border bg-primary/5">
+                  <span>{p.produto_nome} × {p.quantidade}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">R$ {(p.quantidade * p.valor_unitario).toFixed(2)}</span>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => {
+                      setAbatimentoProdutos(prev => prev.filter((_, i) => i !== idx));
+                    }}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground italic">
+                Obs: "inseridos para abate de credito"
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button variant="outline" onClick={() => setAbatimentoModal(false)}>Cancelar</Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                if (!pulseira) return;
+                const result = await fecharComAbatimento(
+                  pulseira.id,
+                  [],
+                  userSession?.user?.id,
+                  userSession?.access?.nome || userSession?.user?.email,
+                );
+                if (result) {
+                  setAbatimentoModal(false);
+                  limpar();
+                  listarAtivas();
+                }
+              }}
+            >
+              Fechar sem abatimento
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!pulseira) return;
+                const result = await fecharComAbatimento(
+                  pulseira.id,
+                  abatimentoProdutos,
+                  userSession?.user?.id,
+                  userSession?.access?.nome || userSession?.user?.email,
+                );
+                if (result) {
+                  setAbatimentoModal(false);
+                  limpar();
+                  listarAtivas();
+                }
+              }}
+              disabled={abatimentoProdutos.length === 0}
+            >
+              Confirmar Abatimento e Fechar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
