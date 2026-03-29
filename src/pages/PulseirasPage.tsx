@@ -226,13 +226,13 @@ export default function PulseirasPage() {
     if (tipo.includes('abert')) return 'abertura';
     if (tipo.includes('fech')) return 'fechamento';
     if (tipo.includes('baix') || tipo.includes('consum')) return 'baixa';
-    if (tipo.includes('carg') || tipo.includes('inclu') || tipo.includes('adicion') || tipo.includes('lanc')) return 'carga';
+    if (tipo.includes('inclu') || tipo.includes('carg') || tipo.includes('adicion') || tipo.includes('lanc')) return 'inclusao';
     return tipo || 'movimentacao';
   };
 
   const tipoBadge = (tipoRaw: string) => {
     const tipo = normalizeTipo(tipoRaw);
-    if (tipo === 'carga') return { label: 'Inclusão', variant: 'default' as const };
+    if (tipo === 'inclusao') return { label: 'Inclusão', variant: 'default' as const };
     if (tipo === 'baixa') return { label: 'Baixa', variant: 'secondary' as const };
     if (tipo === 'abertura') return { label: 'Abertura', variant: 'outline' as const };
     if (tipo === 'fechamento') return { label: 'Fechamento', variant: 'destructive' as const };
@@ -261,9 +261,9 @@ export default function PulseirasPage() {
     tipo: normalizeTipo(h.tipo ?? h.tipo_movimentacao ?? h.acao),
     produto_nome: h.produto_nome || h.nome_produto || '—',
     quantidade: Number(h.quantidade ?? 0),
-    atendente_nome: h.atendente_nome ?? h.usuario_nome ?? h.responsavel_nome ?? h.aberta_por ?? h.fechada_por ?? null,
+    atendente_nome: h.usuario_nome ?? h.atendente_nome ?? h.responsavel_nome ?? h.aberta_por ?? h.fechada_por ?? 'Usuário não identificado',
     observacao: h.observacao ?? h.descricao ?? null,
-    data: h.data ?? h.created_at ?? h.updated_at,
+    data: h.created_at ?? h.data ?? h.updated_at,
   });
 
   return (
@@ -570,11 +570,9 @@ export default function PulseirasPage() {
                           setViewFechadaModal(p);
                           // Load details for this closed pulseira
                           const db = await (await import('@/lib/supabase-external')).getSupabaseClient();
-                          const [saldosRes, historicoRes] = await Promise.all([
-                            db.from('vw_pulseira_saldo_produto' as any).select('*').eq('pulseira_id', p.id),
-                            db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', p.id).order('data', { ascending: false }),
-                          ]);
-
+                          
+                          // Load saldos
+                          const saldosRes = await db.from('vw_pulseira_saldo_produto' as any).select('*').eq('pulseira_id', p.id);
                           let saldosData: any[] = (saldosRes.data || []) as any[];
                           if (saldosRes.error) {
                             const { data: fallbackSaldos } = await db
@@ -583,9 +581,23 @@ export default function PulseirasPage() {
                               .eq('pulseira_id', p.id);
                             saldosData = (fallbackSaldos || []) as any[];
                           }
-
                           setViewFechadaSaldos(saldosData.map((s: any) => mapSaldoRow(s, p.id)));
-                          setViewFechadaHistorico((historicoRes.data || []).map((h: any) => mapHistoricoRow(h)));
+
+                          // Load historico via RPC first, fallback to view
+                          let historicoData: any[] = [];
+                          const { data: rpcHist, error: rpcErr } = await db.rpc('listar_historico_pulseira' as any, { p_pulseira_id: p.id } as any);
+                          if (!rpcErr && Array.isArray(rpcHist) && rpcHist.length > 0) {
+                            historicoData = rpcHist;
+                          } else {
+                            const { data: rpcHist2, error: rpcErr2 } = await db.rpc('listar_historico_pulseira' as any, { pulseira_id: p.id } as any);
+                            if (!rpcErr2 && Array.isArray(rpcHist2) && rpcHist2.length > 0) {
+                              historicoData = rpcHist2;
+                            } else {
+                              const { data: viewHist } = await db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', p.id).order('created_at', { ascending: false });
+                              historicoData = (viewHist || []) as any[];
+                            }
+                          }
+                          setViewFechadaHistorico(historicoData.map((h: any) => mapHistoricoRow(h)));
                         }}>
                           <div className="bg-primary/10 rounded-full p-2">
                             <Watch className="h-4 w-4 text-primary" />
@@ -751,7 +763,7 @@ export default function PulseirasPage() {
                        </TableCell>
                       <TableCell className="text-sm">{h.produto_nome}</TableCell>
                       <TableCell className="text-center">{h.quantidade}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{h.atendente_nome || 'Usuário não identificado'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{h.observacao || '—'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatDate(h.data)}</TableCell>
                     </TableRow>
