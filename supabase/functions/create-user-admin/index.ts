@@ -28,11 +28,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const externalUrl = Deno.env.get("EXTERNAL_SUPABASE_URL");
-    const externalServiceKey = Deno.env.get("EXTERNAL_SUPABASE_SERVICE_ROLE_KEY");
+    // Try external config first, fall back to Lovable Cloud's auto-set vars
+    const externalUrl = Deno.env.get("EXTERNAL_SUPABASE_URL") || Deno.env.get("SUPABASE_URL");
+    const externalServiceKey = Deno.env.get("EXTERNAL_SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!externalUrl || !externalServiceKey) {
-      return jsonResponse({ error: "Configuração do Supabase externo ausente." }, 500);
+      return jsonResponse({ error: "Configuração do Supabase ausente." }, 500);
     }
 
     const body = await req.json();

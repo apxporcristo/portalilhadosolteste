@@ -19,6 +19,12 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function requireEnvFallback(primary: string, fallback: string): string {
+  const value = Deno.env.get(primary) || Deno.env.get(fallback);
+  if (!value) throw new Error(`Configuração ausente: ${primary} ou ${fallback}`);
+  return value;
+}
+
 function normalizeEmail(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const e = v.trim().toLowerCase();
@@ -50,8 +56,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const externalUrl = requireEnv("EXTERNAL_SUPABASE_URL");
-    const externalServiceKey = requireEnv("EXTERNAL_SUPABASE_SERVICE_ROLE_KEY");
+    const externalUrl = requireEnvFallback("EXTERNAL_SUPABASE_URL", "SUPABASE_URL");
+    const externalServiceKey = requireEnvFallback("EXTERNAL_SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY");
 
     const body = await req.json();
     if (!isObject(body)) return json({ error: "Payload inválido." }, 400);
@@ -119,6 +125,8 @@ Deno.serve(async (req) => {
         acesso_ficha_consumo: !!permissions.acesso_ficha_consumo,
         acesso_comanda: !!permissions.acesso_comanda,
         acesso_kds: !!permissions.acesso_kds,
+        reimpressao_venda: !!permissions.reimpressao_venda,
+        pulseira: !!permissions.pulseira,
         is_admin: !!permissions.is_admin,
         voucher_tempo_acesso: normalizeString(permissions.voucher_tempo_acesso),
       };
@@ -160,6 +168,8 @@ Deno.serve(async (req) => {
         if (permissions.acesso_ficha_consumo !== undefined) permUpdate.acesso_ficha_consumo = !!permissions.acesso_ficha_consumo;
         if (permissions.acesso_comanda !== undefined) permUpdate.acesso_comanda = !!permissions.acesso_comanda;
         if (permissions.acesso_kds !== undefined) permUpdate.acesso_kds = !!permissions.acesso_kds;
+        if (permissions.reimpressao_venda !== undefined) permUpdate.reimpressao_venda = !!permissions.reimpressao_venda;
+        if (permissions.pulseira !== undefined) permUpdate.pulseira = !!permissions.pulseira;
         if (permissions.is_admin !== undefined) permUpdate.is_admin = !!permissions.is_admin;
         if (permissions.voucher_tempo_acesso !== undefined) permUpdate.voucher_tempo_acesso = normalizeString(permissions.voucher_tempo_acesso);
 

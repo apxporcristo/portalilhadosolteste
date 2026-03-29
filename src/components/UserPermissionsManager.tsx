@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSupabaseClient, getSupabaseConfig } from '@/lib/supabase-external';
+import { getSupabaseClient } from '@/lib/supabase-external';
+import { supabase as cloudSupabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -189,45 +190,35 @@ async function invokeManageUsersDirect(body: Record<string, unknown>) {
 
 async function invokeEdgeFunction(functionName: string, body: Record<string, unknown>): Promise<any> {
   const callerUserId = getCallerUserId();
-  const config = await getSupabaseConfig();
-  const url = `${config.url}/functions/v1/${functionName}`;
   const requestBody = { ...body, caller_user_id: callerUserId };
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.anonKey}`,
-        'apikey': config.anonKey,
-      },
-      body: JSON.stringify(requestBody),
+    const { data, error } = await cloudSupabase.functions.invoke(functionName, {
+      body: requestBody,
     });
 
-    let data: any = null;
-    try {
-      data = await res.json();
-    } catch {
-      data = null;
-    }
-
-    if (!res.ok) {
-      if (res.status === 404 || data?.code === 'NOT_FOUND') {
+    if (error) {
+      const msg = String(error.message || '').toLowerCase();
+      if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed') || msg.includes('non-2xx')) {
         if (functionName === 'manage-users') return invokeManageUsersDirect(requestBody);
         if (functionName === 'create-user-admin') return createUserDirect(requestBody);
       }
-      throw new Error(data?.error || data?.message || `Erro ${res.status}`);
+      throw error;
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
     }
 
     if (functionName === 'manage-users' && data?.success !== true) {
       return invokeManageUsersDirect(requestBody);
     }
-
     if (functionName === 'create-user-admin' && data?.success !== true) {
       return createUserDirect(requestBody);
     }
 
     return data;
+
   } catch (err: any) {
     const msg = String(err?.message || '').toLowerCase();
     if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed')) {
