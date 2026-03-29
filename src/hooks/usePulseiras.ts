@@ -49,6 +49,7 @@ export interface PulseiraProdutoResumo {
   comprado: number;
   consumido: number;
   disponivel: number;
+  valor_unitario: number;
   ultima_retirada: string | null;
   ultimo_atendente: string | null;
 }
