@@ -14,7 +14,7 @@ export interface UserAccess {
   acesso_comanda: boolean;
   acesso_kds: boolean;
   reimpressao_venda: boolean;
-  pulseira: boolean;
+  acesso_pulseira: boolean;
   is_admin: boolean;
   voucher_tempo_acesso: string | null;
 }
@@ -90,7 +90,7 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
           acesso_comanda: perm?.acesso_comanda ?? false,
           acesso_kds: perm?.acesso_kds ?? false,
           reimpressao_venda: perm?.reimpressao_venda ?? false,
-          pulseira: perm?.acesso_pulseira ?? false,
+          acesso_pulseira: perm?.acesso_pulseira ?? false,
           is_admin: perm?.is_admin ?? false,
           voucher_tempo_acesso: perm?.voucher_tempo_acesso ?? null,
         });
