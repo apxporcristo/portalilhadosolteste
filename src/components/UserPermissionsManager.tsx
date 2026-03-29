@@ -481,6 +481,7 @@ export function UserPermissionsManager() {
                         {u.acesso_comanda && <Badge variant="outline" className="text-xs">Comanda</Badge>}
                         {u.acesso_kds && <Badge variant="outline" className="text-xs">KDS</Badge>}
                         {u.reimpressao_venda && <Badge variant="outline" className="text-xs">Reimpressão</Badge>}
+                        {u.pulseira && <Badge variant="outline" className="text-xs">Pulseira</Badge>}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
@@ -600,6 +601,10 @@ export function UserPermissionsManager() {
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Reimpressão de Venda</Label>
                     <Switch checked={formReimpressao} onCheckedChange={setFormReimpressao} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Pulseira</Label>
+                    <Switch checked={formPulseira} onCheckedChange={setFormPulseira} />
                   </div>
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold text-destructive">Administrador</Label>
