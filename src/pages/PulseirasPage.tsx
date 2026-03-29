@@ -570,11 +570,9 @@ export default function PulseirasPage() {
                           setViewFechadaModal(p);
                           // Load details for this closed pulseira
                           const db = await (await import('@/lib/supabase-external')).getSupabaseClient();
-                          const [saldosRes, historicoRes] = await Promise.all([
-                            db.from('vw_pulseira_saldo_produto' as any).select('*').eq('pulseira_id', p.id),
-                            db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', p.id).order('data', { ascending: false }),
-                          ]);
-
+                          
+                          // Load saldos
+                          const saldosRes = await db.from('vw_pulseira_saldo_produto' as any).select('*').eq('pulseira_id', p.id);
                           let saldosData: any[] = (saldosRes.data || []) as any[];
                           if (saldosRes.error) {
                             const { data: fallbackSaldos } = await db
@@ -583,9 +581,23 @@ export default function PulseirasPage() {
                               .eq('pulseira_id', p.id);
                             saldosData = (fallbackSaldos || []) as any[];
                           }
-
                           setViewFechadaSaldos(saldosData.map((s: any) => mapSaldoRow(s, p.id)));
-                          setViewFechadaHistorico((historicoRes.data || []).map((h: any) => mapHistoricoRow(h)));
+
+                          // Load historico via RPC first, fallback to view
+                          let historicoData: any[] = [];
+                          const { data: rpcHist, error: rpcErr } = await db.rpc('listar_historico_pulseira' as any, { p_pulseira_id: p.id } as any);
+                          if (!rpcErr && Array.isArray(rpcHist) && rpcHist.length > 0) {
+                            historicoData = rpcHist;
+                          } else {
+                            const { data: rpcHist2, error: rpcErr2 } = await db.rpc('listar_historico_pulseira' as any, { pulseira_id: p.id } as any);
+                            if (!rpcErr2 && Array.isArray(rpcHist2) && rpcHist2.length > 0) {
+                              historicoData = rpcHist2;
+                            } else {
+                              const { data: viewHist } = await db.from('vw_pulseira_historico' as any).select('*').eq('pulseira_id', p.id).order('created_at', { ascending: false });
+                              historicoData = (viewHist || []) as any[];
+                            }
+                          }
+                          setViewFechadaHistorico(historicoData.map((h: any) => mapHistoricoRow(h)));
                         }}>
                           <div className="bg-primary/10 rounded-full p-2">
                             <Watch className="h-4 w-4 text-primary" />
