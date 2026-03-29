@@ -527,23 +527,28 @@ export default function FichasLista() {
     await proceedAfterClientData();
   };
 
-  const addItemsToPulseiraContext = async () => {
-    if (!hasPulseiraContext || !pulseiraContextId) return;
+  const addItemsToPulseiraContext = async (): Promise<boolean> => {
+    if (!hasPulseiraContext || !pulseiraContextId) return false;
     try {
+      const usuarioId = userSession?.user?.id;
+      if (!usuarioId) {
+        toast({ title: 'Erro', description: 'Não foi possível adicionar o produto à pulseira.', variant: 'destructive' });
+        return false;
+      }
+
       const itemsToAdd = cart.map(ci => ({
         produto_id: ci.ficha.id,
         produto_nome: ci.ficha.nome_produto + (ci.selectedItems.length > 0 ? ' | ' + ci.selectedItems.map(si => si.item.nome).join(', ') : ''),
         quantidade: ci.quantidade,
         valor_unitario: cartItemTotal(ci),
-        atendente_user_id: userSession?.user?.id,
+        atendente_user_id: usuarioId,
         atendente_nome: userName || undefined,
       }));
       const success = await adicionarItensPulseira(pulseiraContextId, itemsToAdd);
-      if (success) {
-        toast({ title: `${totalItems} item(ns) adicionados à pulseira #${pulseiraContextNumero}` });
-      }
+      return !!success;
     } catch (err: any) {
-      toast({ title: 'Erro ao adicionar à pulseira', description: err?.message || String(err), variant: 'destructive' });
+      toast({ title: 'Erro', description: 'Não foi possível adicionar o produto à pulseira.', variant: 'destructive' });
+      return false;
     }
   };
 
@@ -552,8 +557,8 @@ export default function FichasLista() {
     if (!hasPulseiraContext || !pulseiraContextId || cart.length === 0) return;
     setPrinting(true);
     try {
-      await addItemsToPulseiraContext();
-      clearCart();
+      const success = await addItemsToPulseiraContext();
+      if (success) clearCart();
     } catch (err: any) {
       console.error('[Pulseira] Erro ao adicionar diretamente:', err);
     } finally {
@@ -565,21 +570,19 @@ export default function FichasLista() {
     setPrinting(true);
     try {
       const codigoVenda = await saveAllToDB();
-      setSavedCodigoVenda(codigoVenda);
-      setPaymentConfirmed(true);
 
       // If pulseira context, add items to pulseira after payment
       if (hasPulseiraContext) {
-        await addItemsToPulseiraContext();
-      }
-
-      // If pulseira context: skip print modal entirely
-      if (hasPulseiraContext) {
-        toast({ title: 'Produto adicionado à pulseira com sucesso.', description: `Venda ${codigoVenda} registrada. Itens lançados na pulseira #${pulseiraContextNumero}.` });
-        clearCart();
+        const success = await addItemsToPulseiraContext();
+        if (success) {
+          clearCart();
+        }
         setPaymentConfirmed(false);
         setSavedCodigoVenda(null);
+        return;
       } else {
+        setSavedCodigoVenda(codigoVenda);
+        setPaymentConfirmed(true);
         // Check if there are any printable items
         const hasPrintable = cart.some(item => {
           const produto = produtos.find(p => p.id === item.ficha.id);
@@ -650,9 +653,13 @@ export default function FichasLista() {
       const codigoVenda = await saveAllToDB();
       // If pulseira context, add items to pulseira after save
       if (hasPulseiraContext) {
-        await addItemsToPulseiraContext();
+        const success = await addItemsToPulseiraContext();
+        if (success) {
+          clearCart();
+        }
+        return;
       }
-      toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s).${hasPulseiraContext ? ` Itens lançados na pulseira #${pulseiraContextNumero}.` : ''} Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
+      toast({ title: 'Salvo!', description: `Venda ${codigoVenda} - ${totalItems} ficha(s) registrada(s). Total: R$ ${totalCart.toFixed(2).replace('.', ',')}` });
       clearCart();
     } catch (err) {
       toast({ title: 'Erro', description: `Falha ao salvar: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
@@ -1382,23 +1389,28 @@ export default function FichasLista() {
         onConfirm={async () => {
           if (!confirmPulseira) return;
           try {
+            const usuarioId = userSession?.user?.id;
+            if (!usuarioId) {
+              toast({ title: 'Erro', description: 'Não foi possível adicionar o produto à pulseira.', variant: 'destructive' });
+              return;
+            }
+
             const itemsToAdd = cart.map(ci => ({
               produto_id: ci.ficha.id,
               produto_nome: ci.ficha.nome_produto + (ci.selectedItems.length > 0 ? ' | ' + ci.selectedItems.map(si => si.item.nome).join(', ') : ''),
               quantidade: ci.quantidade,
               valor_unitario: cartItemTotal(ci),
-              atendente_user_id: userSession?.user?.id,
+              atendente_user_id: usuarioId,
               atendente_nome: userName || undefined,
             }));
             const success = await adicionarItensPulseira(confirmPulseira.id, itemsToAdd);
             if (success) {
-              toast({ title: `${totalItems} item(ns) adicionados à pulseira #${confirmPulseira.numero}` });
               clearCart();
               setConfirmPulseira(null);
               setShowPulseiraModal(false);
             }
           } catch (err: any) {
-            toast({ title: 'Erro ao adicionar à pulseira', description: err?.message || String(err), variant: 'destructive' });
+            toast({ title: 'Erro', description: 'Não foi possível adicionar o produto à pulseira.', variant: 'destructive' });
           }
         }}
         confirmText="Sim, adicionar"
