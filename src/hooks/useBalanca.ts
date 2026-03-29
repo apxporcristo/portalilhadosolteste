@@ -27,7 +27,17 @@ export interface BalancaConfig {
   user_id?: string | null;
 }
 
-export type BalancaStatus = 'desconectada' | 'conectando' | 'conectada' | 'falha' | 'tentando';
+export type BalancaStatus =
+  | 'desconectada'
+  | 'conectando'
+  | 'conectada'
+  | 'falha'
+  | 'tentando'
+  | 'lendo'
+  | 'aguardando_leitura'
+  | 'verificando_conexao'
+  | 'recuperando_conexao'
+  | 'erro_leitura';
 
 const DEFAULT_CONFIG: BalancaConfig = {
   tipo_conexao: 'serial',
@@ -89,6 +99,12 @@ export function useBalanca() {
   const [serialPort, setSerialPort] = useState<any>(null);
   const [serialConfig, setSerialConfigState] = useState<SerialConfig>(loadSerialConfig);
   const autoConnectAttempted = useRef(false);
+  const activeReaderRef = useRef<any>(null);
+  const readingInProgressRef = useRef(false);
+  const consecutiveReadFailuresRef = useRef(0);
+  const lastValidReadAtRef = useRef<number | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heartbeatRunningRef = useRef(false);
 
   const updateSerialConfig = useCallback((partial: Partial<SerialConfig>) => {
     setSerialConfigState(prev => {
@@ -98,7 +114,12 @@ export function useBalanca() {
     });
   }, []);
 
-  const connected = status === 'conectada';
+  const connected =
+    status === 'conectada'
+    || status === 'lendo'
+    || status === 'aguardando_leitura'
+    || status === 'verificando_conexao'
+    || status === 'recuperando_conexao';
 
   const mapRowToConfig = (row: any): BalancaConfig => ({
     id: row.id,
@@ -314,6 +335,225 @@ export function useBalanca() {
       && typeof navigator !== 'undefined'
       && 'serial' in navigator;
   }, [config.tipo_conexao]);
+
+  const stopHeartbeat = useCallback((reason = 'manual') => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+    if (heartbeatRunningRef.current) {
+      console.log(`[Balança][Heartbeat] Parado (${reason})`);
+    }
+    heartbeatRunningRef.current = false;
+  }, []);
+
+  const releaseActiveReader = useCallback(async (reason = 'unknown') => {
+    const reader = activeReaderRef.current;
+    if (!reader) return;
+
+    console.log(`[Balança][Reader] Liberando lock (${reason})`);
+    try { await reader.cancel(); } catch { /* ignore */ }
+    try { reader.releaseLock(); } catch { /* ignore */ }
+    activeReaderRef.current = null;
+  }, []);
+
+  const ensureSerialPortReady = useCallback(async (): Promise<any | null> => {
+    if (typeof navigator === 'undefined' || !('serial' in navigator)) return null;
+
+    try {
+      if (serialPort?.readable) {
+        console.log('[Balança][Serial] Reutilizando porta já aberta');
+        return serialPort;
+      }
+
+      const ports = await (navigator as any).serial.getPorts();
+      if (!ports?.length) {
+        console.log('[Balança][Serial] Nenhuma porta previamente autorizada');
+        return null;
+      }
+
+      const openPort = ports.find((p: any) => p.readable);
+      if (openPort) {
+        setSerialPort(openPort);
+        console.log('[Balança][Serial] Reutilizando porta autorizada já aberta');
+        return openPort;
+      }
+
+      const candidate = ports[0];
+      await candidate.open({
+        baudRate: serialConfig.baudRate,
+        dataBits: serialConfig.dataBits,
+        stopBits: serialConfig.stopBits,
+        parity: serialConfig.parity,
+      });
+      setSerialPort(candidate);
+      console.log('[Balança][Serial] Porta autorizada reaberta com sucesso');
+      return candidate;
+    } catch (err) {
+      console.warn('[Balança][Serial] Falha ao preparar porta serial:', err);
+      return null;
+    }
+  }, [serialPort, serialConfig]);
+
+  const readFromSerialPort = useCallback(async (
+    port: any,
+    options?: { timeoutMs?: number; emitStatus?: boolean; origin?: string },
+  ): Promise<number | null> => {
+    const timeoutMs = options?.timeoutMs ?? 3500;
+    const emitStatus = options?.emitStatus ?? true;
+    const origin = options?.origin ?? 'read';
+
+    if (!port?.readable) return null;
+
+    for (let i = 0; i < 8 && readingInProgressRef.current; i++) {
+      await new Promise(r => setTimeout(r, 120));
+    }
+
+    if (readingInProgressRef.current) {
+      console.warn(`[Balança][Serial] Leitura concorrente detectada (${origin}), ignorando`);
+      return null;
+    }
+
+    readingInProgressRef.current = true;
+    if (emitStatus) setStatus('lendo');
+
+    try {
+      if (port.readable.locked) {
+        console.warn(`[Balança][Serial] Stream locked antes da leitura (${origin}), resetando reader`);
+        await releaseActiveReader(`pre-read-${origin}`);
+      }
+
+      if (port.writable && !port.writable.locked) {
+        try {
+          const writer = port.writable.getWriter();
+          try {
+            await writer.write(new Uint8Array([0x05])); // ENQ
+          } finally {
+            writer.releaseLock();
+          }
+        } catch (writeErr) {
+          console.warn(`[Balança][Serial] Falha ao enviar ENQ (${origin}):`, writeErr);
+        }
+      }
+
+      const reader = port.readable.getReader();
+      activeReaderRef.current = reader;
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const timer = setTimeout(() => {
+        try { reader.cancel(); } catch { /* ignore */ }
+      }, timeoutMs);
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          console.log(`[Balança][Serial] Chunk recebido (${origin}):`, JSON.stringify(chunk));
+
+          const parsedFromBuffer = parseToledoWeight(buffer);
+          if (parsedFromBuffer !== null && parsedFromBuffer > 0) {
+            clearTimeout(timer);
+            lastValidReadAtRef.current = Date.now();
+            consecutiveReadFailuresRef.current = 0;
+            console.log(`[Balança][Serial] Leitura válida (${origin}):`, parsedFromBuffer.toFixed(3), 'kg');
+            if (emitStatus) setStatus('aguardando_leitura');
+            return parsedFromBuffer;
+          }
+
+          const lines = buffer.split(/[\r\n]+/);
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const parsedLine = parseToledoWeight(line);
+            if (parsedLine !== null && parsedLine > 0) {
+              clearTimeout(timer);
+              lastValidReadAtRef.current = Date.now();
+              consecutiveReadFailuresRef.current = 0;
+              console.log(`[Balança][Serial] Leitura válida por linha (${origin}):`, parsedLine.toFixed(3), 'kg');
+              if (emitStatus) setStatus('aguardando_leitura');
+              return parsedLine;
+            }
+          }
+
+          if (buffer.length > 2048) {
+            buffer = buffer.slice(-256);
+          }
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      console.warn(`[Balança][Serial] Falha na leitura (${origin}):`, err);
+    } finally {
+      await releaseActiveReader(`post-read-${origin}`);
+      readingInProgressRef.current = false;
+    }
+
+    return null;
+  }, [releaseActiveReader]);
+
+  const recoverSerialConnection = useCallback(async (reason: string): Promise<boolean> => {
+    console.warn(`[Balança][Recovery] Iniciando recuperação: ${reason}`);
+    setStatus('recuperando_conexao');
+
+    // Nível 1: reinicia apenas reader/stream
+    await releaseActiveReader(`recover-l1-${reason}`);
+    let port = await ensureSerialPortReady();
+    if (port) {
+      console.log('[Balança][Recovery] Nível 1: tentando recuperar reader na mesma porta');
+      const probe = await readFromSerialPort(port, { timeoutMs: 2200, emitStatus: false, origin: 'recover-l1' });
+      if (probe !== null && probe > 0) {
+        console.log('[Balança][Recovery] Nível 1 OK');
+        setStatus('aguardando_leitura');
+        return true;
+      }
+    }
+
+    // Nível 2: reabre leitura na mesma porta autorizada
+    try {
+      const ports = typeof navigator !== 'undefined' && 'serial' in navigator
+        ? await (navigator as any).serial.getPorts()
+        : [];
+      const candidate = port || ports?.[0];
+      if (candidate) {
+        console.log('[Balança][Recovery] Nível 2: reabrindo porta existente');
+        try {
+          await releaseActiveReader('recover-l2-before-close');
+          if (candidate.readable) {
+            await candidate.close();
+          }
+        } catch (closeErr) {
+          console.warn('[Balança][Recovery] Falha ao fechar porta no nível 2:', closeErr);
+        }
+
+        await candidate.open({
+          baudRate: serialConfig.baudRate,
+          dataBits: serialConfig.dataBits,
+          stopBits: serialConfig.stopBits,
+          parity: serialConfig.parity,
+        });
+
+        setSerialPort(candidate);
+        port = candidate;
+
+        const probe = await readFromSerialPort(port, { timeoutMs: 2500, emitStatus: false, origin: 'recover-l2' });
+        if (probe !== null && probe > 0) {
+          console.log('[Balança][Recovery] Nível 2 OK');
+          setStatus('aguardando_leitura');
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn('[Balança][Recovery] Nível 2 falhou:', err);
+    }
+
+    // Nível 3: perda real de conexão
+    console.error('[Balança][Recovery] Nível 3: conexão perdida, aguardando reconexão manual/automática controlada');
+    setStatus('falha');
+    return false;
+  }, [ensureSerialPortReady, readFromSerialPort, releaseActiveReader, serialConfig]);
 
   // ========== BLUETOOTH CONNECTION ==========
   // Web Bluetooth (BLE/GATT) does NOT work with classic serial scales (SPP/RFCOMM).
