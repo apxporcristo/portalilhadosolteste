@@ -66,6 +66,7 @@ export default function FichasLista() {
   const userSession = useOptionalUserSession();
   const userName = userSession?.access?.nome || '';
   const { comandasAbertas, lancarItens, refetch: refetchComandas } = useComandas();
+  const { pulseirasAtivas, listarAtivas: listarPulseirasAtivas, adicionarItens: adicionarItensPulseira } = usePulseiras();
   const { getFreVouchersBatch, markVouchersPreReservado, stats: voucherStats } = useVouchers();
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const balanca = useBalanca();
@@ -85,6 +86,16 @@ export default function FichasLista() {
   const [showComandaModal, setShowComandaModal] = useState(false);
   const [comandaSearch, setComandaSearch] = useState('');
   const [confirmComanda, setConfirmComanda] = useState<{ id: string; numero: number } | null>(null);
+
+  // Lançar na pulseira
+  const [showPulseiraModal, setShowPulseiraModal] = useState(false);
+  const [pulseiraSearch, setPulseiraSearch] = useState('');
+  const [confirmPulseira, setConfirmPulseira] = useState<Pulseira | null>(null);
+
+  // Load pulseiras when needed
+  useEffect(() => {
+    listarPulseirasAtivas();
+  }, [listarPulseirasAtivas]);
 
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
