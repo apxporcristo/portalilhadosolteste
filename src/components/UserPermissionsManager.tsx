@@ -540,17 +540,36 @@ export function UserPermissionsManager() {
                   {/* Voucher sub-options */}
                   {fVoucher && (
                     <div className="ml-4 border-l-2 border-muted pl-3 space-y-3">
-                      <PermToggle label="Todos os vouchers" checked={fVoucherTodos} onChange={setFVoucherTodos} />
+                      <PermToggle label="Todos os vouchers ativos" checked={fVoucherTodos} onChange={v => { setFVoucherTodos(v); if (v) setFVoucherTemposSelecionados([]); }} />
                       {!fVoucherTodos && (
                         <div className="space-y-2">
-                          <Label className="text-sm">Voucher Tempo ID</Label>
-                          <Input value={fVoucherTempoId} onChange={e => setFVoucherTempoId(e.target.value)} placeholder="ID do tempo" />
+                          <Label className="text-sm font-medium">Selecionar vouchers específicos</Label>
+                          {availableTempos.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Nenhum voucher ativo encontrado.</p>
+                          ) : (
+                            <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-2">
+                              {availableTempos.map(tempo => (
+                                <label key={tempo} className="flex items-center gap-2 cursor-pointer text-sm">
+                                  <Checkbox
+                                    checked={fVoucherTemposSelecionados.includes(tempo)}
+                                    onCheckedChange={(checked) => {
+                                      setFVoucherTemposSelecionados(prev =>
+                                        checked ? [...prev, tempo] : prev.filter(t => t !== tempo)
+                                      );
+                                    }}
+                                  />
+                                  {tempo}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          {fVoucherTemposSelecionados.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              {fVoucherTemposSelecionados.length} voucher(s) selecionado(s)
+                            </p>
+                          )}
                         </div>
                       )}
-                      <div className="space-y-2">
-                        <Label className="text-sm">Voucher Tempo Acesso</Label>
-                        <Input value={fVoucherTempoAcesso} onChange={e => setFVoucherTempoAcesso(e.target.value)} placeholder="Tempo de acesso" />
-                      </div>
                     </div>
                   )}
 
