@@ -211,14 +211,18 @@ export function usePulseiras() {
     setLoading(true);
     try {
       const db = await getSupabaseClient();
+      // Check for any existing pulseira with this number
       const { data: existing } = await db
         .from('pulseiras')
-        .select('id')
+        .select('id, status')
         .eq('numero', data.numero.trim())
-        .eq('status', 'ativa')
         .maybeSingle();
       if (existing) {
-        toast({ title: 'Erro', description: 'Já existe uma pulseira ativa com este número.', variant: 'destructive' });
+        if (existing.status === 'ativa') {
+          toast({ title: 'Erro', description: 'Esta pulseira já está cadastrada.', variant: 'destructive' });
+        } else {
+          toast({ title: 'Erro', description: 'Esta pulseira já foi utilizada e não pode ser cadastrada novamente.', variant: 'destructive' });
+        }
         setLoading(false);
         return null;
       }
@@ -436,6 +440,33 @@ export function usePulseiras() {
     }
   }, []);
 
+  const excluirPulseira = useCallback(async (pulseiraId: string): Promise<boolean> => {
+    try {
+      const db = await getSupabaseClient();
+      // Check if there's any movement (items or consumos)
+      const { data: itensExist } = await db
+        .from('pulseira_itens' as any)
+        .select('id')
+        .eq('pulseira_id', pulseiraId)
+        .limit(1);
+      if (itensExist && itensExist.length > 0) {
+        toast({ title: 'Não é possível excluir', description: 'Esta pulseira possui movimentação vinculada e não pode ser excluída.', variant: 'destructive' });
+        return false;
+      }
+      const { error } = await db
+        .from('pulseiras')
+        .delete()
+        .eq('id', pulseiraId);
+      if (error) throw error;
+      toast({ title: 'Pulseira excluída com sucesso!' });
+      setPulseira(null);
+      return true;
+    } catch (err: any) {
+      toast({ title: 'Erro ao excluir', description: err.message, variant: 'destructive' });
+      return false;
+    }
+  }, []);
+
   const limpar = useCallback(() => {
     setPulseira(null);
     setItens([]);
@@ -460,6 +491,7 @@ export function usePulseiras() {
     fecharPulseira,
     fecharComAbatimento,
     reabrirPulseira,
+    excluirPulseira,
     carregarDetalhes,
     listarAtivas,
     listarFechadas,

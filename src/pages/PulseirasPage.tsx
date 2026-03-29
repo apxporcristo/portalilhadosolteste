@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Plus, Minus, Watch, User, Phone, CreditCard, Clock, Package, History, AlertTriangle, Trash2, RotateCcw } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +25,7 @@ export default function PulseirasPage() {
   const userSession = useOptionalUserSession();
   const {
     loading, pulseira, resumoProdutos, itens, consumos, historico, pulseirasAtivas, pulseirasFechadas,
-    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, fecharComAbatimento, reabrirPulseira, listarAtivas, listarFechadas, limpar, carregarDetalhes,
+    buscarPulseira, abrirPulseira, adicionarItens, consumirProduto, fecharPulseira, fecharComAbatimento, reabrirPulseira, excluirPulseira, listarAtivas, listarFechadas, limpar, carregarDetalhes,
   } = usePulseiras();
   const { fichasAtivas, produtos } = useFichasConsumo();
 
@@ -55,6 +56,7 @@ export default function PulseirasPage() {
   const [abatimentoProdutos, setAbatimentoProdutos] = useState<{ produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number }[]>([]);
   const [abatimentoProdutoId, setAbatimentoProdutoId] = useState('');
   const [abatimentoQtd, setAbatimentoQtd] = useState(1);
+  const [confirmExcluirModal, setConfirmExcluirModal] = useState(false);
 
   const creditoTotal = useMemo(() => {
     return resumoProdutos
@@ -76,6 +78,10 @@ export default function PulseirasPage() {
   }, [pulseira]);
 
   const temSaldo = useMemo(() => resumoProdutos.some(p => p.disponivel > 0), [resumoProdutos]);
+  const totalItensLancados = useMemo(() => resumoProdutos.reduce((sum, p) => sum + p.comprado, 0), [resumoProdutos]);
+  const hasMovimentacao = useMemo(() => totalItensLancados > 0 || historico.length > 0, [totalItensLancados, historico]);
+  const canClosePulseira = pulseira?.status === 'ativa' && hasMovimentacao && !temSaldo;
+  const canDeletePulseira = pulseira?.status === 'ativa' && !hasMovimentacao;
 
   useEffect(() => {
     listarAtivas();
@@ -300,30 +306,53 @@ export default function PulseirasPage() {
                     <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
                       <History className="h-3.5 w-3.5 mr-1" /> Histórico
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={temSaldo && !is24hPassadas}
-                      title={temSaldo && !is24hPassadas ? 'Não é possível fechar com crédito/saldo disponível' : undefined}
-                      onClick={async () => {
-                        const result = await fecharPulseira(pulseira.id);
-                        if (result === 'abatimento') {
+                    {canClosePulseira && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={async () => {
+                          const result = await fecharPulseira(pulseira.id);
+                          if (result === 'abatimento') {
+                            setAbatimentoProdutos([]);
+                            setAbatimentoProdutoId('');
+                            setAbatimentoQtd(1);
+                            setAbatimentoModal(true);
+                          } else if (result === true) {
+                            limpar();
+                            listarAtivas();
+                            listarFechadas();
+                          }
+                        }}
+                      >
+                        Fechar Pulseira
+                      </Button>
+                    )}
+                    {is24hPassadas && temSaldo && hasMovimentacao && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
                           setAbatimentoProdutos([]);
                           setAbatimentoProdutoId('');
                           setAbatimentoQtd(1);
                           setAbatimentoModal(true);
-                        } else if (result === true) {
-                          limpar();
-                          listarAtivas();
-                          listarFechadas();
-                        }
-                      }}
-                    >
-                      Fechar Pulseira
-                    </Button>
+                        }}
+                      >
+                        Fechar com Abatimento
+                      </Button>
+                    )}
+                    {canDeletePulseira && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setConfirmExcluirModal(true)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir Pulseira
+                      </Button>
+                    )}
                   </div>
                 )}
-                {temSaldo && !is24hPassadas && pulseira.status === 'ativa' && (
+                {temSaldo && !is24hPassadas && pulseira.status === 'ativa' && hasMovimentacao && (
                   <p className="text-xs text-muted-foreground mt-1">
                     ⚠ A pulseira não pode ser finalizada manualmente enquanto existir crédito ou produtos disponíveis para retirada.
                   </p>
@@ -819,6 +848,25 @@ export default function PulseirasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal: Confirmar Exclusão */}
+      <ConfirmDialog
+        open={confirmExcluirModal}
+        onOpenChange={setConfirmExcluirModal}
+        title="Excluir Pulseira"
+        description={`Tem certeza que deseja excluir a pulseira #${pulseira?.numero}? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        onConfirm={async () => {
+          if (!pulseira) return;
+          const result = await excluirPulseira(pulseira.id);
+          if (result) {
+            setConfirmExcluirModal(false);
+            limpar();
+            listarAtivas();
+          }
+        }}
+      />
     </div>
   );
 }
