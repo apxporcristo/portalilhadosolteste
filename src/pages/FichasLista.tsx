@@ -1025,8 +1025,8 @@ export default function FichasLista() {
         formasAtivas={formasAtivas.filter(f => !f.nome.toLowerCase().includes('comanda'))}
         totalConta={totalCart}
         titulo="Forma de Pagamento"
-        confirmLabel={printing ? 'Imprimindo...' : `Imprimir ${totalItems} ficha(s)`}
-        confirmIcon={<Printer className="h-5 w-5 mr-2" />}
+        confirmLabel={printing ? 'Processando...' : 'Confirmar pagamento'}
+        confirmIcon={<CreditCard className="h-5 w-5 mr-2" />}
         onConfirm={() => {
           setShowPagamentoModal(false);
           handleInitPrint();
