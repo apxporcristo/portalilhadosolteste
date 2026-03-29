@@ -82,7 +82,9 @@ export default function PulseirasPage() {
 
   const temSaldo = useMemo(() => resumoProdutos.some(p => p.disponivel > 0), [resumoProdutos]);
   const totalItensLancados = useMemo(() => resumoProdutos.reduce((sum, p) => sum + p.comprado, 0), [resumoProdutos]);
-  const hasMovimentacao = useMemo(() => totalItensLancados > 0 || historico.length > 0, [totalItensLancados, historico]);
+  const hasMovimentacao = useMemo(() => {
+    return totalItensLancados > 0 || historico.length > 0 || itens.length > 0 || consumos.length > 0 || resumoProdutos.length > 0;
+  }, [totalItensLancados, historico, itens, consumos, resumoProdutos]);
   const canClosePulseira = pulseira?.status === 'ativa' && hasMovimentacao && !temSaldo;
   const canDeletePulseira = pulseira?.status === 'ativa' && !hasMovimentacao;
 
