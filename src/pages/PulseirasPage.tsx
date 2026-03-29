@@ -261,9 +261,9 @@ export default function PulseirasPage() {
     tipo: normalizeTipo(h.tipo ?? h.tipo_movimentacao ?? h.acao),
     produto_nome: h.produto_nome || h.nome_produto || '—',
     quantidade: Number(h.quantidade ?? 0),
-    atendente_nome: h.atendente_nome ?? h.usuario_nome ?? h.responsavel_nome ?? h.aberta_por ?? h.fechada_por ?? null,
+    atendente_nome: h.usuario_nome ?? h.atendente_nome ?? h.responsavel_nome ?? h.aberta_por ?? h.fechada_por ?? 'Usuário não identificado',
     observacao: h.observacao ?? h.descricao ?? null,
-    data: h.data ?? h.created_at ?? h.updated_at,
+    data: h.created_at ?? h.data ?? h.updated_at,
   });
 
   return (
