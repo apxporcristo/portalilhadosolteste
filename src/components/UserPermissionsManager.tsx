@@ -384,7 +384,7 @@ export function UserPermissionsManager() {
           administrador: formAdmin,
           pulseira: formPulseira,
         });
-        toast({ title: 'Usuário criado com sucesso!' });
+        toast({ title: 'Usuário salvo com sucesso.' });
 
       } else if (modalMode === 'edit' && selectedUser) {
         const cpfClean = cleanCPF(formCpf);
@@ -406,7 +406,7 @@ export function UserPermissionsManager() {
           },
           new_email: formEmail !== selectedUser.email ? formEmail : undefined,
         });
-        toast({ title: 'Usuário atualizado!' });
+        toast({ title: 'Usuário salvo com sucesso.' });
 
       } else if (modalMode === 'reset-password' && selectedUser) {
         if (!formSenha || formSenha.length < 6) {
@@ -424,7 +424,8 @@ export function UserPermissionsManager() {
       setModalMode(null);
       await fetchUsers();
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message || 'Falha na operação.', variant: 'destructive' });
+      console.error('Erro ao salvar usuário:', err);
+      toast({ title: 'Erro', description: 'Não foi possível salvar o usuário.', variant: 'destructive' });
     }
     setSaving(false);
   };
