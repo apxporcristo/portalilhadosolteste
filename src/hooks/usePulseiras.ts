@@ -371,28 +371,53 @@ export function usePulseiras() {
     }
   }, []);
 
-  const adicionarItens = useCallback(async (pulseiraId: string, items: { produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number; atendente_user_id?: string; atendente_nome?: string; codigo_venda?: string }[]) => {
+  const adicionarItens = useCallback(async (pulseiraId: string, items: { produto_id: string; produto_nome: string; quantidade: number; valor_unitario: number; atendente_user_id?: string; atendente_nome?: string; codigo_venda?: string; observacao?: string }[]) => {
     try {
       const db = await getSupabaseClient();
+      const saldosAntes = await carregarSaldosPadronizados(db, pulseiraId);
+      const compradoAntes = new Map(saldosAntes.map((s) => [s.produto_id, Number(s.comprado || 0)]));
+
       for (const item of items) {
-        const { error } = await db.rpc('incluir_produto_pulseira' as any, {
+        const usuarioId = item.atendente_user_id?.trim();
+        if (!usuarioId) throw new Error('MISSING_LOGGED_USER');
+
+        const { data, error } = await db.rpc('incluir_produto_pulseira' as any, {
           p_pulseira_id: pulseiraId,
           p_produto_id: item.produto_id,
           p_quantidade: item.quantidade,
-          p_usuario_id: item.atendente_user_id || null,
-          p_observacao: null,
+          p_usuario_id: usuarioId,
+          p_observacao: item.observacao?.trim() || null,
         } as any);
         if (error) throw error;
+        if (data === false || data === 0 || data === 'false') throw new Error('RPC_INCLUSAO_SEM_PERSISTENCIA');
       }
-      toast({ title: 'Itens adicionados à pulseira!' });
+
       await carregarDetalhes(pulseiraId);
+
+      const saldosDepois = await carregarSaldosPadronizados(db, pulseiraId);
+      const compradoDepois = new Map(saldosDepois.map((s) => [s.produto_id, Number(s.comprado || 0)]));
+
+      const incrementoEsperado = new Map<string, number>();
+      for (const item of items) {
+        incrementoEsperado.set(item.produto_id, (incrementoEsperado.get(item.produto_id) || 0) + Number(item.quantidade || 0));
+      }
+
+      const persistiu = Array.from(incrementoEsperado.entries()).every(([produtoId, qtdEsperada]) => {
+        const antes = compradoAntes.get(produtoId) || 0;
+        const depois = compradoDepois.get(produtoId) || 0;
+        return depois >= antes + qtdEsperada;
+      });
+
+      if (!persistiu) throw new Error('INCLUSAO_NAO_REFLETIU_NO_SALDO');
+
+      toast({ title: 'Produto adicionado à pulseira com sucesso.' });
       return true;
     } catch (err: any) {
       console.error('[Pulseiras] Erro ao incluir produto:', err);
       toast({ title: 'Erro', description: 'Não foi possível adicionar o produto à pulseira.', variant: 'destructive' });
       return false;
     }
-  }, [carregarDetalhes]);
+  }, [carregarDetalhes, carregarSaldosPadronizados]);
 
   const consumirProduto = useCallback(async (pulseiraId: string, produto_id: string, produto_nome: string, quantidade: number, atendente_user_id?: string, atendente_nome?: string, observacao?: string) => {
     const prod = resumoProdutos.find(p => p.produto_id === produto_id);
