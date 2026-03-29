@@ -269,8 +269,16 @@ export default function FichasLista() {
     const produto = produtos.find(p => p.id === pendingPesoFicha.ficha.id);
     const valorKg = produto?.valor_por_kg || Number(pendingPesoFicha.ficha.valor);
     addItemToCart(pendingPesoFicha.ficha, pendingPesoFicha.selectedItems, peso, valorKg);
+    // Keep modal open, just clear weight for next reading
+    setPesoManual('');
+    toast({ title: 'Item adicionado!', description: `${pendingPesoFicha.ficha.nome_produto} - ${peso.toFixed(3)} kg` });
+    console.log('[Balança] Item adicionado, modal permanece aberto, conexão preservada');
+  };
+
+  const handleClosePesoModal = () => {
     setShowPesoModal(false);
     setPendingPesoFicha(null);
+    console.log('[Balança] Modal fechado pelo usuário');
   };
 
   const moveToNextCategory = (newCollected: SelectedItem[]) => {
