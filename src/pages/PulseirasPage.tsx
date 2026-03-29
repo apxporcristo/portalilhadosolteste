@@ -46,6 +46,7 @@ export default function PulseirasPage() {
   // Form: consumo
   const [consumoQtd, setConsumoQtd] = useState(1);
   const [consumoObs, setConsumoObs] = useState('');
+  const [buscaSaldo, setBuscaSaldo] = useState('');
 
   // Abatimento de crédito
   const [abatimentoModal, setAbatimentoModal] = useState(false);
@@ -285,12 +286,24 @@ export default function PulseirasPage() {
                   Saldo por Produto
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
+                <Input
+                  placeholder="Buscar produto..."
+                  value={buscaSaldo}
+                  onChange={e => setBuscaSaldo(e.target.value)}
+                  className="mb-1"
+                />
                 {resumoProdutos.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Nenhum produto adicionado ainda.</p>
                 ) : (
                   <div className="space-y-2">
-                    {resumoProdutos.map(p => (
+                    {resumoProdutos
+                      .filter(p => !buscaSaldo.trim() || (p.produto_nome || '').toLowerCase().includes(buscaSaldo.toLowerCase()))
+                      .length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">Nenhum produto encontrado para "{buscaSaldo}".</p>
+                    ) : resumoProdutos
+                      .filter(p => !buscaSaldo.trim() || (p.produto_nome || '').toLowerCase().includes(buscaSaldo.toLowerCase()))
+                      .map(p => (
                       <div
                         key={p.produto_id}
                         className={cn(

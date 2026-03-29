@@ -133,7 +133,7 @@ export function usePulseiras() {
     // Map saldos to resumoProdutos
     const resumo: PulseiraProdutoResumo[] = saldosData.map((s: any) => ({
       produto_id: s.produto_id,
-      produto_nome: s.produto_nome,
+      produto_nome: s.produto_nome || s.nome_produto || 'Produto sem nome',
       comprado: Number(s.total_carregado ?? s.comprado ?? 0),
       consumido: Number(s.total_baixado ?? s.consumido ?? 0),
       disponivel: Number(s.saldo_disponivel ?? s.disponivel ?? 0),
