@@ -203,7 +203,7 @@ export function UserPermissionsManager() {
     setFAtivo(true); setFAdmin(false); setFVoucher(false);
     setFCadProduto(false); setFFicha(false); setFComanda(false);
     setFKds(false); setFReimpressao(false); setFPulseira(false);
-    setFVoucherTodos(false); setFVoucherTempoId(''); setFVoucherTempoAcesso('');
+    setFVoucherTodos(false); setFVoucherTemposSelecionados([]); setFVoucherTempoAcesso('');
   };
 
   const openCreate = () => { resetForm(); setSelectedUser(null); setModalMode('create'); };
