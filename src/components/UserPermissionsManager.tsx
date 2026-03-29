@@ -49,11 +49,25 @@ function getCallerUserId(): string {
 
 async function createUserDirect(body: Record<string, unknown>) {
   const db = await getSupabaseClient();
-  const nome = String(body.nome ?? '').trim();
-  const email = String(body.email ?? '').trim().toLowerCase();
+  const profile = typeof body.profile === 'object' && body.profile !== null ? body.profile as Record<string, unknown> : {};
+  const permissions = typeof body.permissions === 'object' && body.permissions !== null ? body.permissions as Record<string, unknown> : {};
+
+  const nome = String(profile.nome ?? body.nome ?? '').trim();
+  const email = String(profile.email ?? body.email ?? '').trim().toLowerCase();
   const password = String(body.password ?? '');
-  const cpfRaw = String(body.cpf ?? '');
+  const cpfRaw = String(profile.cpf ?? body.cpf ?? '');
+  const ativo = profile.ativo !== undefined ? !!profile.ativo : true;
   const cpfClean = cleanCPF(cpfRaw);
+
+  const acessoVoucher = !!(permissions.acesso_voucher ?? body.acesso_voucher);
+  const acessoCadastrarProduto = !!(permissions.acesso_cadastrar_produto ?? body.acesso_cadastrar_produto ?? body.cadastrar_produto);
+  const acessoFichaConsumo = !!(permissions.acesso_ficha_consumo ?? body.acesso_ficha_consumo ?? body.ficha_consumo);
+  const acessoComanda = !!(permissions.acesso_comanda ?? body.acesso_comanda);
+  const acessoKds = !!(permissions.acesso_kds ?? body.acesso_kds);
+  const reimpressaoVenda = !!(permissions.reimpressao_venda ?? body.reimpressao_venda);
+  const pulseira = !!(permissions.pulseira ?? permissions.acesso_pulseira ?? body.pulseira ?? body.acesso_pulseira);
+  const isAdmin = !!(permissions.is_admin ?? body.is_admin ?? body.administrador);
+  const voucherTempoAcesso = permissions.voucher_tempo_acesso ?? body.voucher_tempo_acesso ?? body.tempo_voucher;
 
   if (!nome || !email || !password || !cpfClean) throw new Error('Campos obrigatórios: nome, email, senha e cpf.');
   if (password.length < 6) throw new Error('Senha deve ter pelo menos 6 caracteres.');
@@ -70,21 +84,23 @@ async function createUserDirect(body: Record<string, unknown>) {
     email,
     cpf: cpfClean,
     senha_hash: senhaHash,
-    ativo: true,
+    ativo,
   } as any);
   if (profErr) throw new Error(`Erro perfil: ${profErr.message}`);
 
   const { error: permErr } = await db.from('user_permissions').insert({
     user_id: userId,
-    acesso_voucher: !!body.acesso_voucher,
-    acesso_cadastrar_produto: !!body.cadastrar_produto,
-    acesso_ficha_consumo: !!body.ficha_consumo,
-    acesso_comanda: !!body.acesso_comanda,
-    acesso_kds: !!body.acesso_kds,
-    reimpressao_venda: !!body.reimpressao_venda,
-    pulseira: !!body.pulseira,
-    is_admin: !!body.administrador,
-    voucher_tempo_acesso: body.tempo_voucher && String(body.tempo_voucher) !== 'Todos' ? String(body.tempo_voucher) : null,
+    acesso_voucher: acessoVoucher,
+    acesso_cadastrar_produto: acessoCadastrarProduto,
+    acesso_ficha_consumo: acessoFichaConsumo,
+    acesso_comanda: acessoComanda,
+    acesso_kds: acessoKds,
+    reimpressao_venda: reimpressaoVenda,
+    pulseira,
+    is_admin: isAdmin,
+    voucher_tempo_acesso: typeof voucherTempoAcesso === 'string' && voucherTempoAcesso !== 'Todos' && voucherTempoAcesso.trim()
+      ? voucherTempoAcesso.trim()
+      : null,
   } as any);
   if (permErr) {
     await db.from('user_profiles').delete().eq('id', userId);
@@ -100,6 +116,11 @@ async function invokeManageUsersDirect(body: Record<string, unknown>) {
   const userId = typeof body.user_id === 'string' ? body.user_id : null;
 
   if (!action) throw new Error('Ação inválida.');
+
+  if (action === 'create-user') {
+    return createUserDirect(body);
+  }
+
   if (!userId) throw new Error('user_id é obrigatório.');
 
   if (action === 'update-user') {
@@ -360,20 +381,27 @@ export function UserPermissionsManager() {
           setSaving(false); return;
         }
 
-        await invokeEdgeFunction('create-user-admin', {
-          nome: formNome,
+        await invokeEdgeFunction('manage-users', {
+          action: 'create-user',
           email: formEmail,
           password: formSenha,
-          cpf: cpfClean,
-          acesso_voucher: formVoucher,
-          tempo_voucher: formVoucher && formVoucherTempo !== 'todos' ? formVoucherTempo : 'Todos',
-          cadastrar_produto: formProduto,
-          ficha_consumo: formFicha,
-          acesso_comanda: formComanda,
-          acesso_kds: formKds,
-          reimpressao_venda: formReimpressao,
-          administrador: formAdmin,
-          pulseira: formPulseira,
+          profile: {
+            nome: formNome,
+            cpf: cpfClean,
+            ativo: formAtivo,
+          },
+          permissions: {
+            acesso_voucher: formVoucher,
+            acesso_cadastrar_produto: formProduto,
+            acesso_ficha_consumo: formFicha,
+            acesso_comanda: formComanda,
+            acesso_kds: formKds,
+            reimpressao_venda: formReimpressao,
+            pulseira: formPulseira,
+            acesso_pulseira: formPulseira,
+            is_admin: formAdmin,
+            voucher_tempo_acesso: formVoucher && formVoucherTempo !== 'todos' ? formVoucherTempo : null,
+          },
         });
         toast({ title: 'Usuário salvo com sucesso.' });
 
