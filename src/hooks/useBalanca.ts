@@ -22,7 +22,7 @@ export interface BalancaConfig {
   data_bits?: number;
   stop_bits?: number;
   parity?: string;
-  valor_peso: number;
+  valor_peso?: number;
   ativo?: boolean;
   user_id?: string | null;
 }
@@ -36,7 +36,6 @@ const DEFAULT_CONFIG: BalancaConfig = {
   endereco_dispositivo: null,
   porta_serial: null,
   baud_rate: 9600,
-  valor_peso: 0,
   ativo: true,
 };
 
@@ -46,10 +45,15 @@ function parseToledoWeight(data: string): number | null {
   const etxIdx = data.indexOf('\x03', stxIdx);
   if (stxIdx === -1 || etxIdx === -1) return null;
   const payload = data.substring(stxIdx + 1, etxIdx).trim();
-  const match = payload.match(/(\d+\.?\d*)/);
+  const match = payload.match(/(\d+[.,]?\d*)/);
   if (!match) return null;
-  const value = parseFloat(match[1]);
-  return value > 100 ? value / 1000 : value;
+  const numStr = match[1].replace(',', '.');
+  const value = parseFloat(numStr);
+  const hasDecimal = numStr.includes('.');
+  // If explicit decimal, use as-is; otherwise treat as grams
+  const kg = hasDecimal ? value : value / 1000;
+  console.log('[Balança] parseToledoWeight: bruto=', match[1], 'hasDecimal=', hasDecimal, 'kg=', kg);
+  return kg > 0 && kg < 999 ? Math.round(kg * 1000) / 1000 : null;
 }
 
 function parseToledoWeightBytes(bytes: Uint8Array): number | null {
@@ -107,7 +111,6 @@ export function useBalanca() {
     data_bits: row.data_bits ?? 8,
     stop_bits: row.stop_bits ?? 1,
     parity: row.parity || 'none',
-    valor_peso: row.valor_peso || 0,
     ativo: row.ativo ?? false,
     user_id: row.user_id || null,
   });
@@ -144,7 +147,6 @@ export function useBalanca() {
         data_bits: newConfig.data_bits ?? 8,
         stop_bits: newConfig.stop_bits ?? 1,
         parity: newConfig.parity || 'none',
-        valor_peso: newConfig.valor_peso || 0,
         ativo: newConfig.ativo ?? true,
       };
 
@@ -597,8 +599,14 @@ export function useBalanca() {
       if (!raw) return null;
       const parsed = parseToledoWeight(raw);
       if (parsed !== null) return parsed;
-      const num = parseFloat(raw.replace(',', '.'));
-      return isNaN(num) ? null : num;
+      // Fallback: try plain number
+      const numStr = raw.replace(',', '.').trim();
+      const num = parseFloat(numStr);
+      if (isNaN(num) || num <= 0) return null;
+      const hasDecimal = numStr.includes('.');
+      const kg = hasDecimal ? num : num / 1000;
+      console.log('[Balança] Android fallback: bruto=', raw, 'hasDecimal=', hasDecimal, 'kg=', kg);
+      return Math.round(kg * 1000) / 1000;
     } catch {
       return null;
     }

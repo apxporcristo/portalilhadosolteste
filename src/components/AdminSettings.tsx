@@ -244,7 +244,6 @@ function BalancaConfigSection() {
     data_bits: 8,
     stop_bits: 1,
     parity: 'none',
-    valor_peso: 0,
   });
   const [testing, setTesting] = useState(false);
   const [pairing, setPairing] = useState(false);
@@ -271,7 +270,6 @@ function BalancaConfigSection() {
       data_bits: 8,
       stop_bits: 1,
       parity: 'none',
-      valor_peso: 0,
     });
     setShowForm(true);
   };
@@ -287,7 +285,6 @@ function BalancaConfigSection() {
       data_bits: cfg.data_bits ?? 8,
       stop_bits: cfg.stop_bits ?? 1,
       parity: cfg.parity || 'none',
-      valor_peso: cfg.valor_peso || 0,
     });
     setShowForm(true);
   };
@@ -304,7 +301,6 @@ function BalancaConfigSection() {
       data_bits: form.data_bits,
       stop_bits: form.stop_bits,
       parity: form.parity,
-      valor_peso: form.valor_peso,
       ativo: editingConfig?.ativo ?? (allConfigs.length === 0),
     };
     await saveConfig(configToSave);
@@ -386,7 +382,7 @@ function BalancaConfigSection() {
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">
-                {cfg.tipo_conexao} · {cfg.baud_rate} baud · R$ {(cfg.valor_peso || 0).toFixed(2)}/kg
+                {cfg.tipo_conexao} · {cfg.baud_rate} baud
                 {cfg.endereco_dispositivo && ` · ${cfg.endereco_dispositivo}`}
               </div>
               <div className="flex gap-1 pt-1">
@@ -439,10 +435,6 @@ function BalancaConfigSection() {
               <Input value={form.porta_serial} onChange={e => setForm(f => ({ ...f, porta_serial: e.target.value }))} placeholder="Ex: COM3" />
             </div>
           )}
-          <div>
-            <Label className="text-sm">Valor por kg (R$)</Label>
-            <Input type="number" step="0.01" value={form.valor_peso} onChange={e => setForm(f => ({ ...f, valor_peso: parseFloat(e.target.value) || 0 }))} placeholder="0.00" />
-          </div>
 
           <Separator className="my-2" />
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
