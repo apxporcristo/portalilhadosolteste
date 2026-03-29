@@ -19,6 +19,12 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function requireEnvFallback(primary: string, fallback: string): string {
+  const value = Deno.env.get(primary) || Deno.env.get(fallback);
+  if (!value) throw new Error(`Configuração ausente: ${primary} ou ${fallback}`);
+  return value;
+}
+
 function normalizeEmail(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const e = v.trim().toLowerCase();
