@@ -573,18 +573,26 @@ export default function FichasLista() {
         await addItemsToPulseiraContext();
       }
 
-      // Check if there are any printable items
-      const hasPrintable = cart.some(item => {
-        const produto = produtos.find(p => p.id === item.ficha.id);
-        return (produto as any)?.imprimir_ficha !== false;
-      });
-      if (hasPrintable) {
-        setShowPrintSelection(true);
-      } else {
-        toast({ title: 'Pagamento confirmado!', description: `Venda ${codigoVenda} registrada.${hasPulseiraContext ? ` Itens lançados na pulseira #${pulseiraContextNumero}.` : ' Nenhum item gera ficha de impressão.'}` });
+      // If pulseira context: skip print modal entirely
+      if (hasPulseiraContext) {
+        toast({ title: 'Produto adicionado à pulseira com sucesso.', description: `Venda ${codigoVenda} registrada. Itens lançados na pulseira #${pulseiraContextNumero}.` });
         clearCart();
         setPaymentConfirmed(false);
         setSavedCodigoVenda(null);
+      } else {
+        // Check if there are any printable items
+        const hasPrintable = cart.some(item => {
+          const produto = produtos.find(p => p.id === item.ficha.id);
+          return (produto as any)?.imprimir_ficha !== false;
+        });
+        if (hasPrintable) {
+          setShowPrintSelection(true);
+        } else {
+          toast({ title: 'Pagamento confirmado!', description: `Venda ${codigoVenda} registrada. Nenhum item gera ficha de impressão.` });
+          clearCart();
+          setPaymentConfirmed(false);
+          setSavedCodigoVenda(null);
+        }
       }
     } catch (err) {
       toast({ title: 'Erro', description: `Falha ao registrar pagamento: ${(err as Error)?.message || 'Erro desconhecido'}`, variant: 'destructive' });
@@ -999,17 +1007,10 @@ export default function FichasLista() {
                 </span>
               </div>
 
-              {hasPulseiraContext ? (
-                <Button className="w-full" onClick={handleAddToPulseiraDirectly} disabled={printing || totalItems === 0}>
-                  <Watch className="h-4 w-4 mr-2" />
-                  Adicionar à Pulseira #{pulseiraContextNumero}
-                </Button>
-              ) : (
-                <Button variant="outline" className="w-full" onClick={() => setShowPagamentoModal(true)}>
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Forma de Pagamento
-                </Button>
-              )}
+              <Button variant="outline" className="w-full" onClick={() => setShowPagamentoModal(true)} disabled={printing || totalItems === 0}>
+                <CreditCard className="h-4 w-4 mr-2" />
+                Forma de Pagamento
+              </Button>
             </div>
           </aside>
         )}
