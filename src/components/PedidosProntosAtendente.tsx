@@ -237,12 +237,17 @@ export function PedidosProntosAtendente({ userId }: Props) {
                     {STATUS_LABELS[detailOrder.kds_status] || detailOrder.kds_status}
                   </Badge>
                 </div>
-                {detailOrder.complementos && (
-                  <div className="border rounded-lg p-3">
-                    <p className="text-sm font-semibold">Complementos</p>
-                    <p className="text-sm text-muted-foreground">{detailOrder.complementos}</p>
-                  </div>
-                )}
+                {detailOrder.complementos && (() => {
+                  const items = parseComplementos(detailOrder.complementos);
+                  return items.length > 0 ? (
+                    <div className="border rounded-lg p-3">
+                      <p className="text-sm font-semibold">Complementos</p>
+                      <ul className="text-sm text-muted-foreground space-y-0.5">
+                        {items.map((c, i) => <li key={i}>• {c}</li>)}
+                      </ul>
+                    </div>
+                  ) : null;
+                })()}
                 {detailOrder.observacao && (
                   <div className="border rounded-lg p-3">
                     <p className="text-sm font-semibold">Observação</p>
