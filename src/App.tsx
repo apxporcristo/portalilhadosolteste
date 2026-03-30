@@ -63,7 +63,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/kds" element={
-                <ProtectedRoute permission="acesso_kds">
+                <ProtectedRoute anyPermission={['acesso_kds', 'acesso_ficha_consumo']}>
                   <KdsPage />
                 </ProtectedRoute>
               } />

@@ -48,6 +48,7 @@ export default function KdsPage() {
   const printerCtx = usePrinterContext();
   const userSession = useOptionalUserSession();
   const userId = userSession?.user?.id || null;
+  const hasFullKds = userSession?.access?.acesso_kds === true;
   const [detailOrder, setDetailOrder] = useState<KdsOrder | null>(null);
   const [printing, setPrinting] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
@@ -209,12 +210,12 @@ export default function KdsPage() {
           </div>
 
           <div className="flex gap-1 pt-1" onClick={e => e.stopPropagation()}>
-            {order.kds_status === 'novo' && (
+            {hasFullKds && order.kds_status === 'novo' && (
               <Button size="sm" className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white" onClick={() => handleStatusChange(order, 'em_preparo')}>
                 <Play className="h-3 w-3 mr-1" /> Em Preparo
               </Button>
             )}
-            {order.kds_status === 'em_preparo' && (
+            {hasFullKds && order.kds_status === 'em_preparo' && (
               <Button size="sm" className="flex-1 bg-green-500 hover:bg-green-600 text-white" onClick={() => handleStatusChange(order, 'pronto')}>
                 <Check className="h-3 w-3 mr-1" /> Pronto
               </Button>
@@ -230,7 +231,7 @@ export default function KdsPage() {
                 {markingId === order.id ? 'Salvando...' : 'Entregue ao cliente'}
               </Button>
             )}
-            {(order.kds_status === 'novo' || order.kds_status === 'em_preparo') && (
+            {hasFullKds && (order.kds_status === 'novo' || order.kds_status === 'em_preparo') && (
               <Button size="sm" variant="outline" onClick={() => handlePrint(order)} disabled={printing}>
                 <Printer className="h-3 w-3 mr-1" /> Imprimir
               </Button>
@@ -266,7 +267,7 @@ export default function KdsPage() {
             </Button>
             <div className="flex items-center gap-2">
               <ChefHat className="h-6 w-6 text-primary" />
-              <h1 className="text-xl font-bold text-foreground">KDS - Cozinha</h1>
+              <h1 className="text-xl font-bold text-foreground">{hasFullKds ? 'KDS - Cozinha' : 'Acompanhamento de Pedidos'}</h1>
             </div>
             {totalActive > 0 && (
               <Badge variant="secondary">{totalActive} pedido(s)</Badge>
@@ -407,12 +408,12 @@ export default function KdsPage() {
                 </div>
               </div>
               <DialogFooter className="flex flex-wrap gap-2">
-                {detailOrder.kds_status === 'novo' && (
+                {hasFullKds && detailOrder.kds_status === 'novo' && (
                   <Button className="bg-yellow-500 hover:bg-yellow-600 text-white" onClick={() => { handleStatusChange(detailOrder, 'em_preparo'); setDetailOrder(null); }}>
                     <Play className="h-4 w-4 mr-1" /> Em Preparo
                   </Button>
                 )}
-                {detailOrder.kds_status === 'em_preparo' && (
+                {hasFullKds && detailOrder.kds_status === 'em_preparo' && (
                   <Button className="bg-green-500 hover:bg-green-600 text-white" onClick={() => { handleStatusChange(detailOrder, 'pronto'); setDetailOrder(null); }}>
                     <Check className="h-4 w-4 mr-1" /> Pronto
                   </Button>
@@ -422,7 +423,7 @@ export default function KdsPage() {
                     <CheckCircle className="h-4 w-4 mr-1" /> Entregue ao cliente
                   </Button>
                 )}
-                {(detailOrder.kds_status === 'novo' || detailOrder.kds_status === 'em_preparo') && (
+                {hasFullKds && (detailOrder.kds_status === 'novo' || detailOrder.kds_status === 'em_preparo') && (
                   <Button variant="outline" onClick={() => handlePrint(detailOrder)} disabled={printing}>
                     <Printer className="h-4 w-4 mr-1" /> Imprimir
                   </Button>

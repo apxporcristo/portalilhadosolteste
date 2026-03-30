@@ -2,12 +2,16 @@ import { Navigate } from 'react-router-dom';
 import { useUserSession } from '@/contexts/UserSessionContext';
 import { Skeleton } from '@/components/ui/skeleton';
 
+type PermissionKey = 'acesso_voucher' | 'acesso_cadastrar_produto' | 'acesso_ficha_consumo' | 'acesso_kds' | 'acesso_pulseira' | 'is_admin';
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  permission?: 'acesso_voucher' | 'acesso_cadastrar_produto' | 'acesso_ficha_consumo' | 'acesso_kds' | 'acesso_pulseira' | 'is_admin';
+  permission?: PermissionKey;
+  /** If provided, user needs permission OR any of these */
+  anyPermission?: PermissionKey[];
 }
 
-export function ProtectedRoute({ children, permission }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, permission, anyPermission }: ProtectedRouteProps) {
   const { user, access, loading } = useUserSession();
 
   if (loading) {
@@ -22,7 +26,10 @@ export function ProtectedRoute({ children, permission }: ProtectedRouteProps) {
     return <Navigate to="/login" replace />;
   }
 
-  if (permission && access && !access[permission]) {
+  if (anyPermission && access) {
+    const hasAny = anyPermission.some(p => access[p]);
+    if (!hasAny) return <Navigate to="/acesso-negado" replace />;
+  } else if (permission && access && !access[permission]) {
     return <Navigate to="/acesso-negado" replace />;
   }
 
