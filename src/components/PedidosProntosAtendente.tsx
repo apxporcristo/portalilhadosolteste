@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { useAtendenteKds, KdsProntoOrder } from '@/hooks/useAtendenteKds';
-import { parseComplementos } from '@/lib/kds-complementos';
+import { parseComplementos, cleanProdutoNome } from '@/lib/kds-complementos';
 
 interface Props {
   userId: string | null;
