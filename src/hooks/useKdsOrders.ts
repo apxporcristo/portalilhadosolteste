@@ -58,7 +58,7 @@ function speakOrder(order: KdsOrder) {
       const compl = complementosParaVoz(order.complementos);
       const complementosPart = compl ? `. Complementos: ${compl}` : '';
       const obsPart = order.observacao ? `. Observação: ${order.observacao}` : '';
-      const msg = `Novo pedido. Produto: ${order.produto_nome}${complementosPart}${obsPart}.`;
+      const msg = `Novo pedido. Produto: ${cleanProdutoNome(order.produto_nome)}${complementosPart}${obsPart}.`;
       const utterance = new SpeechSynthesisUtterance(msg);
       utterance.lang = 'pt-BR';
       utterance.rate = 1;
