@@ -834,7 +834,7 @@ export default function FichasLista() {
               telefone_cliente: telefoneCliente.trim() || null,
               nome_atendente: nomeAtendente.trim() || null,
               complementos: item.selectedItems.length > 0 ? item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ') : null,
-              observacao: (produto as any)?.obs || null,
+              observacao: item.observacao || (produto as any)?.obs || null,
               kds_status: 'novo',
             });
           } catch (e) { console.warn('[Ficha Print] kds_orders insert falhou:', e); }
