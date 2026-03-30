@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useKdsOrders, KdsOrder, KdsStatus } from '@/hooks/useKdsOrders';
+import { parseComplementos } from '@/lib/kds-complementos';
 import { usePrinterContext } from '@/contexts/PrinterContext';
 
 const statusConfig: Record<KdsStatus, { label: string; color: string; icon: React.ReactNode }> = {
@@ -64,7 +65,11 @@ export default function KdsPage() {
         `Qtd: ${order.quantidade}\n`,
       ];
       if (order.complementos) {
-        lines.push(`Complementos: ${normalize(order.complementos)}\n`);
+        const items = parseComplementos(order.complementos);
+        if (items.length > 0) {
+          lines.push('Complementos:\n');
+          items.forEach(c => lines.push(`  - ${normalize(c)}\n`));
+        }
       }
       if (order.observacao) {
         lines.push(`Obs: ${normalize(order.observacao)}\n`);
@@ -214,9 +219,20 @@ export default function KdsPage() {
                     </div>
 
                     {/* Complementos */}
-                    {order.complementos && (
-                      <p className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 line-clamp-2">
-                        {order.complementos}
+                    {order.complementos && (() => {
+                      const items = parseComplementos(order.complementos);
+                      return items.length > 0 ? (
+                        <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 space-y-0.5">
+                          <span className="font-semibold">Complementos:</span>
+                          {items.map((c, i) => <p key={i}>• {c}</p>)}
+                        </div>
+                      ) : null;
+                    })()}
+
+                    {/* Observação */}
+                    {order.observacao && (
+                      <p className="text-xs text-muted-foreground italic bg-muted rounded px-2 py-1">
+                        Obs: {order.observacao}
                       </p>
                     )}
 
@@ -282,12 +298,17 @@ export default function KdsPage() {
                   </div>
                 </div>
 
-                {detailOrder.complementos && (
-                  <div className="border rounded-lg p-4">
-                    <p className="text-sm font-semibold mb-1">Complementos</p>
-                    <p className="text-sm text-muted-foreground">{detailOrder.complementos}</p>
-                  </div>
-                )}
+                {detailOrder.complementos && (() => {
+                  const items = parseComplementos(detailOrder.complementos);
+                  return items.length > 0 ? (
+                    <div className="border rounded-lg p-4">
+                      <p className="text-sm font-semibold mb-1">Complementos</p>
+                      <ul className="text-sm text-muted-foreground space-y-0.5">
+                        {items.map((c, i) => <li key={i}>• {c}</li>)}
+                      </ul>
+                    </div>
+                  ) : null;
+                })()}
 
                 {detailOrder.observacao && (
                   <div className="border rounded-lg p-4">

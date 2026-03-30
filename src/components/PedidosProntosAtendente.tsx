@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { useAtendenteKds, KdsProntoOrder } from '@/hooks/useAtendenteKds';
+import { parseComplementos } from '@/lib/kds-complementos';
 
 interface Props {
   userId: string | null;
@@ -58,9 +59,15 @@ function OrderCard({
             <span className="text-xs text-muted-foreground">{order.categoria_nome}</span>
           )}
         </div>
-        {order.complementos && (
-          <p className="text-xs text-muted-foreground bg-muted rounded px-2 py-1">{order.complementos}</p>
-        )}
+        {order.complementos && (() => {
+          const items = parseComplementos(order.complementos);
+          return items.length > 0 ? (
+            <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 space-y-0.5">
+              <span className="font-semibold">Complementos:</span>
+              {items.map((c, i) => <p key={i}>• {c}</p>)}
+            </div>
+          ) : null;
+        })()}
         {order.observacao && (
           <p className="text-xs text-muted-foreground italic">Obs: {order.observacao}</p>
         )}
