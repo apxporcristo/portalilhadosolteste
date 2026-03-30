@@ -445,7 +445,7 @@ export default function KdsPage() {
                     <Check className="h-4 w-4 mr-1" /> Pronto
                   </Button>
                 )}
-                {(detailOrder.kds_status === 'pronto' || detailOrder.kds_status === 'impresso') && (
+                {!hasFullKds && (detailOrder.kds_status === 'pronto' || detailOrder.kds_status === 'impresso') && (
                   <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={markingId === detailOrder.id} onClick={() => handleEntregue(detailOrder.id)}>
                     <CheckCircle className="h-4 w-4 mr-1" /> Entregue ao cliente
                   </Button>
