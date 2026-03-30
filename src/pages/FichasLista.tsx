@@ -302,7 +302,7 @@ export default function FichasLista() {
     }
     const produto = produtos.find(p => p.id === pendingPesoFicha.ficha.id);
     const valorKg = produto?.valor_por_kg || Number(pendingPesoFicha.ficha.valor);
-    addItemToCart(pendingPesoFicha.ficha, pendingPesoFicha.selectedItems, peso, valorKg);
+    maybeShowObsOrAddToCart(pendingPesoFicha.ficha, pendingPesoFicha.selectedItems, peso, valorKg);
     // Keep modal open, just clear weight for next reading
     setPesoManual('');
     toast({ title: 'Item adicionado!', description: `${pendingPesoFicha.ficha.nome_produto} - ${peso.toFixed(3)} kg` });
