@@ -1197,6 +1197,32 @@ export default function FichasLista() {
         )}
       </PagamentoDialog>
 
+      {/* Modal Observação do pedido (KDS) */}
+      <Dialog open={showObsModal} onOpenChange={(open) => { if (!open) { setShowObsModal(false); setPendingObsData(null); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Observação do pedido</DialogTitle>
+            <DialogDescription>
+              {pendingObsData?.ficha.nome_produto} — adicione uma observação se necessário.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Ex: sem cebola, bem passado, sem sal..."
+              value={obsText}
+              onChange={(e) => setObsText(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowObsModal(false); setPendingObsData(null); }}>Cancelar</Button>
+            <Button onClick={handleConfirmObs}>
+              Adicionar ao carrinho
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal Peso - estilo ServeService */}
       <Dialog open={showPesoModal} onOpenChange={(open) => { if (!open) handleClosePesoModal(); }}>
         <DialogContent className="sm:max-w-md">
