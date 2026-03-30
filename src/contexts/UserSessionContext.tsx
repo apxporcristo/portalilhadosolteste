@@ -149,6 +149,14 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
       setSession({ user_id: p.id });
       await loadAccess(p.id);
 
+      // Update last login timestamp
+      db.from('user_profiles')
+        .update({ logins: new Date().toISOString() } as any)
+        .eq('id', p.id)
+        .then(({ error: loginErr }) => {
+          if (loginErr) console.warn('[Login] Erro ao atualizar logins:', loginErr);
+        });
+
       return { error: null };
     } catch (err: any) {
       return { error: { message: err.message || 'Erro ao fazer login.' } };
