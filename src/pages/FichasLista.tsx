@@ -474,7 +474,7 @@ export default function FichasLista() {
         try {
           await sbClient.from('kds_orders' as any).insert({
             produto_id: item.ficha.id,
-            produto_nome: produtoNome,
+            produto_nome: item.ficha.nome_produto,
             categoria_nome: item.ficha.categoria_nome || '',
             quantidade: item.quantidade,
             valor_unitario: unitTotal,
