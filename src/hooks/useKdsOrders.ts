@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from '@/hooks/useVouchers';
-import { complementosParaVoz } from '@/lib/kds-complementos';
+import { complementosParaVoz, cleanProdutoNome } from '@/lib/kds-complementos';
 
 export type KdsStatus = 'novo' | 'em_preparo' | 'pronto' | 'impresso' | 'entregue';
 
@@ -58,7 +58,7 @@ function speakOrder(order: KdsOrder) {
       const compl = complementosParaVoz(order.complementos);
       const complementosPart = compl ? `. Complementos: ${compl}` : '';
       const obsPart = order.observacao ? `. Observação: ${order.observacao}` : '';
-      const msg = `Novo pedido. Produto: ${order.produto_nome}${complementosPart}${obsPart}.`;
+      const msg = `Novo pedido. Produto: ${cleanProdutoNome(order.produto_nome)}${complementosPart}${obsPart}.`;
       const utterance = new SpeechSynthesisUtterance(msg);
       utterance.lang = 'pt-BR';
       utterance.rate = 1;

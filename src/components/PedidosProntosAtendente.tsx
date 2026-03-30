@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { useAtendenteKds, KdsProntoOrder } from '@/hooks/useAtendenteKds';
-import { parseComplementos } from '@/lib/kds-complementos';
+import { parseComplementos, cleanProdutoNome } from '@/lib/kds-complementos';
 
 interface Props {
   userId: string | null;
@@ -60,7 +60,7 @@ function OrderCard({
     <Card className={`border-2 ${borderColor} shadow-md animate-in fade-in slide-in-from-top-2`}>
       <CardContent className="p-4 space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-foreground">{order.produto_nome}</h3>
+          <h3 className="font-bold text-foreground">{cleanProdutoNome(order.produto_nome)}</h3>
           <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {getTimeSince(order.created_at)}
@@ -230,7 +230,7 @@ export function PedidosProntosAtendente({ userId }: Props) {
               </DialogHeader>
               <div className="space-y-3">
                 <div className="border rounded-lg p-3 space-y-1">
-                  <h3 className="font-bold text-lg">{detailOrder.produto_nome}</h3>
+                  <h3 className="font-bold text-lg">{cleanProdutoNome(detailOrder.produto_nome)}</h3>
                   <p className="text-sm text-muted-foreground">{detailOrder.categoria_nome}</p>
                   <p className="font-bold">Quantidade: {detailOrder.quantidade}</p>
                   <Badge className={`${STATUS_COLORS[detailOrder.kds_status] || ''}`}>

@@ -15,9 +15,10 @@ export function parseComplementos(raw: string | null | undefined): string[] {
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed
+      const items = parsed
         .map((item: any) => item.nome || item.name || item.descricao || '')
         .filter(Boolean);
+      return [...new Set(items)];
     }
   } catch { /* not JSON */ }
 
@@ -28,7 +29,7 @@ export function parseComplementos(raw: string | null | undefined): string[] {
     .map(s => s.trim())
     .filter(Boolean);
 
-  return segments.map(seg => {
+  const result = segments.map(seg => {
     // If contains ":", take only the part after the last ":"
     const colonIdx = seg.indexOf(':');
     if (colonIdx !== -1) {
@@ -36,6 +37,22 @@ export function parseComplementos(raw: string | null | undefined): string[] {
     }
     return seg.trim();
   }).filter(Boolean);
+
+  // Deduplicate
+  return [...new Set(result)];
+}
+
+/**
+ * Extracts only the clean product name, stripping any appended complementos.
+ * Handles legacy format: "Produto | CATEGORIA: valor, ..."
+ */
+export function cleanProdutoNome(nome: string | null | undefined): string {
+  if (!nome) return '';
+  const pipeIdx = nome.indexOf(' | ');
+  if (pipeIdx !== -1) {
+    return nome.substring(0, pipeIdx).trim();
+  }
+  return nome.trim();
 }
 
 /**

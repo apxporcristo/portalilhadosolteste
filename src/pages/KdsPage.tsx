@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useKdsOrders, KdsOrder, KdsStatus } from '@/hooks/useKdsOrders';
-import { parseComplementos } from '@/lib/kds-complementos';
+import { parseComplementos, cleanProdutoNome } from '@/lib/kds-complementos';
 import { usePrinterContext } from '@/contexts/PrinterContext';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
 
@@ -179,7 +179,7 @@ export default function KdsPage() {
           </div>
 
           <div>
-            <h3 className="font-bold text-lg text-foreground leading-tight">{order.produto_nome}</h3>
+            <h3 className="font-bold text-lg text-foreground leading-tight">{cleanProdutoNome(order.produto_nome)}</h3>
             <p className="text-sm text-muted-foreground">{order.categoria_nome}</p>
           </div>
 
@@ -400,7 +400,7 @@ export default function KdsPage() {
                 </div>
 
                 <div className="space-y-2 border rounded-lg p-4">
-                  <h3 className="font-bold text-xl text-foreground">{detailOrder.produto_nome}</h3>
+                  <h3 className="font-bold text-xl text-foreground">{cleanProdutoNome(detailOrder.produto_nome)}</h3>
                   <p className="text-sm text-muted-foreground">Categoria: {detailOrder.categoria_nome}</p>
                   <div className="flex items-center gap-4">
                     <span className="font-bold text-lg">x{detailOrder.quantidade}</span>
