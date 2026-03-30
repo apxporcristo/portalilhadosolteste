@@ -394,7 +394,7 @@ export default function FichasLista() {
       if (produto?.forma_venda === 'por_peso') {
         handlePesoProduct(pendingFicha, []);
       } else {
-        addItemToCart(pendingFicha, []);
+        maybeShowObsOrAddToCart(pendingFicha, []);
       }
       setPendingFicha(null);
     }
