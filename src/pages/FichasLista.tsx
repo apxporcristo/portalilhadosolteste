@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useFichasConsumo, FichaAtiva, FichaProduto } from '@/hooks/useFichasConsumo';
 import { useComplementos, Complemento, ComplementoItem, GrupoComplemento } from '@/hooks/useComplementos';
 import { getSupabaseClient, useVouchers } from '@/hooks/useVouchers';
@@ -44,12 +45,14 @@ interface CartItem {
   selectedItems: SelectedItem[];
   peso?: number;
   valorPorKg?: number;
+  observacao?: string;
 }
 
 function cartItemKey(item: CartItem) {
   const itemIds = item.selectedItems.map(si => si.item.id).sort().join(',');
   const pesoKey = item.peso != null ? `__peso_${item.peso.toFixed(3)}` : '';
-  return `${item.ficha.id}__${itemIds}${pesoKey}`;
+  const obsKey = item.observacao ? `__obs_${item.observacao}` : '';
+  return `${item.ficha.id}__${itemIds}${pesoKey}${obsKey}`;
 }
 
 function cartItemTotal(item: CartItem) {
@@ -114,6 +117,11 @@ export default function FichasLista() {
   const [showCatModal, setShowCatModal] = useState(false);
   const [collectedItems, setCollectedItems] = useState<SelectedItem[]>([]);
   const [groupSelections, setGroupSelections] = useState<Record<string, ComplementoItem[]>>({});
+
+  // Observation modal for KDS products
+  const [showObsModal, setShowObsModal] = useState(false);
+  const [obsText, setObsText] = useState('');
+  const [pendingObsData, setPendingObsData] = useState<{ ficha: FichaAtiva; selectedItems: SelectedItem[]; peso?: number; valorPorKg?: number } | null>(null);
 
   const totalCart = useMemo(() => {
     return cart.reduce((sum, item) => sum + cartItemTotal(item) * item.quantidade, 0);
@@ -236,7 +244,7 @@ export default function FichasLista() {
       await handlePesoProduct(ficha, []);
       return;
     }
-    addItemToCart(ficha, []);
+    maybeShowObsOrAddToCart(ficha, []);
   };
 
   const handlePesoProduct = async (ficha: FichaAtiva, selectedItems: SelectedItem[]) => {
@@ -295,7 +303,7 @@ export default function FichasLista() {
     }
     const produto = produtos.find(p => p.id === pendingPesoFicha.ficha.id);
     const valorKg = produto?.valor_por_kg || Number(pendingPesoFicha.ficha.valor);
-    addItemToCart(pendingPesoFicha.ficha, pendingPesoFicha.selectedItems, peso, valorKg);
+    maybeShowObsOrAddToCart(pendingPesoFicha.ficha, pendingPesoFicha.selectedItems, peso, valorKg);
     // Keep modal open, just clear weight for next reading
     setPesoManual('');
     toast({ title: 'Item adicionado!', description: `${pendingPesoFicha.ficha.nome_produto} - ${peso.toFixed(3)} kg` });
@@ -325,7 +333,7 @@ export default function FichasLista() {
         if (produto?.forma_venda === 'por_peso') {
           handlePesoProduct(pendingFicha, newCollected);
         } else {
-          addItemToCart(pendingFicha, newCollected);
+          maybeShowObsOrAddToCart(pendingFicha, newCollected);
         }
         setPendingFicha(null);
       }
@@ -387,26 +395,43 @@ export default function FichasLista() {
       if (produto?.forma_venda === 'por_peso') {
         handlePesoProduct(pendingFicha, []);
       } else {
-        addItemToCart(pendingFicha, []);
+        maybeShowObsOrAddToCart(pendingFicha, []);
       }
       setPendingFicha(null);
     }
   };
 
-  const addItemToCart = (ficha: FichaAtiva, selectedItems: SelectedItem[], peso?: number, valorPorKg?: number) => {
-    const itemIds = selectedItems.map(si => si.item.id).sort().join(',');
-    const pesoKey = peso ? `_p${peso.toFixed(3)}` : '';
-    const key = `${ficha.id}__${itemIds}${pesoKey}`;
+  const maybeShowObsOrAddToCart = (ficha: FichaAtiva, selectedItems: SelectedItem[], peso?: number, valorPorKg?: number) => {
+    const produto = produtos.find(p => p.id === ficha.id);
+    if ((produto as any)?.enviar_para_kds) {
+      setPendingObsData({ ficha, selectedItems, peso, valorPorKg });
+      setObsText('');
+      setShowObsModal(true);
+      return;
+    }
+    addItemToCart(ficha, selectedItems, peso, valorPorKg);
+  };
+
+  const handleConfirmObs = () => {
+    if (!pendingObsData) return;
+    addItemToCart(pendingObsData.ficha, pendingObsData.selectedItems, pendingObsData.peso, pendingObsData.valorPorKg, obsText.trim() || undefined);
+    setShowObsModal(false);
+    setPendingObsData(null);
+    setObsText('');
+  };
+
+  const addItemToCart = (ficha: FichaAtiva, selectedItems: SelectedItem[], peso?: number, valorPorKg?: number, observacao?: string) => {
+    const newItem: CartItem = { ficha, quantidade: 1, selectedItems, peso, valorPorKg, observacao };
+    const key = cartItemKey(newItem);
     setCart(prev => {
       if (peso) {
-        // Weight items are always unique entries
-        return [...prev, { ficha, quantidade: 1, selectedItems, peso, valorPorKg }];
+        return [...prev, newItem];
       }
       const existing = prev.find(c => cartItemKey(c) === key);
       if (existing) {
         return prev.map(c => cartItemKey(c) === key ? { ...c, quantidade: c.quantidade + 1 } : c);
       }
-      return [...prev, { ficha, quantidade: 1, selectedItems }];
+      return [...prev, newItem];
     });
   };
 
@@ -483,7 +508,7 @@ export default function FichasLista() {
             telefone_cliente: telefoneCliente.trim() || null,
             nome_atendente: nomeAtendente.trim() || null,
             complementos: item.selectedItems.length > 0 ? item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ') : null,
-            observacao: (produto as any)?.obs || null,
+            observacao: item.observacao || (produto as any)?.obs || null,
             kds_status: 'novo',
           });
         } catch (e) { console.warn('[Ficha] kds_orders insert falhou:', e); }
@@ -810,7 +835,7 @@ export default function FichasLista() {
               telefone_cliente: telefoneCliente.trim() || null,
               nome_atendente: nomeAtendente.trim() || null,
               complementos: item.selectedItems.length > 0 ? item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ') : null,
-              observacao: (produto as any)?.obs || null,
+              observacao: item.observacao || (produto as any)?.obs || null,
               kds_status: 'novo',
             });
           } catch (e) { console.warn('[Ficha Print] kds_orders insert falhou:', e); }
@@ -988,6 +1013,9 @@ export default function FichasLista() {
                   <div key={key} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-foreground block truncate">{item.ficha.nome_produto}</span>
+                      {item.observacao && (
+                        <span className="text-xs text-muted-foreground block truncate italic">Obs: {item.observacao}</span>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         R$ {unitTotal.toFixed(2).replace('.', ',')}
                       </span>
@@ -1168,6 +1196,32 @@ export default function FichasLista() {
           </Button>
         )}
       </PagamentoDialog>
+
+      {/* Modal Observação do pedido (KDS) */}
+      <Dialog open={showObsModal} onOpenChange={(open) => { if (!open) { setShowObsModal(false); setPendingObsData(null); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Observação do pedido</DialogTitle>
+            <DialogDescription>
+              {pendingObsData?.ficha.nome_produto} — adicione uma observação se necessário.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Ex: sem cebola, bem passado, sem sal..."
+              value={obsText}
+              onChange={(e) => setObsText(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowObsModal(false); setPendingObsData(null); }}>Cancelar</Button>
+            <Button onClick={handleConfirmObs}>
+              Adicionar ao carrinho
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Peso - estilo ServeService */}
       <Dialog open={showPesoModal} onOpenChange={(open) => { if (!open) handleClosePesoModal(); }}>
