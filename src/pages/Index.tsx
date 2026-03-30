@@ -284,8 +284,8 @@ const Index = () => {
           </>
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[50vh] gap-6 px-2">
-            {/* Pedidos prontos para o atendente */}
-            {isLoggedIn && (
+            {/* Pedidos prontos para o atendente - visível para quem tem acesso_kds ou acesso_ficha_consumo */}
+            {isLoggedIn && (canSeeKds || canSeeFichas) && (
               <PedidosProntosAtendente userId={userSession?.user?.id || null} />
             )}
             <Alert variant="default" className="border max-w-md w-full">

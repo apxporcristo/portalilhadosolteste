@@ -41,6 +41,16 @@ function playAlertSound() {
   } catch { /* ignore */ }
 }
 
+/** Sort orders: logged user's orders first, then by created_at */
+function sortOrders(orders: KdsProntoOrder[], userId: string | null): KdsProntoOrder[] {
+  return [...orders].sort((a, b) => {
+    const aIsUser = a.atendente_user_id === userId ? 0 : 1;
+    const bIsUser = b.atendente_user_id === userId ? 0 : 1;
+    if (aIsUser !== bIsUser) return aIsUser - bIsUser;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+}
+
 export function useAtendenteKds(userId: string | null) {
   const [orders, setOrders] = useState<KdsProntoOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +63,6 @@ export function useAtendenteKds(userId: string | null) {
       const { data, error } = await supabase
         .from('kds_orders' as any)
         .select('*')
-        .eq('atendente_user_id', userId)
         .in('kds_status', ['em_preparo', 'pronto', 'entregue'])
         .order('created_at', { ascending: true });
       if (error) throw error;
@@ -86,7 +95,6 @@ export function useAtendenteKds(userId: string | null) {
         }, (payload: any) => {
           const row = payload.new as any;
           if (!row) return;
-          if (row.atendente_user_id !== userId) return;
 
           if (['em_preparo', 'pronto', 'entregue'].includes(row.kds_status)) {
             setOrders(prev => {
@@ -102,7 +110,6 @@ export function useAtendenteKds(userId: string | null) {
               );
             });
           } else {
-            // Status not relevant (e.g. novo) or deleted — remove from list
             setOrders(prev => prev.filter(o => o.id !== row.id));
           }
         })
@@ -135,9 +142,9 @@ export function useAtendenteKds(userId: string | null) {
     }
   }, []);
 
-  const emPreparo = orders.filter(o => o.kds_status === 'em_preparo');
-  const prontos = orders.filter(o => o.kds_status === 'pronto');
-  const entregues = orders.filter(o => o.kds_status === 'entregue');
+  const emPreparo = sortOrders(orders.filter(o => o.kds_status === 'em_preparo'), userId);
+  const prontos = sortOrders(orders.filter(o => o.kds_status === 'pronto'), userId);
+  const entregues = sortOrders(orders.filter(o => o.kds_status === 'entregue'), userId);
 
   return { orders, emPreparo, prontos, entregues, loading, marcarEntregue, refetch: fetchOrders };
 }
