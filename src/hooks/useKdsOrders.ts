@@ -78,9 +78,15 @@ export function useKdsOrders() {
   const fetchOrders = useCallback(async () => {
     try {
       const supabase = await getSupabaseClient();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
       const { data, error } = await supabase
         .from('kds_orders' as any)
         .select('*')
+        .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString())
         .order('created_at', { ascending: true });
       if (error) throw error;
       setOrders((data as any[]) || []);
