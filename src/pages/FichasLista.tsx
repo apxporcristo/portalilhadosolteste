@@ -117,6 +117,11 @@ export default function FichasLista() {
   const [collectedItems, setCollectedItems] = useState<SelectedItem[]>([]);
   const [groupSelections, setGroupSelections] = useState<Record<string, ComplementoItem[]>>({});
 
+  // Observation modal for KDS products
+  const [showObsModal, setShowObsModal] = useState(false);
+  const [obsText, setObsText] = useState('');
+  const [pendingObsData, setPendingObsData] = useState<{ ficha: FichaAtiva; selectedItems: SelectedItem[]; peso?: number; valorPorKg?: number } | null>(null);
+
   const totalCart = useMemo(() => {
     return cart.reduce((sum, item) => sum + cartItemTotal(item) * item.quantidade, 0);
   }, [cart]);
