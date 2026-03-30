@@ -1012,6 +1012,9 @@ export default function FichasLista() {
                   <div key={key} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-foreground block truncate">{item.ficha.nome_produto}</span>
+                      {item.observacao && (
+                        <span className="text-xs text-muted-foreground block truncate italic">Obs: {item.observacao}</span>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         R$ {unitTotal.toFixed(2).replace('.', ',')}
                       </span>
