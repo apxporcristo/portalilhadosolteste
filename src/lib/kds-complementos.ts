@@ -28,7 +28,7 @@ export function parseComplementos(raw: string | null | undefined): string[] {
     .map(s => s.trim())
     .filter(Boolean);
 
-  return segments.map(seg => {
+  const result = segments.map(seg => {
     // If contains ":", take only the part after the last ":"
     const colonIdx = seg.indexOf(':');
     if (colonIdx !== -1) {
@@ -36,6 +36,9 @@ export function parseComplementos(raw: string | null | undefined): string[] {
     }
     return seg.trim();
   }).filter(Boolean);
+
+  // Deduplicate
+  return [...new Set(result)];
 }
 
 /**
