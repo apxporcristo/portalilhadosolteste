@@ -225,7 +225,7 @@ export default function KdsPage() {
                 <Check className="h-3 w-3 mr-1" /> Pronto
               </Button>
             )}
-            {showEntregueBtn && (
+            {!hasFullKds && (order.kds_status === 'pronto' || order.kds_status === 'impresso') && (
               <Button
                 size="sm"
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white"
