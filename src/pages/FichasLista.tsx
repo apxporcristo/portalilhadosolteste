@@ -50,7 +50,8 @@ interface CartItem {
 function cartItemKey(item: CartItem) {
   const itemIds = item.selectedItems.map(si => si.item.id).sort().join(',');
   const pesoKey = item.peso != null ? `__peso_${item.peso.toFixed(3)}` : '';
-  return `${item.ficha.id}__${itemIds}${pesoKey}`;
+  const obsKey = item.observacao ? `__obs_${item.observacao}` : '';
+  return `${item.ficha.id}__${itemIds}${pesoKey}${obsKey}`;
 }
 
 function cartItemTotal(item: CartItem) {
