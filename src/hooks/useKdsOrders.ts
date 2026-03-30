@@ -55,10 +55,9 @@ function playBeep() {
 function speakOrder(order: KdsOrder) {
   if ('speechSynthesis' in window) {
     try {
-      const compl = complementosParaVoz(order.complementos);
-      const complementosPart = compl ? `. Complementos: ${compl}` : '';
-      const obsPart = order.observacao ? `. Observação: ${order.observacao}` : '';
-      const msg = `Novo pedido. Produto: ${cleanProdutoNome(order.produto_nome)}${complementosPart}${obsPart}.`;
+      const tamanho = complementosParaVoz(order.complementos);
+      const tamanhoPart = tamanho ? `. ${tamanho}` : '';
+      const msg = `Novo pedido. ${cleanProdutoNome(order.produto_nome)}${tamanhoPart}.`;
       const utterance = new SpeechSynthesisUtterance(msg);
       utterance.lang = 'pt-BR';
       utterance.rate = 1;

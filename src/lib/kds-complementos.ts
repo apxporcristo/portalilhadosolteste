@@ -56,10 +56,22 @@ export function cleanProdutoNome(nome: string | null | undefined): string {
 }
 
 /**
- * Formats complementos for speech synthesis (plain text list).
+ * Extracts the size/tamanho from complementos if present.
+ * Looks for common size keywords.
+ */
+export function extractTamanho(raw: string | null | undefined): string | null {
+  const items = parseComplementos(raw);
+  const sizeKeywords = ['pequeno', 'pequena', 'médio', 'média', 'medio', 'media', 'grande', 'p', 'm', 'g', 'gg', 'individual', 'família', 'familia'];
+  for (const item of items) {
+    if (sizeKeywords.includes(item.toLowerCase())) return item;
+  }
+  return null;
+}
+
+/**
+ * Formats complementos for speech synthesis — only product name + size.
  */
 export function complementosParaVoz(raw: string | null | undefined): string {
-  const items = parseComplementos(raw);
-  if (items.length === 0) return '';
-  return items.join(', ');
+  const tamanho = extractTamanho(raw);
+  return tamanho ? `Tamanho ${tamanho}` : '';
 }
