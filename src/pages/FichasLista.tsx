@@ -44,6 +44,7 @@ interface CartItem {
   selectedItems: SelectedItem[];
   peso?: number;
   valorPorKg?: number;
+  observacao?: string;
 }
 
 function cartItemKey(item: CartItem) {
