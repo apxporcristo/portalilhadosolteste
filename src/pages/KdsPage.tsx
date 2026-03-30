@@ -65,7 +65,11 @@ export default function KdsPage() {
         `Qtd: ${order.quantidade}\n`,
       ];
       if (order.complementos) {
-        lines.push(`Complementos: ${normalize(order.complementos)}\n`);
+        const items = parseComplementos(order.complementos);
+        if (items.length > 0) {
+          lines.push('Complementos:\n');
+          items.forEach(c => lines.push(`  - ${normalize(c)}\n`));
+        }
       }
       if (order.observacao) {
         lines.push(`Obs: ${normalize(order.observacao)}\n`);
