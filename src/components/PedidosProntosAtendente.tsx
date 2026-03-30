@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { ChefHat, Check, Clock, Eye, Package, Flame, CheckCircle2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { ChefHat, Check, Clock, Eye, Package, Flame, CheckCircle2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { useAtendenteKds, KdsProntoOrder } from '@/hooks/useAtendenteKds';
 import { parseComplementos } from '@/lib/kds-complementos';
@@ -12,6 +13,18 @@ import { parseComplementos } from '@/lib/kds-complementos';
 interface Props {
   userId: string | null;
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  em_preparo: 'Em preparação',
+  pronto: 'Pronto',
+  entregue: 'Entregue',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  em_preparo: 'bg-orange-500 text-white',
+  pronto: 'bg-green-600 text-white',
+  entregue: 'bg-muted text-muted-foreground',
+};
 
 function OrderCard({
   order,
@@ -53,8 +66,11 @@ function OrderCard({
             {getTimeSince(order.created_at)}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className="font-bold">x{order.quantidade}</Badge>
+          <Badge className={`text-[10px] px-1.5 py-0.5 ${STATUS_COLORS[order.kds_status] || ''}`}>
+            {STATUS_LABELS[order.kds_status] || order.kds_status}
+          </Badge>
           {order.categoria_nome && (
             <span className="text-xs text-muted-foreground">{order.categoria_nome}</span>
           )}
@@ -97,10 +113,24 @@ function OrderCard({
   );
 }
 
+function filterBySearch(orders: KdsProntoOrder[], search: string): KdsProntoOrder[] {
+  if (!search.trim()) return orders;
+  const term = search.toLowerCase();
+  return orders.filter(o =>
+    (o.nome_cliente && o.nome_cliente.toLowerCase().includes(term)) ||
+    (o.produto_nome && o.produto_nome.toLowerCase().includes(term))
+  );
+}
+
 export function PedidosProntosAtendente({ userId }: Props) {
   const { emPreparo, prontos, entregues, loading, marcarEntregue } = useAtendenteKds(userId);
   const [detailOrder, setDetailOrder] = useState<KdsProntoOrder | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  const filteredEmPreparo = useMemo(() => filterBySearch(emPreparo, search), [emPreparo, search]);
+  const filteredProntos = useMemo(() => filterBySearch(prontos, search), [prontos, search]);
+  const filteredEntregues = useMemo(() => filterBySearch(entregues, search), [entregues, search]);
 
   const handleEntregue = async (orderId: string) => {
     setMarkingId(orderId);
@@ -117,14 +147,25 @@ export function PedidosProntosAtendente({ userId }: Props) {
 
   const totalCount = emPreparo.length + prontos.length;
 
-  if (loading || !userId || totalCount === 0 && entregues.length === 0) return null;
+  if (loading || !userId || (totalCount === 0 && entregues.length === 0)) return null;
 
   return (
     <div className="w-full max-w-md space-y-3">
       <div className="flex items-center gap-2">
         <ChefHat className="h-5 w-5 text-primary" />
-        <h2 className="text-base font-bold text-foreground">Meus Pedidos</h2>
+        <h2 className="text-base font-bold text-foreground">Pedidos</h2>
         {totalCount > 0 && <Badge className="bg-primary text-primary-foreground">{totalCount}</Badge>}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por cliente ou produto..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9 h-9 text-sm"
+        />
       </div>
 
       <Tabs defaultValue="em_preparo" className="w-full">
@@ -146,30 +187,30 @@ export function PedidosProntosAtendente({ userId }: Props) {
         </TabsList>
 
         <TabsContent value="em_preparo" className="mt-3 space-y-2">
-          {emPreparo.length === 0 ? (
+          {filteredEmPreparo.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Nenhum pedido em preparação.</p>
           ) : (
-            emPreparo.map(order => (
+            filteredEmPreparo.map(order => (
               <OrderCard key={order.id} order={order} onDetail={setDetailOrder} markingId={markingId} />
             ))
           )}
         </TabsContent>
 
         <TabsContent value="prontos" className="mt-3 space-y-2">
-          {prontos.length === 0 ? (
+          {filteredProntos.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Nenhum pedido pronto.</p>
           ) : (
-            prontos.map(order => (
+            filteredProntos.map(order => (
               <OrderCard key={order.id} order={order} showEntregueBtn onEntregue={handleEntregue} onDetail={setDetailOrder} markingId={markingId} />
             ))
           )}
         </TabsContent>
 
         <TabsContent value="entregues" className="mt-3 space-y-2">
-          {entregues.length === 0 ? (
+          {filteredEntregues.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Nenhum pedido entregue.</p>
           ) : (
-            entregues.map(order => (
+            filteredEntregues.map(order => (
               <OrderCard key={order.id} order={order} onDetail={setDetailOrder} markingId={markingId} />
             ))
           )}
@@ -192,8 +233,8 @@ export function PedidosProntosAtendente({ userId }: Props) {
                   <h3 className="font-bold text-lg">{detailOrder.produto_nome}</h3>
                   <p className="text-sm text-muted-foreground">{detailOrder.categoria_nome}</p>
                   <p className="font-bold">Quantidade: {detailOrder.quantidade}</p>
-                  <Badge variant="outline">
-                    {detailOrder.kds_status === 'em_preparo' ? 'Em preparação' : detailOrder.kds_status === 'pronto' ? 'Pronto' : 'Entregue'}
+                  <Badge className={`${STATUS_COLORS[detailOrder.kds_status] || ''}`}>
+                    {STATUS_LABELS[detailOrder.kds_status] || detailOrder.kds_status}
                   </Badge>
                 </div>
                 {detailOrder.complementos && (
