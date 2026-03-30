@@ -60,7 +60,7 @@ function OrderCard({
     <Card className={`border-2 ${borderColor} shadow-md animate-in fade-in slide-in-from-top-2`}>
       <CardContent className="p-4 space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-foreground">{order.produto_nome}</h3>
+          <h3 className="font-bold text-foreground">{cleanProdutoNome(order.produto_nome)}</h3>
           <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {getTimeSince(order.created_at)}
