@@ -13,6 +13,7 @@ export interface KdsProntoOrder {
   atendente_user_id: string | null;
   created_at: string;
   pronto_at: string | null;
+  entregue_at: string | null;
   kds_status: string;
 }
 
@@ -45,7 +46,7 @@ export function useAtendenteKds(userId: string | null) {
   const [loading, setLoading] = useState(true);
   const knownIdsRef = useRef<Set<string>>(new Set());
 
-  const fetchProntoOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async () => {
     if (!userId) { setOrders([]); setLoading(false); return; }
     try {
       const supabase = await getSupabaseClient();
@@ -53,11 +54,10 @@ export function useAtendenteKds(userId: string | null) {
         .from('kds_orders' as any)
         .select('*')
         .eq('atendente_user_id', userId)
-        .eq('kds_status', 'pronto')
+        .in('kds_status', ['em_preparo', 'pronto', 'entregue'])
         .order('created_at', { ascending: true });
       if (error) throw error;
       const list = (data as any[]) || [];
-      // Track known IDs (don't alert on initial load)
       list.forEach(o => knownIdsRef.current.add(o.id));
       setOrders(list);
     } catch (e) {
@@ -68,8 +68,8 @@ export function useAtendenteKds(userId: string | null) {
   }, [userId]);
 
   useEffect(() => {
-    fetchProntoOrders();
-  }, [fetchProntoOrders]);
+    fetchOrders();
+  }, [fetchOrders]);
 
   // Realtime
   useEffect(() => {
@@ -86,24 +86,23 @@ export function useAtendenteKds(userId: string | null) {
         }, (payload: any) => {
           const row = payload.new as any;
           if (!row) return;
-          // Only care about orders for this attendant
           if (row.atendente_user_id !== userId) return;
 
-          if (row.kds_status === 'pronto') {
+          if (['em_preparo', 'pronto', 'entregue'].includes(row.kds_status)) {
             setOrders(prev => {
               const exists = prev.find(o => o.id === row.id);
               if (exists) return prev.map(o => o.id === row.id ? { ...o, ...row } : o);
-              // New pronto order - play sound
-              if (!knownIdsRef.current.has(row.id)) {
+              if (row.kds_status === 'pronto' && !knownIdsRef.current.has(row.id)) {
                 knownIdsRef.current.add(row.id);
                 playAlertSound();
               }
+              knownIdsRef.current.add(row.id);
               return [...prev, row].sort((a, b) =>
                 new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
               );
             });
           } else {
-            // Status changed away from pronto (e.g. entregue) - remove
+            // Status not relevant (e.g. novo) or deleted — remove from list
             setOrders(prev => prev.filter(o => o.id !== row.id));
           }
         })
@@ -129,12 +128,16 @@ export function useAtendenteKds(userId: string | null) {
         } as any)
         .eq('id', orderId);
       if (error) throw error;
-      setOrders(prev => prev.filter(o => o.id !== orderId));
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, kds_status: 'entregue', entregue_at: new Date().toISOString() } : o));
     } catch (e) {
       console.error('[AtendenteKDS] Erro ao marcar entregue:', e);
       throw e;
     }
   }, []);
 
-  return { orders, loading, marcarEntregue, refetch: fetchProntoOrders };
+  const emPreparo = orders.filter(o => o.kds_status === 'em_preparo');
+  const prontos = orders.filter(o => o.kds_status === 'pronto');
+  const entregues = orders.filter(o => o.kds_status === 'entregue');
+
+  return { orders, emPreparo, prontos, entregues, loading, marcarEntregue, refetch: fetchOrders };
 }
