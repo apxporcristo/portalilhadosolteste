@@ -243,7 +243,7 @@ export default function FichasLista() {
       await handlePesoProduct(ficha, []);
       return;
     }
-    addItemToCart(ficha, []);
+    maybeShowObsOrAddToCart(ficha, []);
   };
 
   const handlePesoProduct = async (ficha: FichaAtiva, selectedItems: SelectedItem[]) => {
