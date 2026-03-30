@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { useAtendenteKds, KdsProntoOrder } from '@/hooks/useAtendenteKds';
+import { parseComplementos } from '@/lib/kds-complementos';
 
 interface Props {
   userId: string | null;
