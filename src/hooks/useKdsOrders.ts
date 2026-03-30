@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from '@/hooks/useVouchers';
+import { complementosParaVoz } from '@/lib/kds-complementos';
 
 export type KdsStatus = 'novo' | 'em_preparo' | 'pronto' | 'impresso' | 'entregue';
 
