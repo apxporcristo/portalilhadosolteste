@@ -400,20 +400,37 @@ export default function FichasLista() {
     }
   };
 
-  const addItemToCart = (ficha: FichaAtiva, selectedItems: SelectedItem[], peso?: number, valorPorKg?: number) => {
-    const itemIds = selectedItems.map(si => si.item.id).sort().join(',');
-    const pesoKey = peso ? `_p${peso.toFixed(3)}` : '';
-    const key = `${ficha.id}__${itemIds}${pesoKey}`;
+  const maybeShowObsOrAddToCart = (ficha: FichaAtiva, selectedItems: SelectedItem[], peso?: number, valorPorKg?: number) => {
+    const produto = produtos.find(p => p.id === ficha.id);
+    if ((produto as any)?.enviar_para_kds) {
+      setPendingObsData({ ficha, selectedItems, peso, valorPorKg });
+      setObsText('');
+      setShowObsModal(true);
+      return;
+    }
+    addItemToCart(ficha, selectedItems, peso, valorPorKg);
+  };
+
+  const handleConfirmObs = () => {
+    if (!pendingObsData) return;
+    addItemToCart(pendingObsData.ficha, pendingObsData.selectedItems, pendingObsData.peso, pendingObsData.valorPorKg, obsText.trim() || undefined);
+    setShowObsModal(false);
+    setPendingObsData(null);
+    setObsText('');
+  };
+
+  const addItemToCart = (ficha: FichaAtiva, selectedItems: SelectedItem[], peso?: number, valorPorKg?: number, observacao?: string) => {
+    const newItem: CartItem = { ficha, quantidade: 1, selectedItems, peso, valorPorKg, observacao };
+    const key = cartItemKey(newItem);
     setCart(prev => {
       if (peso) {
-        // Weight items are always unique entries
-        return [...prev, { ficha, quantidade: 1, selectedItems, peso, valorPorKg }];
+        return [...prev, newItem];
       }
       const existing = prev.find(c => cartItemKey(c) === key);
       if (existing) {
         return prev.map(c => cartItemKey(c) === key ? { ...c, quantidade: c.quantidade + 1 } : c);
       }
-      return [...prev, { ficha, quantidade: 1, selectedItems }];
+      return [...prev, newItem];
     });
   };
 
