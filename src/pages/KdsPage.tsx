@@ -179,7 +179,7 @@ export default function KdsPage() {
           </div>
 
           <div>
-            <h3 className="font-bold text-lg text-foreground leading-tight">{order.produto_nome}</h3>
+            <h3 className="font-bold text-lg text-foreground leading-tight">{cleanProdutoNome(order.produto_nome)}</h3>
             <p className="text-sm text-muted-foreground">{order.categoria_nome}</p>
           </div>
 
