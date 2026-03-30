@@ -187,9 +187,6 @@ export default function KdsPage() {
             <Badge variant="outline" className="text-base font-bold px-3 py-1">
               x{order.quantidade}
             </Badge>
-            <span className="text-sm font-medium text-primary">
-              R$ {Number(order.valor_total).toFixed(2).replace('.', ',')}
-            </span>
           </div>
 
           {order.complementos && (() => {
