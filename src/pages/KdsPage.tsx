@@ -152,7 +152,7 @@ export default function KdsPage() {
     return `${Math.floor(mins / 60)}h${mins % 60}min`;
   };
 
-  const renderOrderCard = (order: KdsOrder, showEntregueBtn: boolean) => {
+  const renderOrderCard = (order: KdsOrder) => {
     const config = statusConfig[order.kds_status];
     const isNew = order.kds_status === 'novo';
     return (
