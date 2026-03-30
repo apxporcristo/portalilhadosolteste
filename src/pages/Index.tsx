@@ -20,7 +20,7 @@ import { UserPermissionsManager } from '@/components/UserPermissionsManager';
 import { FormasPagamentoSettings } from '@/components/FormasPagamentoSettings';
 import { PermissionGate } from '@/components/PermissionGate';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
-import { PedidosProntosAtendente } from '@/components/PedidosProntosAtendente';
+
 import { useFichasConsumo } from '@/hooks/useFichasConsumo';
 import { useComandas } from '@/hooks/useComandas';
 import { AuditoriaComandas } from '@/components/AuditoriaComandas';
