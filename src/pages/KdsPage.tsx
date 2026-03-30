@@ -55,8 +55,13 @@ export default function KdsPage() {
   const [search, setSearch] = useState('');
 
   // Split orders by status
+  const novos = useMemo(() => {
+    const filtered = allOrders.filter(o => o.kds_status === 'novo');
+    return filterBySearch(sortByUser(filtered, userId), search);
+  }, [allOrders, userId, search]);
+
   const emPreparo = useMemo(() => {
-    const filtered = allOrders.filter(o => o.kds_status === 'novo' || o.kds_status === 'em_preparo');
+    const filtered = allOrders.filter(o => o.kds_status === 'em_preparo');
     return filterBySearch(sortByUser(filtered, userId), search);
   }, [allOrders, userId, search]);
 
