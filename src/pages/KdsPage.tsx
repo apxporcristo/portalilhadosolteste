@@ -210,12 +210,12 @@ export default function KdsPage() {
           </div>
 
           <div className="flex gap-1 pt-1" onClick={e => e.stopPropagation()}>
-            {order.kds_status === 'novo' && (
+            {hasFullKds && order.kds_status === 'novo' && (
               <Button size="sm" className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white" onClick={() => handleStatusChange(order, 'em_preparo')}>
                 <Play className="h-3 w-3 mr-1" /> Em Preparo
               </Button>
             )}
-            {order.kds_status === 'em_preparo' && (
+            {hasFullKds && order.kds_status === 'em_preparo' && (
               <Button size="sm" className="flex-1 bg-green-500 hover:bg-green-600 text-white" onClick={() => handleStatusChange(order, 'pronto')}>
                 <Check className="h-3 w-3 mr-1" /> Pronto
               </Button>
@@ -231,7 +231,7 @@ export default function KdsPage() {
                 {markingId === order.id ? 'Salvando...' : 'Entregue ao cliente'}
               </Button>
             )}
-            {(order.kds_status === 'novo' || order.kds_status === 'em_preparo') && (
+            {hasFullKds && (order.kds_status === 'novo' || order.kds_status === 'em_preparo') && (
               <Button size="sm" variant="outline" onClick={() => handlePrint(order)} disabled={printing}>
                 <Printer className="h-3 w-3 mr-1" /> Imprimir
               </Button>
