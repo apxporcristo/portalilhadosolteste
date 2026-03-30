@@ -267,7 +267,7 @@ export default function KdsPage() {
             </Button>
             <div className="flex items-center gap-2">
               <ChefHat className="h-6 w-6 text-primary" />
-              <h1 className="text-xl font-bold text-foreground">KDS - Cozinha</h1>
+              <h1 className="text-xl font-bold text-foreground">{hasFullKds ? 'KDS - Cozinha' : 'Acompanhamento de Pedidos'}</h1>
             </div>
             {totalActive > 0 && (
               <Badge variant="secondary">{totalActive} pedido(s)</Badge>
