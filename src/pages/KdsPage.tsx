@@ -215,9 +215,20 @@ export default function KdsPage() {
                     </div>
 
                     {/* Complementos */}
-                    {order.complementos && (
-                      <p className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 line-clamp-2">
-                        {order.complementos}
+                    {order.complementos && (() => {
+                      const items = parseComplementos(order.complementos);
+                      return items.length > 0 ? (
+                        <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 space-y-0.5">
+                          <span className="font-semibold">Complementos:</span>
+                          {items.map((c, i) => <p key={i}>• {c}</p>)}
+                        </div>
+                      ) : null;
+                    })()}
+
+                    {/* Observação */}
+                    {order.observacao && (
+                      <p className="text-xs text-muted-foreground italic bg-muted rounded px-2 py-1">
+                        Obs: {order.observacao}
                       </p>
                     )}
 
