@@ -408,12 +408,12 @@ export default function KdsPage() {
                 </div>
               </div>
               <DialogFooter className="flex flex-wrap gap-2">
-                {detailOrder.kds_status === 'novo' && (
+                {hasFullKds && detailOrder.kds_status === 'novo' && (
                   <Button className="bg-yellow-500 hover:bg-yellow-600 text-white" onClick={() => { handleStatusChange(detailOrder, 'em_preparo'); setDetailOrder(null); }}>
                     <Play className="h-4 w-4 mr-1" /> Em Preparo
                   </Button>
                 )}
-                {detailOrder.kds_status === 'em_preparo' && (
+                {hasFullKds && detailOrder.kds_status === 'em_preparo' && (
                   <Button className="bg-green-500 hover:bg-green-600 text-white" onClick={() => { handleStatusChange(detailOrder, 'pronto'); setDetailOrder(null); }}>
                     <Check className="h-4 w-4 mr-1" /> Pronto
                   </Button>
@@ -423,7 +423,7 @@ export default function KdsPage() {
                     <CheckCircle className="h-4 w-4 mr-1" /> Entregue ao cliente
                   </Button>
                 )}
-                {(detailOrder.kds_status === 'novo' || detailOrder.kds_status === 'em_preparo') && (
+                {hasFullKds && (detailOrder.kds_status === 'novo' || detailOrder.kds_status === 'em_preparo') && (
                   <Button variant="outline" onClick={() => handlePrint(detailOrder)} disabled={printing}>
                     <Printer className="h-4 w-4 mr-1" /> Imprimir
                   </Button>
