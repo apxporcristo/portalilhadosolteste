@@ -20,7 +20,7 @@ import { UserPermissionsManager } from '@/components/UserPermissionsManager';
 import { FormasPagamentoSettings } from '@/components/FormasPagamentoSettings';
 import { PermissionGate } from '@/components/PermissionGate';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
-import { PedidosProntosAtendente } from '@/components/PedidosProntosAtendente';
+
 import { useFichasConsumo } from '@/hooks/useFichasConsumo';
 import { useComandas } from '@/hooks/useComandas';
 import { AuditoriaComandas } from '@/components/AuditoriaComandas';
@@ -284,10 +284,6 @@ const Index = () => {
           </>
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[50vh] gap-6 px-2">
-            {/* Pedidos prontos para o atendente - visível para quem tem acesso_kds ou acesso_ficha_consumo */}
-            {isLoggedIn && (canSeeKds || canSeeFichas) && (
-              <PedidosProntosAtendente userId={userSession?.user?.id || null} />
-            )}
             <Alert variant="default" className="border max-w-md w-full">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="font-medium">
@@ -358,7 +354,7 @@ const Index = () => {
               )}
 
               {/* KDS */}
-              {canSeeKds && (
+              {(canSeeKds || canSeeFichas) && (
                 <Card
                   className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-[1.02] border-2 hover:border-primary"
                   onClick={() => navigate('/kds')}
