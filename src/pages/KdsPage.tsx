@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChefHat, Clock, Printer, Check, Eye, RefreshCw, Play, CheckCircle, Search, Flame, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ChefHat, Clock, Printer, Check, Eye, RefreshCw, Play, CheckCircle, Search, Flame, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -55,8 +55,13 @@ export default function KdsPage() {
   const [search, setSearch] = useState('');
 
   // Split orders by status
+  const novos = useMemo(() => {
+    const filtered = allOrders.filter(o => o.kds_status === 'novo');
+    return filterBySearch(sortByUser(filtered, userId), search);
+  }, [allOrders, userId, search]);
+
   const emPreparo = useMemo(() => {
-    const filtered = allOrders.filter(o => o.kds_status === 'novo' || o.kds_status === 'em_preparo');
+    const filtered = allOrders.filter(o => o.kds_status === 'em_preparo');
     return filterBySearch(sortByUser(filtered, userId), search);
   }, [allOrders, userId, search]);
 
@@ -147,7 +152,7 @@ export default function KdsPage() {
     return `${Math.floor(mins / 60)}h${mins % 60}min`;
   };
 
-  const renderOrderCard = (order: KdsOrder, showEntregueBtn: boolean) => {
+  const renderOrderCard = (order: KdsOrder) => {
     const config = statusConfig[order.kds_status];
     const isNew = order.kds_status === 'novo';
     return (
@@ -220,7 +225,7 @@ export default function KdsPage() {
                 <Check className="h-3 w-3 mr-1" /> Pronto
               </Button>
             )}
-            {showEntregueBtn && (
+            {!hasFullKds && (order.kds_status === 'pronto' || order.kds_status === 'impresso') && (
               <Button
                 size="sm"
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white"
@@ -255,7 +260,7 @@ export default function KdsPage() {
     );
   }
 
-  const totalActive = emPreparo.length + prontos.length;
+  const totalActive = novos.length + emPreparo.length + prontos.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -293,8 +298,15 @@ export default function KdsPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="em_preparo" className="w-full">
-          <TabsList className="w-full max-w-lg grid grid-cols-3">
+        <Tabs defaultValue={hasFullKds ? "novos" : "em_preparo"} className="w-full">
+          <TabsList className={cn("w-full max-w-lg grid", hasFullKds ? "grid-cols-4" : "grid-cols-3")}>
+            {hasFullKds && (
+              <TabsTrigger value="novos" className="flex items-center gap-1 text-xs sm:text-sm">
+                <AlertCircle className="h-3 w-3" />
+                Novo
+                {novos.length > 0 && <Badge variant="outline" className="ml-1 text-[10px] px-1">{novos.length}</Badge>}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="em_preparo" className="flex items-center gap-1 text-xs sm:text-sm">
               <Flame className="h-3 w-3" />
               Preparação
@@ -311,6 +323,21 @@ export default function KdsPage() {
             </TabsTrigger>
           </TabsList>
 
+          {hasFullKds && (
+            <TabsContent value="novos" className="mt-4">
+              {novos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <AlertCircle className="h-12 w-12 mb-3 opacity-30" />
+                  <p>Nenhum pedido novo</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {novos.map(order => renderOrderCard(order))}
+                </div>
+              )}
+            </TabsContent>
+          )}
+
           <TabsContent value="em_preparo" className="mt-4">
             {emPreparo.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -319,7 +346,7 @@ export default function KdsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {emPreparo.map(order => renderOrderCard(order, false))}
+                {emPreparo.map(order => renderOrderCard(order))}
               </div>
             )}
           </TabsContent>
@@ -332,7 +359,7 @@ export default function KdsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {prontos.map(order => renderOrderCard(order, true))}
+                {prontos.map(order => renderOrderCard(order))}
               </div>
             )}
           </TabsContent>
@@ -345,7 +372,7 @@ export default function KdsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {entregues.map(order => renderOrderCard(order, false))}
+                {entregues.map(order => renderOrderCard(order))}
               </div>
             )}
           </TabsContent>
@@ -418,7 +445,7 @@ export default function KdsPage() {
                     <Check className="h-4 w-4 mr-1" /> Pronto
                   </Button>
                 )}
-                {(detailOrder.kds_status === 'pronto' || detailOrder.kds_status === 'impresso') && (
+                {!hasFullKds && (detailOrder.kds_status === 'pronto' || detailOrder.kds_status === 'impresso') && (
                   <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={markingId === detailOrder.id} onClick={() => handleEntregue(detailOrder.id)}>
                     <CheckCircle className="h-4 w-4 mr-1" /> Entregue ao cliente
                   </Button>
