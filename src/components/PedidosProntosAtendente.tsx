@@ -205,8 +205,13 @@ export function PedidosProntosAtendente({ userId }: Props) {
         />
       </div>
 
-      <Tabs defaultValue="em_preparo" className="w-full">
-        <TabsList className="w-full grid grid-cols-3">
+      <Tabs defaultValue="novos" className="w-full">
+        <TabsList className="w-full grid grid-cols-4">
+          <TabsTrigger value="novos" className="flex items-center gap-1 text-xs">
+            <Plus className="h-3 w-3" />
+            Novo
+            {novos.length > 0 && <Badge variant="outline" className="ml-1 text-[10px] px-1">{novos.length}</Badge>}
+          </TabsTrigger>
           <TabsTrigger value="em_preparo" className="flex items-center gap-1 text-xs">
             <Flame className="h-3 w-3" />
             Preparação
@@ -222,6 +227,16 @@ export function PedidosProntosAtendente({ userId }: Props) {
             Entregues
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="novos" className="mt-3 space-y-2">
+          {filteredNovos.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum pedido novo.</p>
+          ) : (
+            filteredNovos.map(order => (
+              <OrderCard key={order.id} order={order} showCancelBtn onCancel={(id) => setCancelConfirmId(id)} onDetail={setDetailOrder} markingId={markingId} />
+            ))
+          )}
+        </TabsContent>
 
         <TabsContent value="em_preparo" className="mt-3 space-y-2">
           {filteredEmPreparo.length === 0 ? (
