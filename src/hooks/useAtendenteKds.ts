@@ -148,9 +148,28 @@ export function useAtendenteKds(userId: string | null) {
     }
   }, []);
 
+  const novos = orders.filter(o => o.kds_status === 'novo' && o.atendente_user_id === userId);
   const emPreparo = sortOrders(orders.filter(o => o.kds_status === 'em_preparo'), userId);
   const prontos = sortOrders(orders.filter(o => o.kds_status === 'pronto'), userId);
   const entregues = sortOrders(orders.filter(o => o.kds_status === 'entregue'), userId);
 
-  return { orders, emPreparo, prontos, entregues, loading, marcarEntregue, refetch: fetchOrders };
+  const cancelarPedido = useCallback(async (orderId: string) => {
+    try {
+      const supabase = await getSupabaseClient();
+      const { error } = await supabase
+        .from('kds_orders' as any)
+        .update({
+          kds_status: 'cancelado',
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', orderId);
+      if (error) throw error;
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+    } catch (e) {
+      console.error('[AtendenteKDS] Erro ao cancelar:', e);
+      throw e;
+    }
+  }, []);
+
+  return { orders, novos, emPreparo, prontos, entregues, loading, marcarEntregue, cancelarPedido, refetch: fetchOrders };
 }
