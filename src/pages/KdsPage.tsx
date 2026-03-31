@@ -555,6 +555,52 @@ export default function KdsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Cancel reason dialog */}
+      <Dialog open={!!cancelDialogOrder} onOpenChange={(open) => { if (!open) { setCancelDialogOrder(null); setCancelMotivo(''); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-destructive" />
+              Cancelar Pedido
+            </DialogTitle>
+          </DialogHeader>
+          {cancelDialogOrder && (
+            <div className="space-y-4">
+              <div className="border rounded-lg p-3 bg-muted/50">
+                <p className="font-semibold">{cleanProdutoNome(cancelDialogOrder.produto_nome)}</p>
+                <p className="text-sm text-muted-foreground">x{cancelDialogOrder.quantidade}</p>
+                {cancelDialogOrder.nome_cliente && (
+                  <p className="text-sm text-muted-foreground">Cliente: {cancelDialogOrder.nome_cliente}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="motivo-cancel">Motivo do cancelamento *</Label>
+                <Textarea
+                  id="motivo-cancel"
+                  placeholder="Ex: cliente desistiu, pedido duplicado, erro no pedido..."
+                  value={cancelMotivo}
+                  onChange={(e) => setCancelMotivo(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <DialogFooter className="flex gap-2">
+                <Button variant="outline" onClick={() => { setCancelDialogOrder(null); setCancelMotivo(''); }}>
+                  Voltar
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!cancelMotivo.trim() || markingId === cancelDialogOrder.id}
+                  onClick={handleConfirmCancel}
+                >
+                  <XCircle className="h-4 w-4 mr-1" />
+                  {markingId === cancelDialogOrder.id ? 'Cancelando...' : 'Confirmar cancelamento'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
