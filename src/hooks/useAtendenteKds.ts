@@ -102,7 +102,7 @@ export function useAtendenteKds(userId: string | null) {
           const row = payload.new as any;
           if (!row) return;
 
-          if (['em_preparo', 'pronto', 'entregue'].includes(row.kds_status)) {
+          if (['novo', 'em_preparo', 'pronto', 'entregue'].includes(row.kds_status)) {
             setOrders(prev => {
               const exists = prev.find(o => o.id === row.id);
               if (exists) return prev.map(o => o.id === row.id ? { ...o, ...row } : o);
