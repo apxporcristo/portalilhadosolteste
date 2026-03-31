@@ -57,7 +57,9 @@ function OrderCard({
   };
 
   const borderColor =
-    order.kds_status === 'em_preparo'
+    order.kds_status === 'novo'
+      ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20'
+      : order.kds_status === 'em_preparo'
       ? 'border-orange-400 bg-orange-50 dark:bg-orange-950/20'
       : order.kds_status === 'pronto'
       ? 'border-green-500 bg-green-50 dark:bg-green-950/20'
