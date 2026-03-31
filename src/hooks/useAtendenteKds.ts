@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from '@/hooks/useVouchers';
+import { getSupabaseConfig } from '@/lib/supabase-external';
 
 export interface KdsProntoOrder {
   id: string;
@@ -39,6 +40,54 @@ function playAlertSound() {
       osc2.stop(ctx.currentTime + 0.15);
     }, 200);
   } catch { /* ignore */ }
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const maybeError = error as Record<string, unknown>;
+    if (typeof maybeError.message === 'string') return maybeError.message;
+    if (typeof maybeError.error === 'string') return maybeError.error;
+  }
+  return 'Erro ao cancelar pedido.';
+}
+
+async function cancelOrderViaFunction(params: {
+  callerUserId: string;
+  orderId: string;
+  motivo: string;
+  canceladoPor?: string;
+}) {
+  const { url, anonKey } = await getSupabaseConfig();
+  const response = await fetch(`${url}/functions/v1/cancel-kds-order`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${anonKey}`,
+      'apikey': anonKey,
+    },
+    body: JSON.stringify({
+      caller_user_id: params.callerUserId,
+      order_id: params.orderId,
+      motivo_cancelamento: params.motivo,
+      cancelado_por: params.canceladoPor ?? null,
+    }),
+  });
+
+  const text = await response.text();
+  let data: any = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { error: text };
+  }
+
+  if (!response.ok || data?.error) {
+    throw new Error(data?.error || `HTTP ${response.status}: ${text}`);
+  }
+
+  return data;
 }
 
 /** Sort orders: logged user's orders first, then by created_at */
@@ -155,24 +204,28 @@ export function useAtendenteKds(userId: string | null) {
 
   const cancelarPedido = useCallback(async (orderId: string, motivo?: string, canceladoPor?: string) => {
     try {
-      const supabase = await getSupabaseClient();
-      const { error } = await supabase
-        .from('kds_orders' as any)
-        .update({
-          kds_status: 'cancelado',
-          motivo_cancelamento: motivo || null,
-          cancelado_at: new Date().toISOString(),
-          cancelado_por: canceladoPor || null,
-          updated_at: new Date().toISOString(),
-        } as any)
-        .eq('id', orderId);
-      if (error) throw error;
+      if (!userId) {
+        throw new Error('Sessão inválida. Faça login novamente.');
+      }
+
+      const motivoTrimmed = motivo?.trim();
+      if (!motivoTrimmed) {
+        throw new Error('Motivo de cancelamento é obrigatório.');
+      }
+
+      await cancelOrderViaFunction({
+        callerUserId: userId,
+        orderId,
+        motivo: motivoTrimmed,
+        canceladoPor,
+      });
+
       setOrders(prev => prev.filter(o => o.id !== orderId));
     } catch (e) {
       console.error('[AtendenteKDS] Erro ao cancelar:', e);
-      throw e;
+      throw new Error(extractErrorMessage(e));
     }
-  }, []);
+  }, [userId]);
 
   return { orders, novos, emPreparo, prontos, entregues, loading, marcarEntregue, cancelarPedido, refetch: fetchOrders };
 }
