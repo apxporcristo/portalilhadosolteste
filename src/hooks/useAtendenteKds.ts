@@ -67,7 +67,7 @@ export function useAtendenteKds(userId: string | null) {
       const { data, error } = await supabase
         .from('kds_orders' as any)
         .select('*')
-        .in('kds_status', ['em_preparo', 'pronto', 'entregue'])
+        .in('kds_status', ['novo', 'em_preparo', 'pronto', 'entregue'])
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString())
         .order('created_at', { ascending: true });
