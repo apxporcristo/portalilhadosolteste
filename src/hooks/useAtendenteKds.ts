@@ -67,7 +67,7 @@ export function useAtendenteKds(userId: string | null) {
       const { data, error } = await supabase
         .from('kds_orders' as any)
         .select('*')
-        .in('kds_status', ['em_preparo', 'pronto', 'entregue'])
+        .in('kds_status', ['novo', 'em_preparo', 'pronto', 'entregue'])
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString())
         .order('created_at', { ascending: true });
@@ -102,7 +102,7 @@ export function useAtendenteKds(userId: string | null) {
           const row = payload.new as any;
           if (!row) return;
 
-          if (['em_preparo', 'pronto', 'entregue'].includes(row.kds_status)) {
+          if (['novo', 'em_preparo', 'pronto', 'entregue'].includes(row.kds_status)) {
             setOrders(prev => {
               const exists = prev.find(o => o.id === row.id);
               if (exists) return prev.map(o => o.id === row.id ? { ...o, ...row } : o);
@@ -148,9 +148,28 @@ export function useAtendenteKds(userId: string | null) {
     }
   }, []);
 
+  const novos = orders.filter(o => o.kds_status === 'novo' && o.atendente_user_id === userId);
   const emPreparo = sortOrders(orders.filter(o => o.kds_status === 'em_preparo'), userId);
   const prontos = sortOrders(orders.filter(o => o.kds_status === 'pronto'), userId);
   const entregues = sortOrders(orders.filter(o => o.kds_status === 'entregue'), userId);
 
-  return { orders, emPreparo, prontos, entregues, loading, marcarEntregue, refetch: fetchOrders };
+  const cancelarPedido = useCallback(async (orderId: string) => {
+    try {
+      const supabase = await getSupabaseClient();
+      const { error } = await supabase
+        .from('kds_orders' as any)
+        .update({
+          kds_status: 'cancelado',
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', orderId);
+      if (error) throw error;
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+    } catch (e) {
+      console.error('[AtendenteKDS] Erro ao cancelar:', e);
+      throw e;
+    }
+  }, []);
+
+  return { orders, novos, emPreparo, prontos, entregues, loading, marcarEntregue, cancelarPedido, refetch: fetchOrders };
 }

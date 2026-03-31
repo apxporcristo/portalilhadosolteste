@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChefHat, Check, Clock, Eye, Package, Flame, CheckCircle2, Search } from 'lucide-react';
+import { ChefHat, Check, Clock, Eye, Package, Flame, CheckCircle2, Search, XCircle, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,18 +9,21 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { useAtendenteKds, KdsProntoOrder } from '@/hooks/useAtendenteKds';
 import { parseComplementos, cleanProdutoNome } from '@/lib/kds-complementos';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Props {
   userId: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  novo: 'Novo',
   em_preparo: 'Em preparação',
   pronto: 'Pronto',
   entregue: 'Entregue',
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  novo: 'bg-blue-500 text-white',
   em_preparo: 'bg-orange-500 text-white',
   pronto: 'bg-green-600 text-white',
   entregue: 'bg-muted text-muted-foreground',
@@ -29,13 +32,17 @@ const STATUS_COLORS: Record<string, string> = {
 function OrderCard({
   order,
   showEntregueBtn,
+  showCancelBtn,
   onEntregue,
+  onCancel,
   onDetail,
   markingId,
 }: {
   order: KdsProntoOrder;
   showEntregueBtn?: boolean;
+  showCancelBtn?: boolean;
   onEntregue?: (id: string) => void;
+  onCancel?: (id: string) => void;
   onDetail: (o: KdsProntoOrder) => void;
   markingId: string | null;
 }) {
@@ -50,7 +57,9 @@ function OrderCard({
   };
 
   const borderColor =
-    order.kds_status === 'em_preparo'
+    order.kds_status === 'novo'
+      ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20'
+      : order.kds_status === 'em_preparo'
       ? 'border-orange-400 bg-orange-50 dark:bg-orange-950/20'
       : order.kds_status === 'pronto'
       ? 'border-green-500 bg-green-50 dark:bg-green-950/20'
@@ -93,6 +102,18 @@ function OrderCard({
           {order.nome_atendente && <span> · {order.nome_atendente}</span>}
         </div>
         <div className="flex gap-2 pt-1">
+          {showCancelBtn && onCancel && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="flex-1"
+              disabled={markingId === order.id}
+              onClick={() => onCancel(order.id)}
+            >
+              <XCircle className="h-3 w-3 mr-1" />
+              {markingId === order.id ? 'Cancelando...' : 'Cancelar pedido'}
+            </Button>
+          )}
           {showEntregueBtn && onEntregue && (
             <Button
               size="sm"
@@ -123,11 +144,13 @@ function filterBySearch(orders: KdsProntoOrder[], search: string): KdsProntoOrde
 }
 
 export function PedidosProntosAtendente({ userId }: Props) {
-  const { emPreparo, prontos, entregues, loading, marcarEntregue } = useAtendenteKds(userId);
+  const { novos, emPreparo, prontos, entregues, loading, marcarEntregue, cancelarPedido } = useAtendenteKds(userId);
   const [detailOrder, setDetailOrder] = useState<KdsProntoOrder | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
 
+  const filteredNovos = useMemo(() => filterBySearch(novos, search), [novos, search]);
   const filteredEmPreparo = useMemo(() => filterBySearch(emPreparo, search), [emPreparo, search]);
   const filteredProntos = useMemo(() => filterBySearch(prontos, search), [prontos, search]);
   const filteredEntregues = useMemo(() => filterBySearch(entregues, search), [entregues, search]);
@@ -145,7 +168,21 @@ export function PedidosProntosAtendente({ userId }: Props) {
     }
   };
 
-  const totalCount = emPreparo.length + prontos.length;
+  const handleCancelar = async (orderId: string) => {
+    setMarkingId(orderId);
+    try {
+      await cancelarPedido(orderId);
+      toast({ title: 'Pedido cancelado!' });
+      if (detailOrder?.id === orderId) setDetailOrder(null);
+    } catch {
+      toast({ title: 'Erro ao cancelar pedido', variant: 'destructive' });
+    } finally {
+      setMarkingId(null);
+      setCancelConfirmId(null);
+    }
+  };
+
+  const totalCount = novos.length + emPreparo.length + prontos.length;
 
   if (loading || !userId || (totalCount === 0 && entregues.length === 0)) return null;
 
@@ -168,8 +205,13 @@ export function PedidosProntosAtendente({ userId }: Props) {
         />
       </div>
 
-      <Tabs defaultValue="em_preparo" className="w-full">
-        <TabsList className="w-full grid grid-cols-3">
+      <Tabs defaultValue="novos" className="w-full">
+        <TabsList className="w-full grid grid-cols-4">
+          <TabsTrigger value="novos" className="flex items-center gap-1 text-xs">
+            <Plus className="h-3 w-3" />
+            Novo
+            {novos.length > 0 && <Badge variant="outline" className="ml-1 text-[10px] px-1">{novos.length}</Badge>}
+          </TabsTrigger>
           <TabsTrigger value="em_preparo" className="flex items-center gap-1 text-xs">
             <Flame className="h-3 w-3" />
             Preparação
@@ -185,6 +227,16 @@ export function PedidosProntosAtendente({ userId }: Props) {
             Entregues
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="novos" className="mt-3 space-y-2">
+          {filteredNovos.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum pedido novo.</p>
+          ) : (
+            filteredNovos.map(order => (
+              <OrderCard key={order.id} order={order} showCancelBtn onCancel={(id) => setCancelConfirmId(id)} onDetail={setDetailOrder} markingId={markingId} />
+            ))
+          )}
+        </TabsContent>
 
         <TabsContent value="em_preparo" className="mt-3 space-y-2">
           {filteredEmPreparo.length === 0 ? (
@@ -274,6 +326,16 @@ export function PedidosProntosAtendente({ userId }: Props) {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!cancelConfirmId}
+        onOpenChange={(open) => !open && setCancelConfirmId(null)}
+        title="Cancelar pedido"
+        description="Tem certeza que deseja cancelar este pedido? Esta ação não pode ser desfeita."
+        onConfirm={() => cancelConfirmId && handleCancelar(cancelConfirmId)}
+        confirmText="Cancelar pedido"
+        cancelText="Voltar"
+      />
     </div>
   );
 }
