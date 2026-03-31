@@ -65,6 +65,13 @@ export default function KdsPage() {
     return filterBySearch(sortByUser(filtered, userId), search);
   }, [allOrders, userId, search]);
 
+  // Garçom: only own orders with status 'novo'
+  const novosGarcom = useMemo(() => {
+    if (hasFullKds) return [];
+    const filtered = allOrders.filter(o => o.kds_status === 'novo' && (o as any).atendente_user_id === userId);
+    return filterBySearch(filtered, search);
+  }, [allOrders, userId, search, hasFullKds]);
+
   const emPreparo = useMemo(() => {
     const filtered = allOrders.filter(o => o.kds_status === 'em_preparo');
     return filterBySearch(sortByUser(filtered, userId), search);
