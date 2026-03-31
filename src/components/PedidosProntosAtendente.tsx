@@ -3,13 +3,15 @@ import { ChefHat, Check, Clock, Eye, Package, Flame, CheckCircle2, Search, XCirc
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { useAtendenteKds, KdsProntoOrder } from '@/hooks/useAtendenteKds';
 import { parseComplementos, cleanProdutoNome } from '@/lib/kds-complementos';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { useOptionalUserSession } from '@/contexts/UserSessionContext';
 
 interface Props {
   userId: string | null;
@@ -144,11 +146,14 @@ function filterBySearch(orders: KdsProntoOrder[], search: string): KdsProntoOrde
 }
 
 export function PedidosProntosAtendente({ userId }: Props) {
+  const userSession = useOptionalUserSession();
+  const userName = userSession?.access?.nome || userSession?.user?.email || undefined;
   const { novos, emPreparo, prontos, entregues, loading, marcarEntregue, cancelarPedido } = useAtendenteKds(userId);
   const [detailOrder, setDetailOrder] = useState<KdsProntoOrder | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [cancelDialogOrder, setCancelDialogOrder] = useState<KdsProntoOrder | null>(null);
+  const [cancelMotivo, setCancelMotivo] = useState('');
 
   const filteredNovos = useMemo(() => filterBySearch(novos, search), [novos, search]);
   const filteredEmPreparo = useMemo(() => filterBySearch(emPreparo, search), [emPreparo, search]);
@@ -168,17 +173,29 @@ export function PedidosProntosAtendente({ userId }: Props) {
     }
   };
 
-  const handleCancelar = async (orderId: string) => {
-    setMarkingId(orderId);
+  const handleOpenCancelDialog = (order: KdsProntoOrder) => {
+    setCancelDialogOrder(order);
+    setCancelMotivo('');
+  };
+
+  const handleCancelar = async () => {
+    if (!cancelDialogOrder) return;
+    if (!cancelMotivo.trim()) {
+      toast({ title: 'Informe o motivo do cancelamento', variant: 'destructive' });
+      return;
+    }
+
+    setMarkingId(cancelDialogOrder.id);
     try {
-      await cancelarPedido(orderId);
+      await cancelarPedido(cancelDialogOrder.id, cancelMotivo.trim(), userName);
       toast({ title: 'Pedido cancelado!' });
-      if (detailOrder?.id === orderId) setDetailOrder(null);
+      if (detailOrder?.id === cancelDialogOrder.id) setDetailOrder(null);
+      setCancelDialogOrder(null);
+      setCancelMotivo('');
     } catch {
       toast({ title: 'Erro ao cancelar pedido', variant: 'destructive' });
     } finally {
       setMarkingId(null);
-      setCancelConfirmId(null);
     }
   };
 
@@ -233,7 +250,7 @@ export function PedidosProntosAtendente({ userId }: Props) {
             <p className="text-sm text-muted-foreground text-center py-4">Nenhum pedido novo.</p>
           ) : (
             filteredNovos.map(order => (
-              <OrderCard key={order.id} order={order} showCancelBtn onCancel={(id) => setCancelConfirmId(id)} onDetail={setDetailOrder} markingId={markingId} />
+              <OrderCard key={order.id} order={order} showCancelBtn onCancel={() => handleOpenCancelDialog(order)} onDetail={setDetailOrder} markingId={markingId} />
             ))
           )}
         </TabsContent>
@@ -327,15 +344,52 @@ export function PedidosProntosAtendente({ userId }: Props) {
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog
-        open={!!cancelConfirmId}
-        onOpenChange={(open) => !open && setCancelConfirmId(null)}
-        title="Cancelar pedido"
-        description="Tem certeza que deseja cancelar este pedido? Esta ação não pode ser desfeita."
-        onConfirm={() => cancelConfirmId && handleCancelar(cancelConfirmId)}
-        confirmText="Cancelar pedido"
-        cancelText="Voltar"
-      />
+      <Dialog open={!!cancelDialogOrder} onOpenChange={(open) => { if (!open) { setCancelDialogOrder(null); setCancelMotivo(''); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-destructive" />
+              Cancelar Pedido
+            </DialogTitle>
+          </DialogHeader>
+          {cancelDialogOrder && (
+            <div className="space-y-4">
+              <div className="border rounded-lg p-3 bg-muted/50">
+                <p className="font-semibold">{cleanProdutoNome(cancelDialogOrder.produto_nome)}</p>
+                <p className="text-sm text-muted-foreground">x{cancelDialogOrder.quantidade}</p>
+                {cancelDialogOrder.nome_cliente && (
+                  <p className="text-sm text-muted-foreground">Cliente: {cancelDialogOrder.nome_cliente}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="motivo-cancel-atendente">Motivo do cancelamento *</Label>
+                <Textarea
+                  id="motivo-cancel-atendente"
+                  placeholder="Ex: cliente desistiu, pedido duplicado, erro no pedido..."
+                  value={cancelMotivo}
+                  onChange={(e) => setCancelMotivo(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <DialogFooter className="flex gap-2">
+                <Button variant="outline" onClick={() => { setCancelDialogOrder(null); setCancelMotivo(''); }}>
+                  Voltar
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={!cancelMotivo.trim() || markingId === cancelDialogOrder.id}
+                  onClick={handleCancelar}
+                >
+                  <XCircle className="h-4 w-4 mr-1" />
+                  {markingId === cancelDialogOrder.id ? 'Cancelando...' : 'Confirmar cancelamento'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
