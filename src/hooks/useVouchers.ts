@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { supabase as lovableSupabase } from '@/integrations/supabase/client';
 import { normalizeTempoValidade } from '@/lib/voucher-utils';
 import { toast } from '@/hooks/use-toast';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseClient as getExternalSupabaseClient } from '@/lib/supabase-external';
 
 function getBrazilISOString(): string {
   const now = new Date();
@@ -27,7 +27,7 @@ export async function getSupabaseClient(): Promise<SupabaseClient> {
     if (data?.value) {
       const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
       if (parsed.supabase_url && parsed.supabase_anon_key) {
-        return createClient(parsed.supabase_url, parsed.supabase_anon_key);
+        return getExternalSupabaseClient();
       }
     }
   } catch (e) {
