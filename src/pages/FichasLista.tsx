@@ -507,6 +507,7 @@ export default function FichasLista() {
             nome_cliente: nomeCliente.trim() || null,
             telefone_cliente: telefoneCliente.trim() || null,
             nome_atendente: nomeAtendente.trim() || null,
+            atendente_user_id: userSession?.user?.id || null,
             complementos: item.selectedItems.length > 0 ? item.selectedItems.map(si => `${si.categoria}: ${si.item.nome}`).join(', ') : null,
             observacao: item.observacao || (produto as any)?.obs || null,
             kds_status: 'novo',
