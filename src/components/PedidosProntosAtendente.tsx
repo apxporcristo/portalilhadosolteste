@@ -326,6 +326,16 @@ export function PedidosProntosAtendente({ userId }: Props) {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!cancelConfirmId}
+        onOpenChange={(open) => !open && setCancelConfirmId(null)}
+        title="Cancelar pedido"
+        description="Tem certeza que deseja cancelar este pedido? Esta ação não pode ser desfeita."
+        onConfirm={() => cancelConfirmId && handleCancelar(cancelConfirmId)}
+        confirmText="Cancelar pedido"
+        cancelText="Voltar"
+      />
     </div>
   );
 }
