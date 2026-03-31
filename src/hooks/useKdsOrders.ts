@@ -174,6 +174,27 @@ export function useKdsOrders() {
     }
   }, []);
 
+  const cancelarPedido = useCallback(async (orderId: string, motivo: string, canceladoPor?: string) => {
+    try {
+      const supabase = await getSupabaseClient();
+      const { error } = await supabase
+        .from('kds_orders' as any)
+        .update({
+          kds_status: 'cancelado',
+          motivo_cancelamento: motivo,
+          cancelado_at: new Date().toISOString(),
+          cancelado_por: canceladoPor || null,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', orderId);
+      if (error) throw error;
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+    } catch (e) {
+      console.error('[KDS] Erro ao cancelar pedido:', e);
+      throw e;
+    }
+  }, []);
+
   const filteredOrders = statusFilter === 'all'
     ? orders.filter(o => o.kds_status !== 'entregue')
     : orders.filter(o => o.kds_status === statusFilter);
@@ -194,6 +215,7 @@ export function useKdsOrders() {
     statusFilter,
     setStatusFilter,
     updateStatus,
+    cancelarPedido,
     refetch: fetchOrders,
   };
 }

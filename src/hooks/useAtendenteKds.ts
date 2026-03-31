@@ -153,13 +153,16 @@ export function useAtendenteKds(userId: string | null) {
   const prontos = sortOrders(orders.filter(o => o.kds_status === 'pronto'), userId);
   const entregues = sortOrders(orders.filter(o => o.kds_status === 'entregue'), userId);
 
-  const cancelarPedido = useCallback(async (orderId: string) => {
+  const cancelarPedido = useCallback(async (orderId: string, motivo?: string, canceladoPor?: string) => {
     try {
       const supabase = await getSupabaseClient();
       const { error } = await supabase
         .from('kds_orders' as any)
         .update({
           kds_status: 'cancelado',
+          motivo_cancelamento: motivo || null,
+          cancelado_at: new Date().toISOString(),
+          cancelado_por: canceladoPor || null,
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', orderId);
