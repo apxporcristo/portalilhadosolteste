@@ -16,12 +16,14 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  novo: 'Novo',
   em_preparo: 'Em preparação',
   pronto: 'Pronto',
   entregue: 'Entregue',
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  novo: 'bg-blue-500 text-white',
   em_preparo: 'bg-orange-500 text-white',
   pronto: 'bg-green-600 text-white',
   entregue: 'bg-muted text-muted-foreground',
