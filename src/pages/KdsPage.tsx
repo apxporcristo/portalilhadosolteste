@@ -50,7 +50,7 @@ export default function KdsPage() {
   const printerCtx = usePrinterContext();
   const userSession = useOptionalUserSession();
   const userId = userSession?.user?.id || null;
-  const userName = userSession?.user?.email || null;
+  const userName = userSession?.access?.nome || userSession?.user?.email || null;
   const hasFullKds = userSession?.access?.acesso_kds === true;
   const [detailOrder, setDetailOrder] = useState<KdsOrder | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -126,8 +126,12 @@ export default function KdsPage() {
       toast({ title: 'Pedido cancelado com sucesso!' });
       setCancelDialogOrder(null);
       setCancelMotivo('');
-    } catch {
-      toast({ title: 'Erro ao cancelar pedido', variant: 'destructive' });
+    } catch (error) {
+      toast({
+        title: 'Erro ao cancelar pedido',
+        description: error instanceof Error ? error.message : undefined,
+        variant: 'destructive',
+      });
     } finally {
       setMarkingId(null);
     }
