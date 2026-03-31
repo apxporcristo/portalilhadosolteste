@@ -331,15 +331,17 @@ export default function KdsPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue={hasFullKds ? "novos" : "em_preparo"} className="w-full">
-          <TabsList className={cn("w-full max-w-lg grid", hasFullKds ? "grid-cols-4" : "grid-cols-3")}>
-            {hasFullKds && (
-              <TabsTrigger value="novos" className="flex items-center gap-1 text-xs sm:text-sm">
-                <AlertCircle className="h-3 w-3" />
-                Novo
-                {novos.length > 0 && <Badge variant="outline" className="ml-1 text-[10px] px-1">{novos.length}</Badge>}
-              </TabsTrigger>
-            )}
+        <Tabs defaultValue="novos" className="w-full">
+          <TabsList className="w-full max-w-lg grid grid-cols-4">
+            <TabsTrigger value="novos" className="flex items-center gap-1 text-xs sm:text-sm">
+              {hasFullKds ? <AlertCircle className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+              Novo
+              {(hasFullKds ? novos.length : novosGarcom.length) > 0 && (
+                <Badge variant="outline" className="ml-1 text-[10px] px-1">
+                  {hasFullKds ? novos.length : novosGarcom.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="em_preparo" className="flex items-center gap-1 text-xs sm:text-sm">
               <Flame className="h-3 w-3" />
               Preparação
@@ -356,9 +358,9 @@ export default function KdsPage() {
             </TabsTrigger>
           </TabsList>
 
-          {hasFullKds && (
-            <TabsContent value="novos" className="mt-4">
-              {novos.length === 0 ? (
+          <TabsContent value="novos" className="mt-4">
+            {hasFullKds ? (
+              novos.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                   <AlertCircle className="h-12 w-12 mb-3 opacity-30" />
                   <p>Nenhum pedido encontrado hoje</p>
@@ -367,9 +369,70 @@ export default function KdsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {novos.map(order => renderOrderCard(order))}
                 </div>
-              )}
-            </TabsContent>
-          )}
+              )
+            ) : (
+              novosGarcom.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <Plus className="h-12 w-12 mb-3 opacity-30" />
+                  <p>Nenhum pedido novo seu</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {novosGarcom.map(order => (
+                    <Card
+                      key={order.id}
+                      className="transition-all border-2 border-blue-400 bg-blue-50 dark:bg-blue-950/20 shadow-md"
+                    >
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge className="bg-blue-500 text-white flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            Novo
+                          </Badge>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {getTimeSince(order.created_at)}
+                          </span>
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-lg text-foreground leading-tight">{cleanProdutoNome(order.produto_nome)}</h3>
+                          <p className="text-sm text-muted-foreground">{order.categoria_nome}</p>
+                        </div>
+                        <Badge variant="outline" className="text-base font-bold px-3 py-1">x{order.quantidade}</Badge>
+                        {order.complementos && (() => {
+                          const items = parseComplementos(order.complementos);
+                          return items.length > 0 ? (
+                            <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 space-y-0.5">
+                              <span className="font-semibold">Complementos:</span>
+                              {items.map((c, i) => <p key={i}>• {c}</p>)}
+                            </div>
+                          ) : null;
+                        })()}
+                        {order.observacao && (
+                          <p className="text-xs text-muted-foreground italic bg-muted rounded px-2 py-1">
+                            Obs: {order.observacao}
+                          </p>
+                        )}
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          {order.nome_cliente && <p>Cliente: {order.nome_cliente}</p>}
+                          <p>{formatTime(order.created_at)}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="w-full"
+                          disabled={markingId === order.id}
+                          onClick={(e) => { e.stopPropagation(); handleOpenCancelDialog(order); }}
+                        >
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Cancelar pedido
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )
+            )}
+          </TabsContent>
 
           <TabsContent value="em_preparo" className="mt-4">
             {emPreparo.length === 0 ? (
