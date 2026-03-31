@@ -102,6 +102,18 @@ function OrderCard({
           {order.nome_atendente && <span> · {order.nome_atendente}</span>}
         </div>
         <div className="flex gap-2 pt-1">
+          {showCancelBtn && onCancel && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="flex-1"
+              disabled={markingId === order.id}
+              onClick={() => onCancel(order.id)}
+            >
+              <XCircle className="h-3 w-3 mr-1" />
+              {markingId === order.id ? 'Cancelando...' : 'Cancelar pedido'}
+            </Button>
+          )}
           {showEntregueBtn && onEntregue && (
             <Button
               size="sm"
