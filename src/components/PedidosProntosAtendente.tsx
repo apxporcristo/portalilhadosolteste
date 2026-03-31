@@ -32,13 +32,17 @@ const STATUS_COLORS: Record<string, string> = {
 function OrderCard({
   order,
   showEntregueBtn,
+  showCancelBtn,
   onEntregue,
+  onCancel,
   onDetail,
   markingId,
 }: {
   order: KdsProntoOrder;
   showEntregueBtn?: boolean;
+  showCancelBtn?: boolean;
   onEntregue?: (id: string) => void;
+  onCancel?: (id: string) => void;
   onDetail: (o: KdsProntoOrder) => void;
   markingId: string | null;
 }) {
