@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from '@/hooks/useVouchers';
 import { complementosParaVoz, cleanProdutoNome } from '@/lib/kds-complementos';
+import { cancelKdsOrder, extractKdsCancelError } from '@/lib/kds-cancel';
 
 export type KdsStatus = 'novo' | 'em_preparo' | 'pronto' | 'impresso' | 'entregue';
 
@@ -176,22 +177,21 @@ export function useKdsOrders() {
 
   const cancelarPedido = useCallback(async (orderId: string, motivo: string, canceladoPor?: string) => {
     try {
-      const supabase = await getSupabaseClient();
-      const { error } = await supabase
-        .from('kds_orders' as any)
-        .update({
-          kds_status: 'cancelado',
-          motivo_cancelamento: motivo,
-          cancelado_at: new Date().toISOString(),
-          cancelado_por: canceladoPor || null,
-          updated_at: new Date().toISOString(),
-        } as any)
-        .eq('id', orderId);
-      if (error) throw error;
+      const motivoTrimmed = motivo.trim();
+      if (!motivoTrimmed) {
+        throw new Error('Motivo de cancelamento é obrigatório.');
+      }
+
+      await cancelKdsOrder({
+        orderId,
+        motivo: motivoTrimmed,
+        canceladoPor,
+      });
+
       setOrders(prev => prev.filter(o => o.id !== orderId));
     } catch (e) {
       console.error('[KDS] Erro ao cancelar pedido:', e);
-      throw e;
+      throw new Error(extractKdsCancelError(e));
     }
   }, []);
 
