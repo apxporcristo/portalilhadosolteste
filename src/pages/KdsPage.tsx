@@ -50,7 +50,7 @@ export default function KdsPage() {
   const printerCtx = usePrinterContext();
   const userSession = useOptionalUserSession();
   const userId = userSession?.user?.id || null;
-  const userName = userSession?.profile?.nome || null;
+  const userName = userSession?.user?.email || null;
   const hasFullKds = userSession?.access?.acesso_kds === true;
   const [detailOrder, setDetailOrder] = useState<KdsOrder | null>(null);
   const [printing, setPrinting] = useState(false);
