@@ -109,6 +109,30 @@ export default function KdsPage() {
     }
   };
 
+  const handleOpenCancelDialog = (order: KdsOrder) => {
+    setCancelDialogOrder(order);
+    setCancelMotivo('');
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelDialogOrder) return;
+    if (!cancelMotivo.trim()) {
+      toast({ title: 'Informe o motivo do cancelamento', variant: 'destructive' });
+      return;
+    }
+    setMarkingId(cancelDialogOrder.id);
+    try {
+      await cancelarPedido(cancelDialogOrder.id, cancelMotivo.trim(), userName || undefined);
+      toast({ title: 'Pedido cancelado com sucesso!' });
+      setCancelDialogOrder(null);
+      setCancelMotivo('');
+    } catch {
+      toast({ title: 'Erro ao cancelar pedido', variant: 'destructive' });
+    } finally {
+      setMarkingId(null);
+    }
+  };
+
   const handlePrint = async (order: KdsOrder) => {
     setPrinting(true);
     try {
