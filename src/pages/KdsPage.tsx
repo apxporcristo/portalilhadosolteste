@@ -46,15 +46,18 @@ function filterBySearch(orders: KdsOrder[], search: string): KdsOrder[] {
 
 export default function KdsPage() {
   const navigate = useNavigate();
-  const { allOrders, loading, updateStatus, refetch } = useKdsOrders();
+  const { allOrders, loading, updateStatus, cancelarPedido, refetch } = useKdsOrders();
   const printerCtx = usePrinterContext();
   const userSession = useOptionalUserSession();
   const userId = userSession?.user?.id || null;
+  const userName = userSession?.profile?.nome || null;
   const hasFullKds = userSession?.access?.acesso_kds === true;
   const [detailOrder, setDetailOrder] = useState<KdsOrder | null>(null);
   const [printing, setPrinting] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [cancelDialogOrder, setCancelDialogOrder] = useState<KdsOrder | null>(null);
+  const [cancelMotivo, setCancelMotivo] = useState('');
 
   // Split orders by status
   const novos = useMemo(() => {
