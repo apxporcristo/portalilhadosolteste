@@ -215,6 +215,7 @@ export function useKdsOrders() {
     statusFilter,
     setStatusFilter,
     updateStatus,
+    cancelarPedido,
     refetch: fetchOrders,
   };
 }
