@@ -144,11 +144,13 @@ function filterBySearch(orders: KdsProntoOrder[], search: string): KdsProntoOrde
 }
 
 export function PedidosProntosAtendente({ userId }: Props) {
-  const { emPreparo, prontos, entregues, loading, marcarEntregue } = useAtendenteKds(userId);
+  const { novos, emPreparo, prontos, entregues, loading, marcarEntregue, cancelarPedido } = useAtendenteKds(userId);
   const [detailOrder, setDetailOrder] = useState<KdsProntoOrder | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
 
+  const filteredNovos = useMemo(() => filterBySearch(novos, search), [novos, search]);
   const filteredEmPreparo = useMemo(() => filterBySearch(emPreparo, search), [emPreparo, search]);
   const filteredProntos = useMemo(() => filterBySearch(prontos, search), [prontos, search]);
   const filteredEntregues = useMemo(() => filterBySearch(entregues, search), [entregues, search]);
@@ -166,7 +168,21 @@ export function PedidosProntosAtendente({ userId }: Props) {
     }
   };
 
-  const totalCount = emPreparo.length + prontos.length;
+  const handleCancelar = async (orderId: string) => {
+    setMarkingId(orderId);
+    try {
+      await cancelarPedido(orderId);
+      toast({ title: 'Pedido cancelado!' });
+      if (detailOrder?.id === orderId) setDetailOrder(null);
+    } catch {
+      toast({ title: 'Erro ao cancelar pedido', variant: 'destructive' });
+    } finally {
+      setMarkingId(null);
+      setCancelConfirmId(null);
+    }
+  };
+
+  const totalCount = novos.length + emPreparo.length + prontos.length;
 
   if (loading || !userId || (totalCount === 0 && entregues.length === 0)) return null;
 
