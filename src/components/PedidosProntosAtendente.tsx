@@ -192,8 +192,12 @@ export function PedidosProntosAtendente({ userId }: Props) {
       if (detailOrder?.id === cancelDialogOrder.id) setDetailOrder(null);
       setCancelDialogOrder(null);
       setCancelMotivo('');
-    } catch {
-      toast({ title: 'Erro ao cancelar pedido', variant: 'destructive' });
+    } catch (error) {
+      toast({
+        title: 'Erro ao cancelar pedido',
+        description: error instanceof Error ? error.message : undefined,
+        variant: 'destructive',
+      });
     } finally {
       setMarkingId(null);
     }

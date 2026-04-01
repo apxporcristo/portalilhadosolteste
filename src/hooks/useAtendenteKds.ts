@@ -16,6 +16,11 @@ export interface KdsProntoOrder {
   pronto_at: string | null;
   entregue_at: string | null;
   kds_status: string;
+  cancelado_at?: string | null;
+}
+
+function isCancelledOrder(order: Partial<KdsProntoOrder> & { cancelado_at?: string | null }) {
+  return order.cancelado_at != null || order.kds_status === 'cancelado';
 }
 
 function playAlertSound() {
@@ -72,9 +77,10 @@ export function useAtendenteKds(userId: string | null) {
         .in('kds_status', ['novo', 'em_preparo', 'pronto', 'entregue'])
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString())
+        .is('cancelado_at', null)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      const list = (data as any[]) || [];
+      const list = ((data as any[]) || []).filter((order) => !isCancelledOrder(order));
       list.forEach(o => knownIdsRef.current.add(o.id));
       setOrders(list);
     } catch (e) {
@@ -103,6 +109,11 @@ export function useAtendenteKds(userId: string | null) {
         }, (payload: any) => {
           const row = payload.new as any;
           if (!row) return;
+
+          if (isCancelledOrder(row)) {
+            setOrders(prev => prev.filter(o => o.id !== row.id));
+            return;
+          }
 
           if (['novo', 'em_preparo', 'pronto', 'entregue'].includes(row.kds_status)) {
             setOrders(prev => {

@@ -20,6 +20,8 @@ export interface KdsOrder {
   complementos: string | null;
   observacao: string | null;
   kds_status: KdsStatus;
+  cancelado_at?: string | null;
+  motivo_cancelamento?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +40,10 @@ function saveAnnouncedIds(ids: Set<string>) {
   // Keep only last 200 to avoid bloating
   const arr = Array.from(ids).slice(-200);
   localStorage.setItem(ANNOUNCED_KEY, JSON.stringify(arr));
+}
+
+function isCancelledOrder(order: Partial<KdsOrder> & { cancelado_at?: string | null }) {
+  return order.cancelado_at != null || (order.kds_status as string | undefined) === 'cancelado';
 }
 
 function playBeep() {
@@ -88,9 +94,10 @@ export function useKdsOrders() {
         .select('*')
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString())
+        .is('cancelado_at', null)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      setOrders((data as any[]) || []);
+      setOrders(((data as any[]) || []).filter((order) => !isCancelledOrder(order)));
     } catch (e) {
       console.error('[KDS] Erro ao buscar pedidos:', e);
     } finally {
@@ -129,6 +136,7 @@ export function useKdsOrders() {
           console.log('[KDS] Realtime:', payload.eventType, payload.new?.id);
           if (payload.eventType === 'INSERT') {
             const newOrder = payload.new as KdsOrder;
+            if (isCancelledOrder(newOrder)) return;
             setOrders(prev => {
               const exists = prev.find(o => o.id === newOrder.id);
               if (exists) return prev;
@@ -136,7 +144,14 @@ export function useKdsOrders() {
             });
             announceNewOrders([newOrder]);
           } else if (payload.eventType === 'UPDATE') {
-            setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o));
+            const updatedOrder = payload.new as KdsOrder;
+            setOrders(prev => {
+              if (isCancelledOrder(updatedOrder)) {
+                return prev.filter(o => o.id !== updatedOrder.id);
+              }
+
+              return prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o);
+            });
           } else if (payload.eventType === 'DELETE') {
             setOrders(prev => prev.filter(o => o.id !== payload.old.id));
           }
