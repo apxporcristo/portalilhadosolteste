@@ -1,4 +1,4 @@
-import { getSupabaseConfig } from '@/lib/supabase-external';
+import { supabase as cloudSupabase } from '@/integrations/supabase/client';
 
 const SESSION_KEY = 'app-session';
 
@@ -33,35 +33,17 @@ export async function cancelKdsOrder(params: {
   callerUserId?: string;
 }) {
   const callerUserId = params.callerUserId ?? getKdsCallerUserId();
-  const { url, anonKey } = await getSupabaseConfig();
-
-  const response = await fetch(`${url}/functions/v1/cancel-kds-order`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${anonKey}`,
-      apikey: anonKey,
-    },
-    body: JSON.stringify({
+  const { data, error } = await cloudSupabase.functions.invoke('cancel-kds-order', {
+    body: {
       caller_user_id: callerUserId,
       order_id: params.orderId,
       motivo_cancelamento: params.motivo,
       cancelado_por: params.canceladoPor ?? null,
-    }),
+    },
   });
 
-  const text = await response.text();
-  let data: any = null;
-
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { error: text };
-  }
-
-  if (!response.ok || data?.error) {
-    throw new Error(data?.error || `HTTP ${response.status}: ${text}`);
-  }
+  if (error) throw new Error(extractKdsCancelError(error));
+  if (data?.error) throw new Error(extractKdsCancelError(data.error));
 
   return data;
 }

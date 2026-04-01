@@ -166,6 +166,19 @@ export function useAtendenteKds(userId: string | null) {
         throw new Error('Motivo de cancelamento é obrigatório.');
       }
 
+      const order = orders.find((currentOrder) => currentOrder.id === orderId);
+      if (!order) {
+        throw new Error('Pedido não encontrado ou não está mais disponível.');
+      }
+
+      if (order.atendente_user_id !== userId) {
+        throw new Error('Você só pode cancelar pedidos do seu usuário.');
+      }
+
+      if (order.kds_status !== 'novo') {
+        throw new Error('Somente pedidos com status Novo podem ser cancelados.');
+      }
+
       await cancelKdsOrder({
         orderId,
         motivo: motivoTrimmed,
@@ -174,11 +187,12 @@ export function useAtendenteKds(userId: string | null) {
       });
 
       setOrders(prev => prev.filter(o => o.id !== orderId));
+      await fetchOrders();
     } catch (e) {
       console.error('[AtendenteKDS] Erro ao cancelar:', e);
       throw new Error(extractKdsCancelError(e));
     }
-  }, [userId]);
+  }, [userId, orders, fetchOrders]);
 
   return { orders, novos, emPreparo, prontos, entregues, loading, marcarEntregue, cancelarPedido, refetch: fetchOrders };
 }
