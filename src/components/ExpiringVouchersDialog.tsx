@@ -46,11 +46,16 @@ export function ExpiringVouchersDialog({ open, onOpenChange, tempo, onUpdated }:
       const now = new Date();
       const limite = new Date(now.getTime() - 12 * 24 * 60 * 60 * 1000);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('vouchers')
         .select('id, voucher_id, tempo_validade, status, data_uso')
-        .eq('tempo_validade', tempo)
         .eq('status', 'pre-reservado');
+
+      if (tempo) {
+        query = query.eq('tempo_validade', tempo);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
