@@ -175,7 +175,7 @@ export function useKdsOrders() {
     }
   }, []);
 
-  const cancelarPedido = useCallback(async (orderId: string, motivo: string, canceladoPor?: string) => {
+  const cancelarPedido = useCallback(async (orderId: string, motivo: string, canceladoPor?: string, callerUserId?: string) => {
     try {
       const motivoTrimmed = motivo.trim();
       if (!motivoTrimmed) {
@@ -186,6 +186,7 @@ export function useKdsOrders() {
         orderId,
         motivo: motivoTrimmed,
         canceladoPor,
+        callerUserId,
       });
 
       setOrders(prev => prev.filter(o => o.id !== orderId));
