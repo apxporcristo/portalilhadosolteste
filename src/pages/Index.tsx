@@ -412,7 +412,7 @@ const Index = () => {
         </div>
       </footer>
 
-      <StatsDetailDialog open={statsDialog.open} onOpenChange={(open) => setStatsDialog(prev => ({ ...prev, open }))} title={statsDialog.title} type={statsDialog.type} stats={stats} onRefresh={fetchVouchers} />
+      <StatsDetailDialog open={statsDialog.open} onOpenChange={(open) => setStatsDialog(prev => ({ ...prev, open }))} title={statsDialog.title} type={statsDialog.type} stats={stats} onRefresh={refetch} />
       
     </div>
   );
