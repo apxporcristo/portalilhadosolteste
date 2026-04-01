@@ -16,6 +16,7 @@ export interface KdsOrder {
   nome_cliente: string | null;
   telefone_cliente: string | null;
   nome_atendente: string | null;
+  atendente_user_id?: string | null;
   complementos: string | null;
   observacao: string | null;
   kds_status: KdsStatus;
@@ -182,6 +183,19 @@ export function useKdsOrders() {
         throw new Error('Motivo de cancelamento é obrigatório.');
       }
 
+      const order = orders.find((currentOrder) => currentOrder.id === orderId);
+      if (!order) {
+        throw new Error('Pedido não encontrado ou não está mais disponível.');
+      }
+
+      if (order.kds_status !== 'novo') {
+        throw new Error('Somente pedidos com status Novo podem ser cancelados.');
+      }
+
+      if (callerUserId && order.atendente_user_id && order.atendente_user_id !== callerUserId) {
+        throw new Error('Você só pode cancelar pedidos do seu usuário.');
+      }
+
       await cancelKdsOrder({
         orderId,
         motivo: motivoTrimmed,
@@ -190,11 +204,12 @@ export function useKdsOrders() {
       });
 
       setOrders(prev => prev.filter(o => o.id !== orderId));
+      await fetchOrders();
     } catch (e) {
       console.error('[KDS] Erro ao cancelar pedido:', e);
       throw new Error(extractKdsCancelError(e));
     }
-  }, []);
+  }, [orders, fetchOrders]);
 
   const filteredOrders = statusFilter === 'all'
     ? orders.filter(o => o.kds_status !== 'entregue')
