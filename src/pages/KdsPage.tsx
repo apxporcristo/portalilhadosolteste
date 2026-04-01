@@ -122,7 +122,7 @@ export default function KdsPage() {
     }
     setMarkingId(cancelDialogOrder.id);
     try {
-      await cancelarPedido(cancelDialogOrder.id, cancelMotivo.trim(), userName || undefined);
+      await cancelarPedido(cancelDialogOrder.id, cancelMotivo.trim(), userName || undefined, userId || undefined);
       toast({ title: 'Pedido cancelado com sucesso!' });
       setCancelDialogOrder(null);
       setCancelMotivo('');
