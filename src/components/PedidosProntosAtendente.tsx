@@ -80,7 +80,7 @@ function OrderCard({
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="outline" className="font-bold">x{order.quantidade}</Badge>
+          {order.quantidade > 1 && <Badge variant="outline" className="font-bold">x{order.quantidade}</Badge>}
           <Badge className={`text-[10px] px-1.5 py-0.5 ${STATUS_COLORS[order.kds_status] || ''}`}>
             {STATUS_LABELS[order.kds_status] || order.kds_status}
           </Badge>
@@ -97,7 +97,7 @@ function OrderCard({
             </div>
           ) : null;
         })()}
-        {order.observacao && (
+        {order.observacao?.trim() && (
           <p className="text-xs text-muted-foreground italic">Obs: {order.observacao}</p>
         )}
         <div className="text-xs text-muted-foreground">
@@ -307,7 +307,7 @@ export function PedidosProntosAtendente({ userId }: Props) {
                 <div className="border rounded-lg p-3 space-y-1">
                   <h3 className="font-bold text-lg">{cleanProdutoNome(detailOrder.produto_nome)}</h3>
                   <p className="text-sm text-muted-foreground">{detailOrder.categoria_nome}</p>
-                  <p className="font-bold">Quantidade: {detailOrder.quantidade}</p>
+                  {detailOrder.quantidade > 1 && <p className="font-bold">Quantidade: {detailOrder.quantidade}</p>}
                   <Badge className={`${STATUS_COLORS[detailOrder.kds_status] || ''}`}>
                     {STATUS_LABELS[detailOrder.kds_status] || detailOrder.kds_status}
                   </Badge>
@@ -323,12 +323,12 @@ export function PedidosProntosAtendente({ userId }: Props) {
                     </div>
                   ) : null;
                 })()}
-                {detailOrder.observacao && (
-                  <div className="border rounded-lg p-3">
-                    <p className="text-sm font-semibold">Observação</p>
-                    <p className="text-sm text-muted-foreground">{detailOrder.observacao}</p>
-                  </div>
-                )}
+                {detailOrder.observacao?.trim() && (
+                    <div className="border rounded-lg p-3">
+                      <p className="text-sm font-semibold">Observação</p>
+                      <p className="text-sm text-muted-foreground">{detailOrder.observacao}</p>
+                    </div>
+                  )}
                 <div className="border rounded-lg p-3 text-sm space-y-1">
                   {detailOrder.nome_cliente && <p><span className="font-medium">Cliente:</span> {detailOrder.nome_cliente}</p>}
                   {detailOrder.nome_atendente && <p><span className="font-medium">Atendente:</span> {detailOrder.nome_atendente}</p>}
@@ -362,7 +362,7 @@ export function PedidosProntosAtendente({ userId }: Props) {
             <div className="space-y-4">
               <div className="border rounded-lg p-3 bg-muted/50">
                 <p className="font-semibold">{cleanProdutoNome(cancelDialogOrder.produto_nome)}</p>
-                <p className="text-sm text-muted-foreground">x{cancelDialogOrder.quantidade}</p>
+                {cancelDialogOrder.quantidade > 1 && <p className="text-sm text-muted-foreground">x{cancelDialogOrder.quantidade}</p>}
                 {cancelDialogOrder.nome_cliente && (
                   <p className="text-sm text-muted-foreground">Cliente: {cancelDialogOrder.nome_cliente}</p>
                 )}

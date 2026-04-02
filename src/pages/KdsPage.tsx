@@ -154,8 +154,10 @@ export default function KdsPage() {
         '\x1D\x21\x00', '================================\n',
         '\x1D\x21\x01', normalize(order.produto_nome), '\n',
         '\x1D\x21\x00',
-        `Qtd: ${order.quantidade}\n`,
       ];
+      if (order.quantidade > 1) {
+        lines.push(`Qtd: ${order.quantidade}\n`);
+      }
       if (order.complementos) {
         const items = parseComplementos(order.complementos);
         if (items.length > 0) {
@@ -163,7 +165,7 @@ export default function KdsPage() {
           items.forEach(c => lines.push(`  - ${normalize(c)}\n`));
         }
       }
-      if (order.observacao) lines.push(`Obs: ${normalize(order.observacao)}\n`);
+      if (order.observacao?.trim()) lines.push(`Obs: ${normalize(order.observacao)}\n`);
       lines.push('--------------------------------\n');
       if (order.nome_cliente) lines.push(`Cliente: ${normalize(order.nome_cliente)}\n`);
       if (order.nome_atendente) lines.push(`Atendente: ${normalize(order.nome_atendente)}\n`);
@@ -231,11 +233,13 @@ export default function KdsPage() {
             <p className="text-sm text-muted-foreground">{order.categoria_nome}</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-base font-bold px-3 py-1">
-              x{order.quantidade}
-            </Badge>
-          </div>
+          {order.quantidade > 1 && (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-base font-bold px-3 py-1">
+                x{order.quantidade}
+              </Badge>
+            </div>
+          )}
 
           {order.complementos && (() => {
             const items = parseComplementos(order.complementos);
@@ -247,7 +251,7 @@ export default function KdsPage() {
             ) : null;
           })()}
 
-          {order.observacao && (
+          {order.observacao?.trim() && (
             <p className="text-xs text-muted-foreground italic bg-muted rounded px-2 py-1">
               Obs: {order.observacao}
             </p>
@@ -415,7 +419,7 @@ export default function KdsPage() {
                           <h3 className="font-bold text-lg text-foreground leading-tight">{cleanProdutoNome(order.produto_nome)}</h3>
                           <p className="text-sm text-muted-foreground">{order.categoria_nome}</p>
                         </div>
-                        <Badge variant="outline" className="text-base font-bold px-3 py-1">x{order.quantidade}</Badge>
+                        {order.quantidade > 1 && <Badge variant="outline" className="text-base font-bold px-3 py-1">x{order.quantidade}</Badge>}
                         {order.complementos && (() => {
                           const items = parseComplementos(order.complementos);
                           return items.length > 0 ? (
@@ -425,7 +429,7 @@ export default function KdsPage() {
                             </div>
                           ) : null;
                         })()}
-                        {order.observacao && (
+                        {order.observacao?.trim() && (
                           <p className="text-xs text-muted-foreground italic bg-muted rounded px-2 py-1">
                             Obs: {order.observacao}
                           </p>
@@ -516,9 +520,11 @@ export default function KdsPage() {
                 <div className="space-y-2 border rounded-lg p-4">
                   <h3 className="font-bold text-xl text-foreground">{cleanProdutoNome(detailOrder.produto_nome)}</h3>
                   <p className="text-sm text-muted-foreground">Categoria: {detailOrder.categoria_nome}</p>
-                <div className="flex items-center gap-4">
+                {detailOrder.quantidade > 1 && (
+                  <div className="flex items-center gap-4">
                     <span className="font-bold text-lg">x{detailOrder.quantidade}</span>
                   </div>
+                )}
                 </div>
 
                 {detailOrder.complementos && (() => {
@@ -533,7 +539,7 @@ export default function KdsPage() {
                   ) : null;
                 })()}
 
-                {detailOrder.observacao && (
+                {detailOrder.observacao?.trim() && (
                   <div className="border rounded-lg p-4">
                     <p className="text-sm font-semibold mb-1">Observação</p>
                     <p className="text-sm text-muted-foreground">{detailOrder.observacao}</p>
