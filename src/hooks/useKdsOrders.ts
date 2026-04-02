@@ -207,7 +207,8 @@ export function useKdsOrders(isMainKitchenKds = false) {
         .update(updateData)
         .eq('id', orderId);
       if (error) throw error;
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, kds_status: newStatus } : o));
+      const now = new Date().toISOString();
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, kds_status: newStatus, status_changed_at: now, ...(newStatus === 'pronto' ? { pronto_at: now } : {}), ...(newStatus === 'entregue' ? { entregue_at: now } : {}) } : o));
     } catch (e) {
       console.error('[KDS] Erro ao atualizar status:', e);
       throw e;
