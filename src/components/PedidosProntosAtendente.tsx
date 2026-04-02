@@ -97,7 +97,7 @@ function OrderCard({
             </div>
           ) : null;
         })()}
-        {order.observacao && (
+        {order.observacao?.trim() && (
           <p className="text-xs text-muted-foreground italic">Obs: {order.observacao}</p>
         )}
         <div className="text-xs text-muted-foreground">
