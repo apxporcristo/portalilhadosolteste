@@ -323,12 +323,12 @@ export function PedidosProntosAtendente({ userId }: Props) {
                     </div>
                   ) : null;
                 })()}
-                {detailOrder.observacao && (
-                  <div className="border rounded-lg p-3">
-                    <p className="text-sm font-semibold">Observação</p>
-                    <p className="text-sm text-muted-foreground">{detailOrder.observacao}</p>
-                  </div>
-                )}
+                {detailOrder.observacao?.trim() && (
+                    <div className="border rounded-lg p-3">
+                      <p className="text-sm font-semibold">Observação</p>
+                      <p className="text-sm text-muted-foreground">{detailOrder.observacao}</p>
+                    </div>
+                  )}
                 <div className="border rounded-lg p-3 text-sm space-y-1">
                   {detailOrder.nome_cliente && <p><span className="font-medium">Cliente:</span> {detailOrder.nome_cliente}</p>}
                   {detailOrder.nome_atendente && <p><span className="font-medium">Atendente:</span> {detailOrder.nome_atendente}</p>}

@@ -165,7 +165,7 @@ export default function KdsPage() {
           items.forEach(c => lines.push(`  - ${normalize(c)}\n`));
         }
       }
-      if (order.observacao) lines.push(`Obs: ${normalize(order.observacao)}\n`);
+      if (order.observacao?.trim()) lines.push(`Obs: ${normalize(order.observacao)}\n`);
       lines.push('--------------------------------\n');
       if (order.nome_cliente) lines.push(`Cliente: ${normalize(order.nome_cliente)}\n`);
       if (order.nome_atendente) lines.push(`Atendente: ${normalize(order.nome_atendente)}\n`);
