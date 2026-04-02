@@ -307,7 +307,7 @@ export function PedidosProntosAtendente({ userId }: Props) {
                 <div className="border rounded-lg p-3 space-y-1">
                   <h3 className="font-bold text-lg">{cleanProdutoNome(detailOrder.produto_nome)}</h3>
                   <p className="text-sm text-muted-foreground">{detailOrder.categoria_nome}</p>
-                  <p className="font-bold">Quantidade: {detailOrder.quantidade}</p>
+                  {detailOrder.quantidade > 1 && <p className="font-bold">Quantidade: {detailOrder.quantidade}</p>}
                   <Badge className={`${STATUS_COLORS[detailOrder.kds_status] || ''}`}>
                     {STATUS_LABELS[detailOrder.kds_status] || detailOrder.kds_status}
                   </Badge>
