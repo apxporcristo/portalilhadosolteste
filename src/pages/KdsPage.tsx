@@ -154,8 +154,10 @@ export default function KdsPage() {
         '\x1D\x21\x00', '================================\n',
         '\x1D\x21\x01', normalize(order.produto_nome), '\n',
         '\x1D\x21\x00',
-        `Qtd: ${order.quantidade}\n`,
       ];
+      if (order.quantidade > 1) {
+        lines.push(`Qtd: ${order.quantidade}\n`);
+      }
       if (order.complementos) {
         const items = parseComplementos(order.complementos);
         if (items.length > 0) {
