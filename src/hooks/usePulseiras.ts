@@ -293,11 +293,17 @@ export function usePulseiras() {
 
   const carregarSaldosPadronizados = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
     const { data, error } = await db.rpc('listar_saldo_pulseira_produto' as any, { p_pulseira_id: pulseiraId } as any);
-    if (!error && Array.isArray(data)) {
+    if (!error && Array.isArray(data) && data.length > 0) {
       return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
     }
     if (error) console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto falhou:', error.message);
+    if (!error && Array.isArray(data) && data.length === 0) {
+      console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto retornou vazio, tentando fallback...');
+    }
     const fallback = await carregarSaldosFallback(db, pulseiraId);
+    if (fallback.length === 0) {
+      console.warn('[Pulseiras] Fallback também retornou vazio. Verifique as políticas de RLS nas tabelas pulseira_itens e pulseira_baixas.');
+    }
     return fallback;
   }, [carregarSaldosFallback]);
 
