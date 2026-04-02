@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChefHat, Clock, Printer, Check, Eye, RefreshCw, Play, CheckCircle, Search, Flame, CheckCircle2, AlertCircle, XCircle, Plus } from 'lucide-react';
+import { KdsStatusTimer } from '@/components/KdsStatusTimer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
