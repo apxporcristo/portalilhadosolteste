@@ -105,7 +105,7 @@ export function ReimpressaoVendas() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, userName]);
+  }, []);
 
   const handleOpenList = () => {
     setShowListModal(true);
