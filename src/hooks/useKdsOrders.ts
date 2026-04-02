@@ -98,6 +98,7 @@ export function useKdsOrders() {
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString())
         .is('cancelado_at', null)
+        .neq('kds_status', 'cancelado')
         .order('created_at', { ascending: true });
       if (error) throw error;
       setOrders(((data as any[]) || []).filter((order) => !isCancelledOrder(order)));
@@ -147,13 +148,28 @@ export function useKdsOrders() {
             });
             announceNewOrders([newOrder]);
           } else if (payload.eventType === 'UPDATE') {
-            const updatedOrder = payload.new as KdsOrder;
+            const updatedOrder = (payload.new ?? {}) as Partial<KdsOrder>;
+            const previousOrder = (payload.old ?? {}) as Partial<KdsOrder>;
+            const orderId = updatedOrder.id ?? previousOrder.id;
+            if (!orderId) return;
+
             setOrders(prev => {
-              if (isCancelledOrder(updatedOrder)) {
-                return prev.filter(o => o.id !== updatedOrder.id);
+              const currentOrder = prev.find(o => o.id === orderId);
+              const mergedOrder = {
+                ...currentOrder,
+                ...previousOrder,
+                ...updatedOrder,
+              } as KdsOrder;
+
+              if (isCancelledOrder(mergedOrder)) {
+                return prev.filter(o => o.id !== orderId);
               }
 
-              return prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o);
+              if (!currentOrder && updatedOrder.created_at) {
+                return [...prev, updatedOrder as KdsOrder].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+              }
+
+              return prev.map(o => o.id === orderId ? { ...o, ...updatedOrder } : o);
             });
           } else if (payload.eventType === 'DELETE') {
             setOrders(prev => prev.filter(o => o.id !== payload.old.id));
