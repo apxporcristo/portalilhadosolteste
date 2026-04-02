@@ -80,7 +80,7 @@ function OrderCard({
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="outline" className="font-bold">x{order.quantidade}</Badge>
+          {order.quantidade > 1 && <Badge variant="outline" className="font-bold">x{order.quantidade}</Badge>}
           <Badge className={`text-[10px] px-1.5 py-0.5 ${STATUS_COLORS[order.kds_status] || ''}`}>
             {STATUS_LABELS[order.kds_status] || order.kds_status}
           </Badge>
