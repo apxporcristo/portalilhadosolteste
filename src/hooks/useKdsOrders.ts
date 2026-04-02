@@ -66,10 +66,14 @@ function playBeep() {
 function speakOrder(order: KdsOrder) {
   if ('speechSynthesis' in window) {
     try {
-      const tamanho = complementosParaVoz(order.complementos);
-      const tamanhoPart = tamanho ? `. ${tamanho}` : '';
-      const msg = `Novo pedido. ${cleanProdutoNome(order.produto_nome)}${tamanhoPart}.`;
-      const utterance = new SpeechSynthesisUtterance(msg);
+      const display = normalizeKdsDisplay({
+        produto_nome: order.produto_nome,
+        quantidade: order.quantidade,
+        complementos: order.complementos,
+        observacao: order.observacao,
+        nome_atendente: order.nome_atendente,
+      });
+      const utterance = new SpeechSynthesisUtterance(display.textoFalaKds);
       utterance.lang = 'pt-BR';
       utterance.rate = 1;
       window.speechSynthesis.speak(utterance);
