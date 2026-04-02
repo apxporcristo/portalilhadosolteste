@@ -402,8 +402,14 @@ export default function KdsPage() {
                             Novo
                           </Badge>
                           <span className="text-xs text-muted-foreground font-mono">
-                            {getTimeSince(order.created_at)}
+                            {formatTime(order.created_at)}
                           </span>
+                        </div>
+                        <div className="flex justify-end">
+                          <KdsStatusTimer
+                            statusChangedAt={(order as any).status_changed_at || order.created_at}
+                            createdAt={order.created_at}
+                          />
                         </div>
                         <div>
                           <h3 className="font-bold text-lg text-foreground leading-tight">{cleanProdutoNome(order.produto_nome)}</h3>
