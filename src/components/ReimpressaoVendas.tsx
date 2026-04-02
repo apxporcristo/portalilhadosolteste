@@ -52,8 +52,6 @@ export function ReimpressaoVendas() {
   const { produtos } = useFichasConsumo();
   const sessionCtx = useOptionalUserSession();
   const access = sessionCtx?.access;
-  const userName = access?.nome?.trim() || '';
-  const isAdmin = access?.is_admin === true;
 
   const fetchVendasDoDia = useCallback(async () => {
     setLoading(true);
