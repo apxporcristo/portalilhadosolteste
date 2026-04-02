@@ -231,11 +231,13 @@ export default function KdsPage() {
             <p className="text-sm text-muted-foreground">{order.categoria_nome}</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-base font-bold px-3 py-1">
-              x{order.quantidade}
-            </Badge>
-          </div>
+          {order.quantidade > 1 && (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-base font-bold px-3 py-1">
+                x{order.quantidade}
+              </Badge>
+            </div>
+          )}
 
           {order.complementos && (() => {
             const items = parseComplementos(order.complementos);
