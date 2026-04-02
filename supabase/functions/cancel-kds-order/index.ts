@@ -86,7 +86,6 @@ Deno.serve(async (req) => {
     const { error: updateErr } = await admin
       .from("kds_orders")
       .update({
-        kds_status: "cancelado",
         motivo_cancelamento: motivoCancelamento,
         cancelado_at: new Date().toISOString(),
         cancelado_por: canceladoPor,
