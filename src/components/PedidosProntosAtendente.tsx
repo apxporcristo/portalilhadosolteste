@@ -362,7 +362,7 @@ export function PedidosProntosAtendente({ userId }: Props) {
             <div className="space-y-4">
               <div className="border rounded-lg p-3 bg-muted/50">
                 <p className="font-semibold">{cleanProdutoNome(cancelDialogOrder.produto_nome)}</p>
-                <p className="text-sm text-muted-foreground">x{cancelDialogOrder.quantidade}</p>
+                {cancelDialogOrder.quantidade > 1 && <p className="text-sm text-muted-foreground">x{cancelDialogOrder.quantidade}</p>}
                 {cancelDialogOrder.nome_cliente && (
                   <p className="text-sm text-muted-foreground">Cliente: {cancelDialogOrder.nome_cliente}</p>
                 )}
