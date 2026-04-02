@@ -220,19 +220,22 @@ export function usePulseiras() {
   }, []);
 
   const carregarSaldosFallback = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
-    // Try view first (bypasses RLS if view is SECURITY INVOKER or has own grants)
+    // Step 1: Try view
+    console.log('[Pulseiras][Fallback] Step 1: Tentando view vw_pulseira_saldo_produto com pulseira_id:', pulseiraId);
     const { data: viewData, error: viewError } = await db
       .from('vw_pulseira_saldo_produto' as any)
       .select('*')
       .eq('pulseira_id', pulseiraId);
 
     if (!viewError && Array.isArray(viewData) && viewData.length > 0) {
-      console.log('[Pulseiras] Fallback via view vw_pulseira_saldo_produto OK:', viewData.length, 'registros');
+      console.log('[Pulseiras][Fallback] View OK:', viewData.length, 'registros. Primeiro:', JSON.stringify(viewData[0]));
       return viewData.map((row: any) => normalizeSaldoRow(row, pulseiraId));
     }
-    if (viewError) console.warn('[Pulseiras] View vw_pulseira_saldo_produto falhou:', viewError.message);
+    if (viewError) console.warn('[Pulseiras][Fallback] View falhou:', viewError.message, viewError.code);
+    else console.warn('[Pulseiras][Fallback] View retornou array vazio');
 
-    // Try direct tables
+    // Step 2: Try direct tables
+    console.log('[Pulseiras][Fallback] Step 2: Tentando tabelas diretas pulseira_itens e pulseira_baixas');
     const [itensRes, baixasRes] = await Promise.all([
       db
         .from('pulseira_itens' as any)
@@ -244,8 +247,11 @@ export function usePulseiras() {
         .eq('pulseira_id', pulseiraId),
     ]);
 
-    if (itensRes.error) console.warn('[Pulseiras] Fallback pulseira_itens falhou:', itensRes.error.message);
-    if (baixasRes.error) console.warn('[Pulseiras] Fallback pulseira_baixas falhou:', baixasRes.error.message);
+    if (itensRes.error) console.warn('[Pulseiras][Fallback] pulseira_itens erro:', itensRes.error.message, itensRes.error.code);
+    else console.log('[Pulseiras][Fallback] pulseira_itens retornou', (itensRes.data || []).length, 'registros', itensRes.data?.length ? JSON.stringify(itensRes.data[0]) : '');
+    
+    if (baixasRes.error) console.warn('[Pulseiras][Fallback] pulseira_baixas erro:', baixasRes.error.message, baixasRes.error.code);
+    else console.log('[Pulseiras][Fallback] pulseira_baixas retornou', (baixasRes.data || []).length, 'registros');
 
     const map = new Map<string, PulseiraProdutoResumo>();
 
