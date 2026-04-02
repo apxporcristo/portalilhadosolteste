@@ -110,8 +110,15 @@ export default function PulseirasPage() {
         carregarDetalhes(pulseiraIdRef.current);
       }
     };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') handleFocus();
+    };
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [listarAtivas, listarFechadas, carregarDetalhes]);
 
   const filteredAtivas = useMemo(() => {
