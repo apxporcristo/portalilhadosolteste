@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -27,42 +27,59 @@ function formatElapsed(ms: number): string {
 
 function getTimerColor(ms: number): string {
   const minutes = ms / 60000;
-  if (minutes >= 15) return 'text-red-500';
-  if (minutes >= 10) return 'text-orange-500';
+  if (minutes >= 15) return 'text-red-600 font-bold';
+  if (minutes >= 10) return 'text-orange-600 font-semibold';
   if (minutes >= 5) return 'text-yellow-600';
-  return 'text-muted-foreground';
+  return 'text-foreground';
 }
 
 export function KdsStatusTimer({ statusChangedAt, createdAt, entregueAt, className }: KdsStatusTimerProps) {
-  const [now, setNow] = useState(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isDelivered = !!entregueAt;
 
   useEffect(() => {
-    if (isDelivered) return; // no need to tick for delivered
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [isDelivered]);
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
 
-  let elapsed: number;
-  let label: string;
+    if (isDelivered && createdAt) {
+      // Fixed elapsed for delivered orders
+      const total = new Date(entregueAt!).getTime() - new Date(createdAt).getTime();
+      setElapsed(isNaN(total) ? 0 : Math.max(0, total));
+      return;
+    }
 
-  if (isDelivered && createdAt) {
-    // Total time from creation to delivery
-    elapsed = new Date(entregueAt!).getTime() - new Date(createdAt).getTime();
-    label = 'Total';
-  } else {
-    // Time in current status
-    elapsed = now - new Date(statusChangedAt).getTime();
-    label = '';
-  }
+    // Live timer
+    const startTime = new Date(statusChangedAt).getTime();
+    if (isNaN(startTime)) {
+      setElapsed(0);
+      return;
+    }
+
+    const tick = () => {
+      setElapsed(Math.max(0, Date.now() - startTime));
+    };
+
+    tick(); // immediate first tick
+    intervalRef.current = setInterval(tick, 1000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [statusChangedAt, createdAt, entregueAt, isDelivered]);
 
   const colorClass = isDelivered ? 'text-muted-foreground' : getTimerColor(elapsed);
 
   return (
-    <div className={cn('flex items-center gap-1 font-mono text-xs', colorClass, className)}>
-      <Timer className="h-3 w-3" />
-      {label && <span className="text-[10px]">{label}:</span>}
+    <div className={cn('flex items-center gap-1.5 font-mono text-sm', colorClass, className)}>
+      <Timer className="h-4 w-4" />
+      {isDelivered && <span className="text-[10px]">Total:</span>}
       <span className="tabular-nums">{formatElapsed(elapsed)}</span>
     </div>
   );
