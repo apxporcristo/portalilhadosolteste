@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useKdsOrders, KdsOrder, KdsStatus } from '@/hooks/useKdsOrders';
+import { normalizeKdsDisplay } from '@/lib/kds-display';
 import { parseComplementos, cleanProdutoNome } from '@/lib/kds-complementos';
 import { usePrinterContext } from '@/contexts/PrinterContext';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
