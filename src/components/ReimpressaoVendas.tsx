@@ -51,7 +51,9 @@ export function ReimpressaoVendas() {
   const { ensureBluetoothConnected, writeToCharacteristic } = usePrinterContext();
   const { produtos } = useFichasConsumo();
   const sessionCtx = useOptionalUserSession();
-  const userName = sessionCtx?.access?.nome || '';
+  const access = sessionCtx?.access;
+  const userName = access?.nome?.trim() || '';
+  const isAdmin = access?.is_admin === true;
 
   const fetchVendasDoDia = useCallback(async () => {
     setLoading(true);
@@ -69,8 +71,8 @@ export function ReimpressaoVendas() {
         .not('codigo_venda', 'is', null)
         .order('created_at', { ascending: false });
 
-      // Filter by logged user's name (atendente) - case insensitive
-      if (userName) {
+      // Usuários comuns veem apenas as próprias vendas; admin vê todas as vendas do dia.
+      if (!isAdmin && userName) {
         query = query.ilike('nome_atendente', userName);
       }
 
@@ -98,7 +100,6 @@ export function ReimpressaoVendas() {
         groups[key].total += Number(item.valor_total);
       }
 
-      // Sort descending by created_at
       const sorted = Object.values(groups).sort((a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
@@ -109,7 +110,7 @@ export function ReimpressaoVendas() {
     } finally {
       setLoading(false);
     }
-  }, [userName]);
+  }, [isAdmin, userName]);
 
   const handleOpenList = () => {
     setShowListModal(true);
