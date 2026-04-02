@@ -112,8 +112,9 @@ export function useKdsOrders(isMainKitchenKds = false) {
     }
   }, []);
 
-  // Announce new orders
+  // Announce new orders — only on main kitchen KDS
   const announceNewOrders = useCallback((newOrders: KdsOrder[]) => {
+    if (!isMainKitchenKds) return;
     const announced = announcedRef.current;
     for (const order of newOrders) {
       if (order.kds_status === 'novo' && !announced.has(order.id)) {
@@ -122,7 +123,7 @@ export function useKdsOrders(isMainKitchenKds = false) {
       }
     }
     saveAnnouncedIds(announced);
-  }, []);
+  }, [isMainKitchenKds]);
 
   useEffect(() => {
     fetchOrders();
