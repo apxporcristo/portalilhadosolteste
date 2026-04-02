@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Plus, Minus, Watch, User, Phone, CreditCard, Clock, Package, History, AlertTriangle, Trash2, RotateCcw } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -89,10 +89,37 @@ export default function PulseirasPage() {
   const canClosePulseira = pulseira?.status === 'ativa' && hasMovimentacao && !temSaldo;
   const canDeletePulseira = pulseira?.status === 'ativa' && !hasMovimentacao;
 
+  const pulseiraIdRef = useRef<string | null>(null);
+
+  // Track current pulseira id for auto-reload
+  useEffect(() => {
+    pulseiraIdRef.current = pulseira?.id ?? null;
+  }, [pulseira?.id]);
+
   useEffect(() => {
     listarAtivas();
     listarFechadas();
   }, [listarAtivas, listarFechadas]);
+
+  // Auto-reload pulseira details when page gains focus (e.g., returning from fichas)
+  useEffect(() => {
+    const handleFocus = () => {
+      listarAtivas();
+      listarFechadas();
+      if (pulseiraIdRef.current) {
+        carregarDetalhes(pulseiraIdRef.current);
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') handleFocus();
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [listarAtivas, listarFechadas, carregarDetalhes]);
 
   const filteredAtivas = useMemo(() => {
     if (!numeroBusca.trim()) return pulseirasAtivas;

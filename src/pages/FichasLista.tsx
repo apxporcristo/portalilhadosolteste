@@ -584,7 +584,11 @@ export default function FichasLista() {
     setPrinting(true);
     try {
       const success = await addItemsToPulseiraContext();
-      if (success) clearCart();
+      if (success) {
+        clearCart();
+        toast({ title: 'Itens adicionados à pulseira!', description: `Pulseira #${pulseiraContextNumero}` });
+        navigate('/pulseiras');
+      }
     } catch (err: any) {
       console.error('[Pulseira] Erro ao adicionar diretamente:', err);
     } finally {
@@ -602,6 +606,8 @@ export default function FichasLista() {
         const success = await addItemsToPulseiraContext();
         if (success) {
           clearCart();
+          toast({ title: 'Itens adicionados à pulseira!', description: `Pulseira #${pulseiraContextNumero}` });
+          navigate('/pulseiras');
         }
         setPaymentConfirmed(false);
         setSavedCodigoVenda(null);

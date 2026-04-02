@@ -220,6 +220,19 @@ export function usePulseiras() {
   }, []);
 
   const carregarSaldosFallback = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
+    // Try view first (bypasses RLS if view is SECURITY INVOKER or has own grants)
+    const { data: viewData, error: viewError } = await db
+      .from('vw_pulseira_saldo_produto' as any)
+      .select('*')
+      .eq('pulseira_id', pulseiraId);
+
+    if (!viewError && Array.isArray(viewData) && viewData.length > 0) {
+      console.log('[Pulseiras] Fallback via view vw_pulseira_saldo_produto OK:', viewData.length, 'registros');
+      return viewData.map((row: any) => normalizeSaldoRow(row, pulseiraId));
+    }
+    if (viewError) console.warn('[Pulseiras] View vw_pulseira_saldo_produto falhou:', viewError.message);
+
+    // Try direct tables
     const [itensRes, baixasRes] = await Promise.all([
       db
         .from('pulseira_itens' as any)
@@ -294,15 +307,16 @@ export function usePulseiras() {
   const carregarSaldosPadronizados = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
     const { data, error } = await db.rpc('listar_saldo_pulseira_produto' as any, { p_pulseira_id: pulseiraId } as any);
     if (!error && Array.isArray(data) && data.length > 0) {
+      console.log('[Pulseiras] RPC listar_saldo_pulseira_produto OK:', data.length, 'produtos');
       return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
     }
     if (error) console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto falhou:', error.message);
     if (!error && Array.isArray(data) && data.length === 0) {
-      console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto retornou vazio, tentando fallback...');
+      console.warn('[Pulseiras] RPC retornou vazio para pulseira', pulseiraId, '— tentando fallback...');
     }
     const fallback = await carregarSaldosFallback(db, pulseiraId);
     if (fallback.length === 0) {
-      console.warn('[Pulseiras] Fallback também retornou vazio. Verifique as políticas de RLS nas tabelas pulseira_itens e pulseira_baixas.');
+      console.warn('[Pulseiras] Todos os fallbacks retornaram vazio para pulseira', pulseiraId, '. Pode ser que não haja itens ou RLS está bloqueando.');
     }
     return fallback;
   }, [carregarSaldosFallback]);
