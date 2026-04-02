@@ -83,7 +83,7 @@ function speakOrder(order: KdsOrder) {
   playBeep();
 }
 
-export function useKdsOrders() {
+export function useKdsOrders(isMainKitchenKds = false) {
   const [orders, setOrders] = useState<KdsOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<KdsStatus | 'all'>('novo');
