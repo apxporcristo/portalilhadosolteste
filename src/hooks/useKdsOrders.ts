@@ -46,7 +46,7 @@ function saveAnnouncedIds(ids: Set<string>) {
 }
 
 function isCancelledOrder(order: Partial<KdsOrder> & { cancelado_at?: string | null }) {
-  return order.cancelado_at != null || (order.kds_status as string | undefined) === 'cancelado';
+  return order.cancelado_at != null;
 }
 
 function playBeep() {
@@ -98,7 +98,6 @@ export function useKdsOrders() {
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString())
         .is('cancelado_at', null)
-        .neq('kds_status', 'cancelado')
         .order('created_at', { ascending: true });
       if (error) throw error;
       setOrders(((data as any[]) || []).filter((order) => !isCancelledOrder(order)));

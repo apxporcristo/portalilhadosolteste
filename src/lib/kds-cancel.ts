@@ -77,12 +77,10 @@ export async function cancelKdsOrder(params: {
     const { data: updatedOrder, error: updateError } = await supabase
       .from('kds_orders' as any)
       .update({
-        kds_status: 'cancelado',
         motivo_cancelamento: params.motivo,
         cancelado_at: now,
         cancelado_por: params.canceladoPor ?? callerUserId,
         updated_at: now,
-        status_changed_at: now,
       })
       .eq('id', params.orderId)
       .eq('kds_status', 'novo')
