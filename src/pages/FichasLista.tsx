@@ -602,6 +602,8 @@ export default function FichasLista() {
         const success = await addItemsToPulseiraContext();
         if (success) {
           clearCart();
+          toast({ title: 'Itens adicionados à pulseira!', description: `Pulseira #${pulseiraContextNumero}` });
+          navigate('/pulseiras');
         }
         setPaymentConfirmed(false);
         setSavedCodigoVenda(null);
