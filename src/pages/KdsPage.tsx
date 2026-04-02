@@ -417,7 +417,7 @@ export default function KdsPage() {
                           <h3 className="font-bold text-lg text-foreground leading-tight">{cleanProdutoNome(order.produto_nome)}</h3>
                           <p className="text-sm text-muted-foreground">{order.categoria_nome}</p>
                         </div>
-                        <Badge variant="outline" className="text-base font-bold px-3 py-1">x{order.quantidade}</Badge>
+                        {order.quantidade > 1 && <Badge variant="outline" className="text-base font-bold px-3 py-1">x{order.quantidade}</Badge>}
                         {order.complementos && (() => {
                           const items = parseComplementos(order.complementos);
                           return items.length > 0 ? (
