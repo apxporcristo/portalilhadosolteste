@@ -98,7 +98,6 @@ export function useKdsOrders() {
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString())
         .is('cancelado_at', null)
-        .neq('kds_status', 'cancelado')
         .order('created_at', { ascending: true });
       if (error) throw error;
       setOrders(((data as any[]) || []).filter((order) => !isCancelledOrder(order)));
