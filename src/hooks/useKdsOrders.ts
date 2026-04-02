@@ -22,6 +22,9 @@ export interface KdsOrder {
   kds_status: KdsStatus;
   cancelado_at?: string | null;
   motivo_cancelamento?: string | null;
+  status_changed_at?: string | null;
+  entregue_at?: string | null;
+  pronto_at?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChefHat, Clock, Printer, Check, Eye, RefreshCw, Play, CheckCircle, Search, Flame, CheckCircle2, AlertCircle, XCircle, Plus } from 'lucide-react';
+import { KdsStatusTimer } from '@/components/KdsStatusTimer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -214,8 +215,15 @@ export default function KdsPage() {
               {config.label}
             </Badge>
             <span className="text-xs text-muted-foreground font-mono">
-              {getTimeSince(order.created_at)}
+              {formatTime(order.created_at)}
             </span>
+          </div>
+          <div className="flex justify-end">
+            <KdsStatusTimer
+              statusChangedAt={(order as any).status_changed_at || order.created_at}
+              createdAt={order.created_at}
+              entregueAt={(order as any).entregue_at}
+            />
           </div>
 
           <div>
@@ -394,8 +402,14 @@ export default function KdsPage() {
                             Novo
                           </Badge>
                           <span className="text-xs text-muted-foreground font-mono">
-                            {getTimeSince(order.created_at)}
+                            {formatTime(order.created_at)}
                           </span>
+                        </div>
+                        <div className="flex justify-end">
+                          <KdsStatusTimer
+                            statusChangedAt={(order as any).status_changed_at || order.created_at}
+                            createdAt={order.created_at}
+                          />
                         </div>
                         <div>
                           <h3 className="font-bold text-lg text-foreground leading-tight">{cleanProdutoNome(order.produto_nome)}</h3>

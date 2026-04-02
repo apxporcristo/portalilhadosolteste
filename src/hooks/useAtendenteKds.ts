@@ -15,6 +15,7 @@ export interface KdsProntoOrder {
   created_at: string;
   pronto_at: string | null;
   entregue_at: string | null;
+  status_changed_at?: string | null;
   kds_status: string;
   cancelado_at?: string | null;
 }

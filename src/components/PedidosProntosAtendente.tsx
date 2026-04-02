@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ChefHat, Check, Clock, Eye, Package, Flame, CheckCircle2, Search, XCircle, Plus } from 'lucide-react';
+import { KdsStatusTimer } from '@/components/KdsStatusTimer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -72,10 +73,11 @@ function OrderCard({
       <CardContent className="p-4 space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-foreground">{cleanProdutoNome(order.produto_nome)}</h3>
-          <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {getTimeSince(order.created_at)}
-          </span>
+          <KdsStatusTimer
+            statusChangedAt={order.status_changed_at || order.created_at}
+            createdAt={order.created_at}
+            entregueAt={order.entregue_at}
+          />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className="font-bold">x{order.quantidade}</Badge>
