@@ -427,7 +427,7 @@ export default function KdsPage() {
                             </div>
                           ) : null;
                         })()}
-                        {order.observacao && (
+                        {order.observacao?.trim() && (
                           <p className="text-xs text-muted-foreground italic bg-muted rounded px-2 py-1">
                             Obs: {order.observacao}
                           </p>
