@@ -69,9 +69,9 @@ export function ReimpressaoVendas() {
         .not('codigo_venda', 'is', null)
         .order('created_at', { ascending: false });
 
-      // Filter by logged user's name (atendente)
+      // Filter by logged user's name (atendente) - case insensitive
       if (userName) {
-        query = query.eq('nome_atendente', userName);
+        query = query.ilike('nome_atendente', userName);
       }
 
       const { data, error } = await query;
