@@ -220,7 +220,7 @@ export default function KdsPage() {
               {formatTime(order.created_at)}
             </span>
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
             <KdsStatusTimer
               statusChangedAt={(order as any).status_changed_at || order.created_at}
               createdAt={order.created_at}
