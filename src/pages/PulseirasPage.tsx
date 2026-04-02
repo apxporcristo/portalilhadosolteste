@@ -89,10 +89,30 @@ export default function PulseirasPage() {
   const canClosePulseira = pulseira?.status === 'ativa' && hasMovimentacao && !temSaldo;
   const canDeletePulseira = pulseira?.status === 'ativa' && !hasMovimentacao;
 
+  const pulseiraIdRef = useRef<string | null>(null);
+
+  // Track current pulseira id for auto-reload
+  useEffect(() => {
+    pulseiraIdRef.current = pulseira?.id ?? null;
+  }, [pulseira?.id]);
+
   useEffect(() => {
     listarAtivas();
     listarFechadas();
   }, [listarAtivas, listarFechadas]);
+
+  // Auto-reload pulseira details when page gains focus (e.g., returning from fichas)
+  useEffect(() => {
+    const handleFocus = () => {
+      listarAtivas();
+      listarFechadas();
+      if (pulseiraIdRef.current) {
+        carregarDetalhes(pulseiraIdRef.current);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [listarAtivas, listarFechadas, carregarDetalhes]);
 
   const filteredAtivas = useMemo(() => {
     if (!numeroBusca.trim()) return pulseirasAtivas;
