@@ -1125,10 +1125,6 @@ export default function FichasLista() {
                   <Input value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} placeholder="Nome do cliente" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Documento <span className="text-muted-foreground">(opcional)</span></Label>
-                  <Input value={documentoCliente} onChange={(e) => setDocumentoCliente(e.target.value)} placeholder="CPF ou RG" />
-                </div>
-                <div className="space-y-2">
                   <Label>Telefone <span className="text-muted-foreground">(opcional)</span></Label>
                   <Input value={telefoneCliente} onChange={(e) => setTelefoneCliente(e.target.value)} placeholder="(00) 00000-0000" onKeyDown={(e) => e.key === 'Enter' && handleConfirmPrint()} />
                 </div>
