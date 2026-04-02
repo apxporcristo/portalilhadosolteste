@@ -305,18 +305,38 @@ export function usePulseiras() {
   }, []);
 
   const carregarSaldosPadronizados = useCallback(async (db: any, pulseiraId: string): Promise<PulseiraProdutoResumo[]> => {
-    const { data, error } = await db.rpc('listar_saldo_pulseira_produto' as any, { p_pulseira_id: pulseiraId } as any);
-    if (!error && Array.isArray(data) && data.length > 0) {
-      console.log('[Pulseiras] RPC listar_saldo_pulseira_produto OK:', data.length, 'produtos');
-      return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
+    console.log('[Pulseiras] Carregando saldos para pulseira_id:', pulseiraId);
+
+    // Try RPC with explicit uuid cast via POST headers to disambiguate overloads
+    let rpcOk = false;
+    try {
+      // Use fetch directly to add Content-Profile and cast hint
+      const { data, error } = await db.rpc('listar_saldo_pulseira_produto' as any, { p_pulseira_id: pulseiraId } as any);
+      if (!error && Array.isArray(data) && data.length > 0) {
+        console.log('[Pulseiras] RPC listar_saldo_pulseira_produto OK:', data.length, 'produtos. Dados:', JSON.stringify(data[0]));
+        return data.map((row: any) => normalizeSaldoRow(row, pulseiraId));
+      }
+      if (error) {
+        console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto falhou:', error.message);
+        // If ambiguity error, we skip to fallback
+      }
+      if (!error && Array.isArray(data) && data.length === 0) {
+        console.warn('[Pulseiras] RPC retornou array vazio para pulseira', pulseiraId);
+        rpcOk = true; // RPC worked but no data - still try fallback
+      }
+    } catch (rpcErr: any) {
+      console.warn('[Pulseiras] RPC exception:', rpcErr?.message);
     }
-    if (error) console.warn('[Pulseiras] RPC listar_saldo_pulseira_produto falhou:', error.message);
-    if (!error && Array.isArray(data) && data.length === 0) {
-      console.warn('[Pulseiras] RPC retornou vazio para pulseira', pulseiraId, '— tentando fallback...');
-    }
+
+    console.log('[Pulseiras] Tentando fallback para pulseira', pulseiraId);
     const fallback = await carregarSaldosFallback(db, pulseiraId);
-    if (fallback.length === 0) {
-      console.warn('[Pulseiras] Todos os fallbacks retornaram vazio para pulseira', pulseiraId, '. Pode ser que não haja itens ou RLS está bloqueando.');
+    console.log('[Pulseiras] Fallback retornou', fallback.length, 'produtos');
+    if (fallback.length > 0) {
+      console.log('[Pulseiras] Primeiro produto do fallback:', JSON.stringify(fallback[0]));
+    } else {
+      console.warn('[Pulseiras] DIAGNÓSTICO: Nenhum dado encontrado para pulseira', pulseiraId, 
+        '| RPC funcionou sem erro:', rpcOk,
+        '| Verifique: 1) RLS nas tabelas pulseira_itens/pulseira_baixas 2) Se existem registros com este pulseira_id');
     }
     return fallback;
   }, [carregarSaldosFallback]);
