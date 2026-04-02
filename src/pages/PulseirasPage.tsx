@@ -358,9 +358,11 @@ export default function PulseirasPage() {
                 )}
                 {pulseira.status === 'ativa' && (
                   <div className="flex gap-2 pt-2 flex-wrap">
-                    <Button size="sm" variant="outline" onClick={() => navigate(`/fichas?pulseira_id=${pulseira.id}&pulseira_numero=${encodeURIComponent(pulseira.numero)}&pulseira_nome=${encodeURIComponent(pulseira.nome_cliente)}`)}>
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Fichas
-                    </Button>
+                    {!is24hPassadas && (
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/fichas?pulseira_id=${pulseira.id}&pulseira_numero=${encodeURIComponent(pulseira.numero)}&pulseira_nome=${encodeURIComponent(pulseira.nome_cliente)}`)}>
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Fichas
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => setHistoricoModal(true)}>
                       <History className="h-3.5 w-3.5 mr-1" /> Histórico
                     </Button>
