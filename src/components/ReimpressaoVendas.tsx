@@ -71,10 +71,7 @@ export function ReimpressaoVendas() {
         .not('codigo_venda', 'is', null)
         .order('created_at', { ascending: false });
 
-      // Usuários comuns veem apenas as próprias vendas; admin vê todas as vendas do dia.
-      if (!isAdmin && userName) {
-        query = query.ilike('nome_atendente', userName);
-      }
+      // Todos os usuários com acesso à reimpressão veem todas as vendas do dia.
 
       const { data, error } = await query;
       if (error) throw error;
