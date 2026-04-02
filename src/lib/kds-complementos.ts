@@ -50,17 +50,38 @@ export function parseComplementos(raw: string | null | undefined): string[] {
  * E.g. "COMPL ARROZ OU BAIÃO" → "" (it's a category name, not a value)
  * But "Arroz" → "Arroz" (it's an actual selection)
  */
+/**
+ * Category name patterns to filter out.
+ * These are internal grouping labels, not actual selections.
+ */
+const CATEGORY_PATTERNS = [
+  /^COMPL\b/i,
+  /^COMPLEMENTO/i,
+  /^GRUPO\b/i,
+  /^CATEGORIA\b/i,
+  /^SELECIONE/i,
+  /^ESCOLHA/i,
+  /^OPCAO\b/i,
+  /^OPÇÃO\b/i,
+  /\bOU\b.*\bOU\b/i,  // e.g. "ARROZ OU BAIÃO" — multi-option category label
+];
+
+function isCategoryLabel(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  const upper = trimmed.toUpperCase();
+  // All-caps multi-word strings with "OU" are likely category labels like "ARROZ OU BAIÃO"
+  if (upper === trimmed && trimmed.includes(' OU ') && trimmed.split(' ').length >= 3) {
+    return true;
+  }
+  return CATEGORY_PATTERNS.some(p => p.test(trimmed));
+}
+
 function cleanComplementoValue(value: string): string {
   if (!value) return '';
-
-  // Strip "COMPL " or "COMPL. " prefix — these are category labels, not selections
-  // If the entire value starts with "COMPL" and looks like a category name, skip it
-  const upper = value.toUpperCase().trim();
-  if (upper.startsWith('COMPL ') || upper.startsWith('COMPL.') || upper === 'COMPL') {
-    return '';
-  }
-
-  return value.trim();
+  const trimmed = value.trim();
+  if (isCategoryLabel(trimmed)) return '';
+  return trimmed;
 }
 
 /**
