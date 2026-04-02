@@ -331,7 +331,7 @@ export function ReimpressaoVendas() {
                         }}
                       />
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium">{item.produto_nome}</span>
+                        <span className="text-sm font-medium">{item.produto_nome.split(' | ')[0]}</span>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-muted-foreground">{item.quantidade}x R$ {Number(item.valor_unitario).toFixed(2).replace('.', ',')}</span>
                           {isPrintable && <Badge variant="secondary" className="text-[10px]">Imprimível</Badge>}
