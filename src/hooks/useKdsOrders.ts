@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from '@/hooks/useVouchers';
-import { complementosParaVoz, cleanProdutoNome } from '@/lib/kds-complementos';
+import { normalizeKdsDisplay } from '@/lib/kds-display';
 import { cancelKdsOrder, extractKdsCancelError } from '@/lib/kds-cancel';
 
 export type KdsStatus = 'novo' | 'em_preparo' | 'pronto' | 'impresso' | 'entregue';
@@ -66,10 +66,14 @@ function playBeep() {
 function speakOrder(order: KdsOrder) {
   if ('speechSynthesis' in window) {
     try {
-      const tamanho = complementosParaVoz(order.complementos);
-      const tamanhoPart = tamanho ? `. ${tamanho}` : '';
-      const msg = `Novo pedido. ${cleanProdutoNome(order.produto_nome)}${tamanhoPart}.`;
-      const utterance = new SpeechSynthesisUtterance(msg);
+      const display = normalizeKdsDisplay({
+        produto_nome: order.produto_nome,
+        quantidade: order.quantidade,
+        complementos: order.complementos,
+        observacao: order.observacao,
+        nome_atendente: order.nome_atendente,
+      });
+      const utterance = new SpeechSynthesisUtterance(display.textoFalaKds);
       utterance.lang = 'pt-BR';
       utterance.rate = 1;
       window.speechSynthesis.speak(utterance);
@@ -79,7 +83,7 @@ function speakOrder(order: KdsOrder) {
   playBeep();
 }
 
-export function useKdsOrders() {
+export function useKdsOrders(isMainKitchenKds = false) {
   const [orders, setOrders] = useState<KdsOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<KdsStatus | 'all'>('novo');
@@ -108,8 +112,9 @@ export function useKdsOrders() {
     }
   }, []);
 
-  // Announce new orders
+  // Announce new orders — only on main kitchen KDS
   const announceNewOrders = useCallback((newOrders: KdsOrder[]) => {
+    if (!isMainKitchenKds) return;
     const announced = announcedRef.current;
     for (const order of newOrders) {
       if (order.kds_status === 'novo' && !announced.has(order.id)) {
@@ -118,7 +123,7 @@ export function useKdsOrders() {
       }
     }
     saveAnnouncedIds(announced);
-  }, []);
+  }, [isMainKitchenKds]);
 
   useEffect(() => {
     fetchOrders();

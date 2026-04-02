@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useKdsOrders, KdsOrder, KdsStatus } from '@/hooks/useKdsOrders';
+import { normalizeKdsDisplay } from '@/lib/kds-display';
 import { parseComplementos, cleanProdutoNome } from '@/lib/kds-complementos';
 import { usePrinterContext } from '@/contexts/PrinterContext';
 import { useOptionalUserSession } from '@/contexts/UserSessionContext';
@@ -47,12 +48,12 @@ function filterBySearch(orders: KdsOrder[], search: string): KdsOrder[] {
 
 export default function KdsPage() {
   const navigate = useNavigate();
-  const { allOrders, loading, updateStatus, cancelarPedido, refetch } = useKdsOrders();
   const printerCtx = usePrinterContext();
   const userSession = useOptionalUserSession();
   const userId = userSession?.user?.id || null;
   const userName = userSession?.access?.nome || userSession?.user?.email || null;
   const hasFullKds = userSession?.access?.acesso_kds === true;
+  const { allOrders, loading, updateStatus, cancelarPedido, refetch } = useKdsOrders(hasFullKds);
   const [detailOrder, setDetailOrder] = useState<KdsOrder | null>(null);
   const [printing, setPrinting] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
@@ -593,7 +594,7 @@ export default function KdsPage() {
             <div className="space-y-4">
               <div className="border rounded-lg p-3 bg-muted/50">
                 <p className="font-semibold">{cleanProdutoNome(cancelDialogOrder.produto_nome)}</p>
-                <p className="text-sm text-muted-foreground">x{cancelDialogOrder.quantidade}</p>
+                {cancelDialogOrder.quantidade > 1 && <p className="text-sm text-muted-foreground">x{cancelDialogOrder.quantidade}</p>}
                 {cancelDialogOrder.nome_cliente && (
                   <p className="text-sm text-muted-foreground">Cliente: {cancelDialogOrder.nome_cliente}</p>
                 )}
