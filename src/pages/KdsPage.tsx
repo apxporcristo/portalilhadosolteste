@@ -215,8 +215,15 @@ export default function KdsPage() {
               {config.label}
             </Badge>
             <span className="text-xs text-muted-foreground font-mono">
-              {getTimeSince(order.created_at)}
+              {formatTime(order.created_at)}
             </span>
+          </div>
+          <div className="flex justify-end">
+            <KdsStatusTimer
+              statusChangedAt={(order as any).status_changed_at || order.created_at}
+              createdAt={order.created_at}
+              entregueAt={(order as any).entregue_at}
+            />
           </div>
 
           <div>
