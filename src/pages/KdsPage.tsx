@@ -518,9 +518,11 @@ export default function KdsPage() {
                 <div className="space-y-2 border rounded-lg p-4">
                   <h3 className="font-bold text-xl text-foreground">{cleanProdutoNome(detailOrder.produto_nome)}</h3>
                   <p className="text-sm text-muted-foreground">Categoria: {detailOrder.categoria_nome}</p>
-                <div className="flex items-center gap-4">
+                {detailOrder.quantidade > 1 && (
+                  <div className="flex items-center gap-4">
                     <span className="font-bold text-lg">x{detailOrder.quantidade}</span>
                   </div>
+                )}
                 </div>
 
                 {detailOrder.complementos && (() => {

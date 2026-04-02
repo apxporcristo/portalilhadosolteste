@@ -16,7 +16,10 @@ export function parseComplementos(raw: string | null | undefined): string[] {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       const items = parsed
-        .map((item: any) => item.nome || item.name || item.descricao || '')
+        .map((item: any) => {
+          const value = item.nome || item.name || item.descricao || '';
+          return cleanComplementoValue(value);
+        })
         .filter(Boolean);
       return [...new Set(items)];
     }
@@ -33,13 +36,31 @@ export function parseComplementos(raw: string | null | undefined): string[] {
     // If contains ":", take only the part after the last ":"
     const colonIdx = seg.indexOf(':');
     if (colonIdx !== -1) {
-      return seg.substring(colonIdx + 1).trim();
+      return cleanComplementoValue(seg.substring(colonIdx + 1).trim());
     }
-    return seg.trim();
+    return cleanComplementoValue(seg.trim());
   }).filter(Boolean);
 
   // Deduplicate
   return [...new Set(result)];
+}
+
+/**
+ * Strips known category prefixes from a complemento value.
+ * E.g. "COMPL ARROZ OU BAIÃO" → "" (it's a category name, not a value)
+ * But "Arroz" → "Arroz" (it's an actual selection)
+ */
+function cleanComplementoValue(value: string): string {
+  if (!value) return '';
+
+  // Strip "COMPL " or "COMPL. " prefix — these are category labels, not selections
+  // If the entire value starts with "COMPL" and looks like a category name, skip it
+  const upper = value.toUpperCase().trim();
+  if (upper.startsWith('COMPL ') || upper.startsWith('COMPL.') || upper === 'COMPL') {
+    return '';
+  }
+
+  return value.trim();
 }
 
 /**
