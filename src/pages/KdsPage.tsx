@@ -537,7 +537,7 @@ export default function KdsPage() {
                   ) : null;
                 })()}
 
-                {detailOrder.observacao && (
+                {detailOrder.observacao?.trim() && (
                   <div className="border rounded-lg p-4">
                     <p className="text-sm font-semibold mb-1">Observação</p>
                     <p className="text-sm text-muted-foreground">{detailOrder.observacao}</p>
